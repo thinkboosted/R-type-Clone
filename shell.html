@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>R-Type Clone</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #050505;
+        color: #f0f0f0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #canvas-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      canvas {
+        width: min(1024px, 100vw);
+        height: min(768px, 100vh);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: #000;
+      }
+    </style>
+    <script>
+      var Module = {
+        preRun: [],
+        postRun: [],
+        print: function () {
+          console.log.apply(console, arguments);
+        },
+        printErr: function () {
+          console.error.apply(console, arguments);
+        },
+        canvas: null,
+        onRuntimeInitialized: function () {
+          console.log("Emscripten runtime initialized.");
+        },
+      };
+
+      window.addEventListener("DOMContentLoaded", function () {
+        Module.canvas = document.getElementById("canvas");
+        Module.canvas.addEventListener("contextmenu", function (e) {
+          e.preventDefault();
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <div id="canvas-container">
+      <canvas id="canvas" tabindex="0"></canvas>
+    </div>
+
+    {{{ SCRIPT }}}
+  </body>
+</html>
