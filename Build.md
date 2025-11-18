@@ -2,6 +2,24 @@
 
 This project supports a native OpenGL build (desktop) and a WebAssembly build via Emscripten. All third-party libraries (GLFW + glm) are downloaded automatically with CMake’s `FetchContent`, so the repository stays light.
 
+## 0. Quick build script
+
+Run the helper script at the repo root to configure and build the target of your choice:
+
+```bash
+./build.sh --native            # desktop OpenGL (default)
+./build.sh --web --emsdk ~/emsdk/emsdk_env.sh -j 4 # WebAssembly
+```
+
+Common flags:
+
+- `--debug`, `--release`, or `--build-type <type>`: pass the CMake build type
+- `-j/--jobs <n>`: parallel build (defaults to CPU count when supported)
+- `--build-only`, `--configure-only`, `--clean`, `--clean-only`
+- `--serve --port <n>`: after a web build, launch a static server from `build_web/`
+
+See `./build.sh --help` for the full option list. The sections below describe the manual steps if you prefer not to use the script.
+
 ## 1. Prerequisites
 
 ### Native desktop
