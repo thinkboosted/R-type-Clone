@@ -24,12 +24,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glm)
 
 add_executable(opengl_app main.cpp shader.cpp buffer.cpp input.cpp app.cpp platform.cpp)
+target_link_libraries(opengl_app PRIVATE glm)
 
 if(EMSCRIPTEN)
     target_link_options(opengl_app PRIVATE "-sUSE_GLFW=3" "-sFULL_ES3=1" "--shell-file=${CMAKE_SOURCE_DIR}/shell.html")
     # Rename the output to .html
     set_target_properties(opengl_app PROPERTIES SUFFIX ".html")
-    # glm is provided via FetchContent; nothing to add here for includes
 else()
     FetchContent_MakeAvailable(glfw)
     find_package(GLUT REQUIRED)
@@ -39,7 +39,6 @@ else()
     target_link_libraries(opengl_app
         PRIVATE
         OpenGL::GL
-        glm
         GLUT::GLUT
         GLEW::GLEW
         glfw
