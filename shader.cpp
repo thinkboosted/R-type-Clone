@@ -4,9 +4,49 @@
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
+// Embedded shader sources for Emscripten
+#ifdef EMSCRIPTEN
+const char* vertexShaderSource = R"V0G0N(#version 300 es
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aColor;
+
+out vec3 ourColor;
+
+uniform mat4 model;
+uniform mat4 projection;
+
+void main()
+{
+    gl_Position = projection * model * vec4(aPos, 1.0);
+    ourColor = aColor;
+}
+)V0G0N";
+
+const char* fragmentShaderSource = R"V0G0N(#version 300 es
+precision mediump float; // WebGL requires precision for floats
+out vec4 FragColor;
+
+in vec3 ourColor;
+
+void main()
+{
+    FragColor = vec4(ourColor, 1.0);
+}
+)V0G0N";
+#endif
+
 Shader::Shader(const char* vertexPath, const char* fragmentPath) {
     std::string vertexCode;
     std::string fragmentCode;
+
+#ifdef EMSCRIPTEN
+    vertexCode = vertexShaderSource;
+    fragmentCode = fragmentShaderSource;
+#else
     std::ifstream vShaderFile;
     std::ifstream fShaderFile;
 
@@ -25,6 +65,7 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath) {
     } catch (std::ifstream::failure& e) {
         std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << std::endl;
     }
+#endif
     const char* vShaderCode = vertexCode.c_str();
     const char* fShaderCode = fragmentCode.c_str();
 
@@ -65,13 +106,21 @@ void Shader::checkCompileErrors(GLuint shader, std::string type) {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if (!success) {
             glGetShaderInfoLog(shader, 1024, NULL, infoLog);
+#ifdef EMSCRIPTEN
+            emscripten_log(EM_LOG_CONSOLE, "ERROR::SHADER_COMPILATION_ERROR of type: %s\n%s", type.c_str(), infoLog);
+#else
             std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+#endif
         }
     } else {
         glGetProgramiv(shader, GL_LINK_STATUS, &success);
         if (!success) {
             glGetProgramInfoLog(shader, 1024, NULL, infoLog);
+#ifdef EMSCRIPTEN
+            emscripten_log(EM_LOG_CONSOLE, "ERROR::PROGRAM_LINKING_ERROR of type: %s\n%s", type.c_str(), infoLog);
+#else
             std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+#endif
         }
     }
 }
