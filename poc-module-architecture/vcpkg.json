@@ -1,0 +1,11 @@
+{
+  "name": "r-type-poc-modules",
+  "version": "1.0.0",
+  "dependencies": [
+    "sfml",
+    "glew",
+    "opengl",
+    "zeromq",
+    "cppzmq"
+  ]
+}
