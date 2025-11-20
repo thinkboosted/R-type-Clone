@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-#include "../engine/modulesManager/AModulesManager.hpp"
+#include "AModulesManager.hpp"
 
 namespace rtypeGame {
 class ModulesManager : public rtypeEngine::AModulesManager {

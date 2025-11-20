@@ -1,16 +1,16 @@
 # R-Type Game Executable
 add_executable(rtype_game
     main.cpp
-    ModulesManager.cpp
-    ModulesManager.hpp
     Rtype.cpp
     Rtype.hpp
     ../engine/app/AApplication.cpp
     ../engine/app/AApplication.hpp
     ../engine/app/IApplication.hpp
+    ../engine/modulesManager/IModulesManager.hpp
     ../engine/modulesManager/AModulesManager.cpp
     ../engine/modulesManager/AModulesManager.hpp
-    ../engine/modulesManager/IModulesManager.hpp
+    ../engine/modulesManager/ModulesManager.cpp
+    ../engine/modulesManager/ModulesManager.hpp
 )
 
 target_include_directories(rtype_game PRIVATE

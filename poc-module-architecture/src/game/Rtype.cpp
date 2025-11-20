@@ -1,6 +1,6 @@
 
 #include "Rtype.hpp"
-#include "ModulesManager.hpp"
+#include "modulesManager/ModulesManager.hpp"
 #include <string>
 #include <iostream>
 
@@ -24,11 +24,13 @@ void Rtype::init() {
   }
   try {
 #ifdef _WIN32
-    this->addModule("./SFMLWindowManager.dll", pubEndpoint, subEndpoint);
-    this->addModule("./GLEWRenderer.dll", pubEndpoint, subEndpoint);
+    this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
+    this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
+    this->addModule("EngineSceneManager.dll", pubEndpoint, subEndpoint);
 #else
-    this->addModule("./SFMLWindowManager.so", pubEndpoint, subEndpoint);
-    this->addModule("./GLEWRenderer.so", pubEndpoint, subEndpoint);
+    this->addModule("./bin/SFMLWindowManager.so", pubEndpoint, subEndpoint);
+    this->addModule("./bin/GLEWRenderer.so", pubEndpoint, subEndpoint);
+    this->addModule("./bin/EngineSceneManager.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;
