@@ -10,5 +10,8 @@ class Rtype : public rtypeEngine::AApplication {
     Rtype(const std::string &endpoint);
     void init() override;
     void loop() override;
+
+  private:
+    bool _scriptsLoaded = false;
 };
 }  // namespace rtype

@@ -1,6 +1,6 @@
 cmake --build --preset windows
 
-cd ./build/windows/bin/
+cd ./build/windows/
 ./Rtype.exe
 
-cd ../../../
+cd ../../

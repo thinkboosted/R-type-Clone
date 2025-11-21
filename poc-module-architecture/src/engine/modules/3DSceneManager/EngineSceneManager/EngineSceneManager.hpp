@@ -71,11 +71,11 @@ namespace rtypeEngine {
 
         std::vector<RenderCommand> getRenderQueue() override;
 
+        void onSceneCommand(const std::string& message);
+
     private:
         std::unordered_map<EntityID, std::shared_ptr<Entity>> _entities;
         EntityID _activeCameraId;
-        EntityID _cubeId;
-        EntityID _lightId;
 
         std::string generateUuid();
     };

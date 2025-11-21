@@ -16,26 +16,18 @@ namespace rtypeEngine {
     void EngineSceneManager::init() {
         std::cout << "[EngineSceneManager] Initialized" << std::endl;
 
+        subscribe("SceneCommand", [this](const std::string& msg) {
+            this->onSceneCommand(msg);
+        });
+
         // Create Camera
         _activeCameraId = createEntity(EntityType::CAMERA);
         setPosition(_activeCameraId, {0.0f, 0.0f, 5.0f});
         setActiveCamera(_activeCameraId);
 
-        // Create Light
-        _lightId = createEntity(EntityType::LIGHT);
-        setPosition(_lightId, {0.0f, 5.0f, 0.0f});
-        setLightProperties(_lightId, {1.0f, 0.8f, 1.0f}, 1.0f);
-
-        // Create Cube
-        _cubeId = createEntity(EntityType::MESH);
-        setMesh(_cubeId, "assets/models/cube.obj");
-        setPosition(_cubeId, {0.0f, 0.0f, 0.0f});
     }
 
     void EngineSceneManager::loop() {
-        // Rotate cube
-        rotate(_cubeId, {0.01f, 0.02f, 0.0f});
-
         // Serialize Scene
         std::stringstream ss;
 
@@ -43,14 +35,6 @@ namespace rtypeEngine {
         if (!_activeCameraId.empty()) {
             Vector3f camPos = getPosition(_activeCameraId);
             ss << "Camera:" << _activeCameraId << "," << camPos.x << "," << camPos.y << "," << camPos.z << ";";
-        }
-
-        // Light
-        if (!_lightId.empty()) {
-            Vector3f lightPos = getPosition(_lightId);
-            auto lightEnt = _entities[_lightId];
-            ss << "Light:" << _lightId << "," << lightPos.x << "," << lightPos.y << "," << lightPos.z << ","
-               << lightEnt->lightColor.x << "," << lightEnt->lightColor.y << "," << lightEnt->lightColor.z << "," << lightEnt->lightIntensity << ";";
         }
 
         // Meshes
@@ -61,8 +45,15 @@ namespace rtypeEngine {
                    << e->position.x << "," << e->position.y << "," << e->position.z << ","
                    << e->rotation.x << "," << e->rotation.y << "," << e->rotation.z << ","
                    << e->scale.x << "," << e->scale.y << "," << e->scale.z << ";";
+            } else if (pair.second->type == EntityType::LIGHT) {
+                auto& e = pair.second;
+                ss << "Light:" << e->id << ","
+                   << e->position.x << "," << e->position.y << "," << e->position.z << ","
+                   << e->lightColor.x << "," << e->lightColor.y << "," << e->lightColor.z << ","
+                   << e->lightIntensity << ";";
             }
         }
+
 
         sendMessage("SceneUpdated", ss.str());
     }
@@ -190,8 +181,7 @@ namespace rtypeEngine {
     std::vector<RenderCommand> EngineSceneManager::getRenderQueue() {
         std::vector<RenderCommand> queue;
 
-        // In a real engine, we would perform frustum culling here based on the active camera
-        // For now, we just return all renderable entities (MESH, TEXT, UI)
+        // Later, implement frustum culling here based on the active camera
 
         for (const auto& pair : _entities) {
             const auto& entity = pair.second;
@@ -208,6 +198,125 @@ namespace rtypeEngine {
             }
         }
         return queue;
+    }
+
+    void EngineSceneManager::onSceneCommand(const std::string& message) {
+        std::stringstream ss(message);
+        std::string command;
+        std::getline(ss, command, ':');
+
+        if (command == "CreateEntity") {
+            std::string typeStr;
+            std::getline(ss, typeStr, ':');
+            std::string id;
+            std::getline(ss, id);
+
+            EntityType type = EntityType::EMPTY;
+            if (typeStr == "MESH") type = EntityType::MESH;
+            else if (typeStr == "CAMERA") type = EntityType::CAMERA;
+            else if (typeStr == "LIGHT") type = EntityType::LIGHT;
+
+            if (!id.empty()) {
+                auto entity = std::make_shared<Entity>();
+                entity->id = id;
+                entity->type = type;
+                _entities[id] = entity;
+                std::cout << "[EngineSceneManager] Created entity " << id << " of type " << typeStr << " (ID from Lua)" << std::endl;
+
+                if (type == EntityType::MESH) {
+                    setMesh(id, "assets/models/cube.obj");
+                }
+            } else {
+                EntityID newId = createEntity(type);
+                std::cout << "[EngineSceneManager] Created entity " << newId << " of type " << typeStr << std::endl;
+                if (type == EntityType::MESH) {
+                    setMesh(newId, "assets/models/cube.obj");
+                }
+            }
+        } else if (command == "MoveEntity") {
+            std::string params;
+            std::getline(ss, params);
+            std::stringstream paramSs(params);
+            std::string id, xStr, yStr, zStr;
+            std::getline(paramSs, id, ',');
+            std::getline(paramSs, xStr, ',');
+            std::getline(paramSs, yStr, ',');
+            std::getline(paramSs, zStr, ',');
+
+            try {
+                float x = std::stof(xStr);
+                float y = std::stof(yStr);
+                float z = std::stof(zStr);
+                move(id, {x, y, z});
+                std::cout << "[EngineSceneManager] Moved entity " << id << " to " << x << "," << y << "," << z << std::endl;
+            } catch (...) {
+                std::cerr << "[EngineSceneManager] Invalid MoveEntity params: " << params << std::endl;
+            }
+        } else if (command == "RotateEntity") {
+            std::string params;
+            std::getline(ss, params);
+            std::stringstream paramSs(params);
+            std::string id, xStr, yStr, zStr;
+            std::getline(paramSs, id, ',');
+            std::getline(paramSs, xStr, ',');
+            std::getline(paramSs, yStr, ',');
+            std::getline(paramSs, zStr, ',');
+
+            try {
+                float x = std::stof(xStr);
+                float y = std::stof(yStr);
+                float z = std::stof(zStr);
+                rotate(id, {x, y, z});
+                std::cout << "[EngineSceneManager] Rotated entity " << id << " by " << x << "," << y << "," << z << std::endl;
+            } catch (...) {
+                std::cerr << "[EngineSceneManager] Invalid RotateEntity params: " << params << std::endl;
+            }
+        } else if (command == "SetPosition") {
+            std::string params;
+            std::getline(ss, params);
+            std::stringstream paramSs(params);
+            std::string id, xStr, yStr, zStr;
+            std::getline(paramSs, id, ',');
+            std::getline(paramSs, xStr, ',');
+            std::getline(paramSs, yStr, ',');
+            std::getline(paramSs, zStr, ',');
+
+            try {
+                float x = std::stof(xStr);
+                float y = std::stof(yStr);
+                float z = std::stof(zStr);
+                setPosition(id, {x, y, z});
+                std::cout << "[EngineSceneManager] Set position of entity " << id << " to " << x << "," << y << "," << z << std::endl;
+            } catch (...) {
+                std::cerr << "[EngineSceneManager] Invalid SetPosition params: " << params << std::endl;
+            }
+        } else if (command == "SetLightProperties") {
+            std::string params;
+            std::getline(ss, params);
+            std::stringstream paramSs(params);
+            std::string id, rStr, gStr, bStr, iStr;
+            std::getline(paramSs, id, ',');
+            std::getline(paramSs, rStr, ',');
+            std::getline(paramSs, gStr, ',');
+            std::getline(paramSs, bStr, ',');
+            std::getline(paramSs, iStr, ',');
+
+            try {
+                float r = std::stof(rStr);
+                float g = std::stof(gStr);
+                float b = std::stof(bStr);
+                float i = std::stof(iStr);
+                setLightProperties(id, {r, g, b}, i);
+                std::cout << "[EngineSceneManager] Set light properties for " << id << std::endl;
+            } catch (...) {
+                std::cerr << "[EngineSceneManager] Invalid SetLightProperties params: " << params << std::endl;
+            }
+        } else if (command == "SetActiveCamera") {
+            std::string id;
+            std::getline(ss, id);
+            setActiveCamera(id);
+            std::cout << "[EngineSceneManager] Set active camera to " << id << std::endl;
+        }
     }
 
     std::string EngineSceneManager::generateUuid() {

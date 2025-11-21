@@ -58,6 +58,44 @@ if(TARGET GLEWRenderer)
     )
 endif()
 
+if(TARGET EngineSceneManager)
+    add_custom_command(TARGET rtype_game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:EngineSceneManager>
+            $<TARGET_FILE_DIR:rtype_game>
+        COMMENT "Copying Engine Scene Manager to executable directory"
+    )
+endif()
+
+if(TARGET LuaECS)
+    add_custom_command(TARGET rtype_game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:LuaECS>
+            $<TARGET_FILE_DIR:rtype_game>
+        COMMENT "Copying LuaECS to executable directory"
+    )
+    
+    if(WIN32)
+        # Find and copy liblua.dll
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            find_file(LUA_DLL liblua.dll PATHS ${CMAKE_PREFIX_PATH}/debug/bin NO_DEFAULT_PATH)
+        else()
+            find_file(LUA_DLL liblua.dll PATHS ${CMAKE_PREFIX_PATH}/bin NO_DEFAULT_PATH)
+        endif()
+
+        if(LUA_DLL)
+            add_custom_command(TARGET rtype_game POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${LUA_DLL}"
+                    $<TARGET_FILE_DIR:rtype_game>
+                COMMENT "Copying liblua.dll to executable directory"
+            )
+        else()
+            message(WARNING "Could not find liblua.dll to copy")
+        endif()
+    endif()
+endif()
+
 # Install rules
 install(TARGETS rtype_game
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

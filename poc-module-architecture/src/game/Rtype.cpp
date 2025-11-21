@@ -27,18 +27,28 @@ void Rtype::init() {
     this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
     this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
     this->addModule("EngineSceneManager.dll", pubEndpoint, subEndpoint);
+    this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
 #else
     this->addModule("./bin/SFMLWindowManager.so", pubEndpoint, subEndpoint);
     this->addModule("./bin/GLEWRenderer.so", pubEndpoint, subEndpoint);
     this->addModule("./bin/EngineSceneManager.so", pubEndpoint, subEndpoint);
+    this->addModule("./bin/LuaECS.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;
     throw;
   }
+
+  // Give modules some time to initialize
+  // std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
 
 void Rtype::loop() {
+    if (!_scriptsLoaded) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        sendMessage("LoadSystemScript", "assets/scripts/systems/MovingCube.lua");
+        _scriptsLoaded = true;
+    }
 }
 
 }  // namespace rtypeGame

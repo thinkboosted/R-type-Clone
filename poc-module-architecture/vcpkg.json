@@ -6,6 +6,8 @@
     "glew",
     "opengl",
     "zeromq",
-    "cppzmq"
+    "cppzmq",
+    "lua",
+    "sol2"
   ]
 }

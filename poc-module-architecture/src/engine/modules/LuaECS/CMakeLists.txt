@@ -1,0 +1,30 @@
+add_library(LuaECS SHARED
+    LuaECS.cpp
+    LuaECS.hpp
+    ../IModule.hpp
+    ../AModule.hpp
+    ../AModule.cpp
+)
+
+target_include_directories(LuaECS PUBLIC
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+
+find_package(Lua REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
+
+target_link_libraries(LuaECS
+    cppzmq
+    libzmq
+    ${LUA_LIBRARIES}
+)
+
+set_target_properties(LuaECS PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "LuaECS"
+)
+
+install(TARGETS LuaECS
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

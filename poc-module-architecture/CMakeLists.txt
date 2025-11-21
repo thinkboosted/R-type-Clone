@@ -71,5 +71,7 @@ endif()
 
 add_subdirectory(src/engine/modules/3DSceneManager/EngineSceneManager)
 
+add_subdirectory(src/engine/modules/LuaECS)
+
 # Add subdirectory for game executable
 add_subdirectory(src/game)
