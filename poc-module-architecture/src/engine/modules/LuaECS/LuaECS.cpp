@@ -66,39 +66,39 @@ namespace rtypeEngine {
             std::string id = generateUuid();
             std::stringstream ss;
             ss << "CreateEntity:" << type << ":" << id;
-            sendMessage("SceneCommand", ss.str());
+            sendMessage("EntityCommand", ss.str());
             std::cout << "[LuaECS] Requesting CreateEntity: " << type << " with ID: " << id << std::endl;
             return id;
         });
 
-        scene.set_function("moveEntity", [this](const std::string& id, float x, float y, float z) {
+        scene.set_function("setRotation", [this](const std::string& id, float x, float y, float z) {
             std::stringstream ss;
-            ss << "MoveEntity:" << id << "," << x << "," << y << "," << z;
-            sendMessage("SceneCommand", ss.str());
+            ss << "SetRotation:" << id << "," << x << "," << y << "," << z;
+            sendMessage("EntityCommand", ss.str());
         });
 
-        scene.set_function("rotateEntity", [this](const std::string& id, float x, float y, float z) {
+        scene.set_function("setScale", [this](const std::string& id, float x, float y, float z) {
             std::stringstream ss;
-            ss << "RotateEntity:" << id << "," << x << "," << y << "," << z;
-            sendMessage("SceneCommand", ss.str());
+            ss << "SetScale:" << id << "," << x << "," << y << "," << z;
+            sendMessage("EntityCommand", ss.str());
         });
 
         scene.set_function("setPosition", [this](const std::string& id, float x, float y, float z) {
             std::stringstream ss;
             ss << "SetPosition:" << id << "," << x << "," << y << "," << z;
-            sendMessage("SceneCommand", ss.str());
+            sendMessage("EntityCommand", ss.str());
         });
 
         scene.set_function("setLightProperties", [this](const std::string& id, float r, float g, float b, float intensity) {
             std::stringstream ss;
             ss << "SetLightProperties:" << id << "," << r << "," << g << "," << b << "," << intensity;
-            sendMessage("SceneCommand", ss.str());
+            sendMessage("EntityCommand", ss.str());
         });
 
         scene.set_function("setActiveCamera", [this](const std::string& id) {
             std::stringstream ss;
             ss << "SetActiveCamera:" << id;
-            sendMessage("SceneCommand", ss.str());
+            sendMessage("EntityCommand", ss.str());
         });
     }
 

@@ -69,8 +69,6 @@ else()
     message(WARNING "Skipping GLEW Renderer module")
 endif()
 
-add_subdirectory(src/engine/modules/3DSceneManager/EngineSceneManager)
-
 add_subdirectory(src/engine/modules/LuaECS)
 
 # Add subdirectory for game executable

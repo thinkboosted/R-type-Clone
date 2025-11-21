@@ -1,9 +1,0 @@
-Le projet composé  d'une application qui est un ensemble de sous-modules.
-
-- Chaque module est en fait une librairie dynamique (fichier .dll sous Windows, .so sous Linux, .dylib sous macOS), qui est une classe qui hérite de IModule.
-- Chacun de ces modules est donc compilé séparément, et chargé dynamiquement par l'application principale au moment de l'exécution.
-- Chacun de ces modules fonctionne de manière indépendante, et peut être mis à jour ou remplacé sans affecter les autres modules ou l'application principale.
-- L'application principale utilise un gestionnaire de modules (ModuleManager) pour charger, initialiser et gérer les modules.
-- Chaque module tourne dans son propre thread, assurant ainsi que les opérations de chaque module n'interfèrent pas avec les autres. Cela permet une meilleure performance et réactivité de l'application globale.
-- Lors de leur construction, les modules ne reçoivent qu'un "endpoint" vers lequel ils peuvent se connecter pour communiquer avec le reste de l'application, en utilisant zeroMQ.
-- La communication entre les modules et l'application principale se fait via des messages asynchrones (système d'abonnement et d'émission), permettant une interaction fluide et réactive.

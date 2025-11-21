@@ -26,13 +26,11 @@ void Rtype::init() {
 #ifdef _WIN32
     this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
     this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
-    this->addModule("EngineSceneManager.dll", pubEndpoint, subEndpoint);
     this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
 #else
-    this->addModule("./bin/SFMLWindowManager.so", pubEndpoint, subEndpoint);
-    this->addModule("./bin/GLEWRenderer.so", pubEndpoint, subEndpoint);
-    this->addModule("./bin/EngineSceneManager.so", pubEndpoint, subEndpoint);
-    this->addModule("./bin/LuaECS.so", pubEndpoint, subEndpoint);
+    this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
+    this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
+    this->addModule("LuaECS.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;

@@ -1,8 +1,0 @@
-This project is a game engine.
-
-The engine make available modules and an AApplication abstract class.
-
-The modules are compiled as dynamic libraries and run on separate threads.
-They communicate via a global canal, and get the messages they want by subscribing to topics.
-
-The application's main class should inherit from AApplication, and load the modules it needs.

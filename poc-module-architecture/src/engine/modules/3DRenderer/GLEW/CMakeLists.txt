@@ -17,8 +17,6 @@ target_link_libraries(GLEWRenderer
     OpenGL::GL
     cppzmq
     libzmq
-    SFML::Window
-    SFML::System
 )
 
 # Set output name without lib prefix

@@ -1,4 +1,7 @@
 #include "GLEWRenderer.hpp"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <stdexcept>
 #include <iostream>
 #include <thread>
@@ -15,7 +18,14 @@ GLEWRenderer::GLEWRenderer(const char* pubEndpoint, const char* subEndpoint)
       _framebuffer(0),
       _renderTexture(0),
       _depthBuffer(0),
-      _glewInitialized(false) {
+      _glewInitialized(false),
+      _hwnd(nullptr),
+      _hdc(nullptr),
+      _hglrc(nullptr),
+      _cameraPos{0.0f, 0.0f, 5.0f},
+      _lightPos{0.0f, 5.0f, 0.0f},
+      _lightColor{1.0f, 1.0f, 1.0f},
+      _lightIntensity(1.0f) {
           _pixelBuffer.resize(_resolution.x * _resolution.y);
       }
 
@@ -24,19 +34,18 @@ GLEWRenderer::~GLEWRenderer() {
 }
 
 void GLEWRenderer::init() {
-    subscribe("SceneUpdated", [this](const std::string& msg) {
-        this->onSceneUpdated(msg);
+    subscribe("EntityCommand", [this](const std::string& msg) {
+        this->onEntityCommand(msg);
     });
 
-    // Create SFML context to allow OpenGL calls
-    _context = std::make_unique<sf::Context>();
+    initContext();
 
     ensureGLEWInitialized();
     createFramebuffer();
 
     glEnable(GL_DEPTH_TEST);
 
-    std::cout << "[GLEWRenderer] Initialized and subscribed to SceneUpdated" << std::endl;
+    std::cout << "[GLEWRenderer] Initialized and subscribed to EntityCommand" << std::endl;
 }
 
 void GLEWRenderer::ensureGLEWInitialized() {
@@ -51,11 +60,10 @@ void GLEWRenderer::ensureGLEWInitialized() {
 }
 
 void GLEWRenderer::loop() {
+    render();
 }
 
-void GLEWRenderer::onSceneUpdated(const std::string& message) {
-    _renderObjects.clear();
-
+void GLEWRenderer::onEntityCommand(const std::string& message) {
     std::stringstream ss(message);
     std::string segment;
     while (std::getline(ss, segment, ';')) {
@@ -64,47 +72,89 @@ void GLEWRenderer::onSceneUpdated(const std::string& message) {
         size_t colonPos = segment.find(':');
         if (colonPos == std::string::npos) continue;
 
-        std::string type = segment.substr(0, colonPos);
+        std::string command = segment.substr(0, colonPos);
         std::string data = segment.substr(colonPos + 1);
 
-        std::stringstream dataSs(data);
-        std::string val;
-        std::vector<std::string> values;
-        while (std::getline(dataSs, val, ',')) {
-            values.push_back(val);
-        }
+        if (command == "CreateEntity") {
+             size_t split = data.find(':');
+             if (split != std::string::npos) {
+                 std::string type = data.substr(0, split);
+                 std::string id = data.substr(split + 1);
 
-        if (type == "Camera") {
-            if (values.size() >= 4) {
-                _cameraPos = {std::stof(values[1]), std::stof(values[2]), std::stof(values[3])};
-            }
-        } else if (type == "Light") {
-            if (values.size() >= 8) {
-                _lightPos = {std::stof(values[1]), std::stof(values[2]), std::stof(values[3])};
-                _lightColor = {std::stof(values[4]), std::stof(values[5]), std::stof(values[6])};
-                _lightIntensity = std::stof(values[7]);
-            }
-        } else if (type == "Mesh") {
-            if (values.size() >= 11) {
-                RenderObject obj;
-                obj.id = values[0];
-                obj.meshPath = values[1];
-                obj.position = {std::stof(values[2]), std::stof(values[3]), std::stof(values[4])};
-                obj.rotation = {std::stof(values[5]), std::stof(values[6]), std::stof(values[7])};
-                obj.scale = {std::stof(values[8]), std::stof(values[9]), std::stof(values[10])};
-                _renderObjects.push_back(obj);
+                 if (type == "Camera" || type == "CAMERA") {
+                 } else if (type == "Light" || type == "LIGHT") {
+                     _activeLightId = id;
+                 } else {
+                     RenderObject obj;
+                     obj.id = id;
+                     if (type == "cube" || type == "MESH") obj.meshPath = "assets/models/cube.obj";
+                     else obj.meshPath = type;
 
-                if (_meshCache.find(obj.meshPath) == _meshCache.end()) {
-                    loadMesh(obj.meshPath);
+                     obj.position = {0,0,0};
+                     obj.rotation = {0,0,0};
+                     obj.scale = {1,1,1};
+                     _renderObjects[id] = obj;
+
+                     if (_meshCache.find(obj.meshPath) == _meshCache.end()) {
+                        loadMesh(obj.meshPath);
+                     }
+                 }
+             }
+        } else if (command == "SetPosition") {
+            std::stringstream dss(data);
+            std::string id, val;
+            std::getline(dss, id, ',');
+            std::vector<float> v;
+            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+
+            if (v.size() >= 3) {
+                if (_renderObjects.find(id) != _renderObjects.end()) {
+                    _renderObjects[id].position = {v[0], v[1], v[2]};
+                } else if (id == _activeCameraId) {
+                    _cameraPos = {v[0], v[1], v[2]};
+                } else if (id == _activeLightId) {
+                    _lightPos = {v[0], v[1], v[2]};
                 }
             }
+        } else if (command == "SetRotation") {
+            std::stringstream dss(data);
+            std::string id, val;
+            std::getline(dss, id, ',');
+            std::vector<float> v;
+            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+
+            if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
+                _renderObjects[id].rotation = {v[0], v[1], v[2]};
+            }
+        } else if (command == "SetScale") {
+            std::stringstream dss(data);
+            std::string id, val;
+            std::getline(dss, id, ',');
+            std::vector<float> v;
+            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+
+            if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
+                _renderObjects[id].scale = {v[0], v[1], v[2]};
+            }
+        } else if (command == "SetLightProperties") {
+            std::stringstream dss(data);
+            std::string id, val;
+            std::getline(dss, id, ',');
+            std::vector<float> v;
+            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+
+            if (v.size() >= 4) {
+                _lightColor = {v[0], v[1], v[2]};
+                _lightIntensity = v[3];
+            }
+        } else if (command == "SetActiveCamera") {
+            _activeCameraId = data;
         }
     }
-
-    render();
 }
 
 void GLEWRenderer::loadMesh(const std::string& path) {
+    if (path.empty()) return;
     std::ifstream file(path);
     if (!file.is_open()) {
         std::cerr << "Failed to open mesh file: " << path << std::endl;
@@ -155,6 +205,21 @@ void GLEWRenderer::loadMesh(const std::string& path) {
 
 void GLEWRenderer::cleanup() {
     destroyFramebuffer();
+#ifdef _WIN32
+    if (_hglrc) {
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext((HGLRC)_hglrc);
+        _hglrc = nullptr;
+    }
+    if (_hdc && _hwnd) {
+        ReleaseDC((HWND)_hwnd, (HDC)_hdc);
+        _hdc = nullptr;
+    }
+    if (_hwnd) {
+        DestroyWindow((HWND)_hwnd);
+        _hwnd = nullptr;
+    }
+#endif
 }
 
 void GLEWRenderer::createFramebuffer() {
@@ -241,7 +306,8 @@ void GLEWRenderer::render() {
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 
-    for (const auto& obj : _renderObjects) {
+    for (const auto& pair : _renderObjects) {
+        const auto& obj = pair.second;
         glPushMatrix();
 
         glTranslatef(obj.position.x, obj.position.y, obj.position.z);
@@ -301,6 +367,52 @@ std::vector<uint32_t> GLEWRenderer::getPixels() const {
 
 Vector2u GLEWRenderer::getResolution() const {
     return _resolution;
+}
+
+void GLEWRenderer::initContext() {
+#ifdef _WIN32
+    // Register a dummy window class
+    WNDCLASSA wc = {0};
+    wc.lpfnWndProc = DefWindowProcA;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "DummyOGL";
+    RegisterClassA(&wc);
+
+    // Create a dummy window
+    _hwnd = (void*)CreateWindowA("DummyOGL", "Dummy", 0, 0, 0, 1, 1, NULL, NULL, wc.hInstance, NULL);
+    if (!_hwnd) {
+        std::cerr << "Failed to create dummy window" << std::endl;
+        return;
+    }
+    _hdc = (void*)GetDC((HWND)_hwnd);
+
+    // Set pixel format
+    PIXELFORMATDESCRIPTOR pfd = {
+        sizeof(PIXELFORMATDESCRIPTOR),
+        1,
+        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+        PFD_TYPE_RGBA,
+        32,
+        0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0, 0, 0, 0,
+        24,
+        8,
+        0,
+        PFD_MAIN_PLANE,
+        0,
+        0, 0, 0
+    };
+
+    int pixelFormat = ChoosePixelFormat((HDC)_hdc, &pfd);
+    SetPixelFormat((HDC)_hdc, pixelFormat, &pfd);
+
+    // Create context
+    _hglrc = (void*)wglCreateContext((HDC)_hdc);
+    wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+#endif
 }
 
 }  // namespace rtypeEngine

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <GL/glew.h>
-#include <SFML/Window.hpp>
 #include <vector>
 #include <cstdint>
 #include <memory>
@@ -18,7 +17,7 @@ class GLEWRenderer : public I3DRenderer {
     void loop() override;
     void cleanup() override;
 
-    void onSceneUpdated(const std::string& message);
+    void onEntityCommand(const std::string& message);
 
     void addMesh(/* mesh parameters */) override;
     void clearBuffer() override;
@@ -30,7 +29,7 @@ class GLEWRenderer : public I3DRenderer {
     void createFramebuffer();
     void destroyFramebuffer();
     void ensureGLEWInitialized();
-    void initialize();
+    void initContext();
     void loadMesh(const std::string& path);
 
     struct RenderObject {
@@ -52,13 +51,18 @@ class GLEWRenderer : public I3DRenderer {
     GLuint _depthBuffer;
     std::vector<uint32_t> _pixelBuffer;
     bool _glewInitialized;
-    std::unique_ptr<sf::Context> _context;
+    
+    void* _hwnd;
+    void* _hdc;
+    void* _hglrc;
 
     Vector3f _cameraPos;
     Vector3f _lightPos;
     Vector3f _lightColor;
     float _lightIntensity;
-    std::vector<RenderObject> _renderObjects;
+    std::string _activeCameraId;
+    std::string _activeLightId;
+    std::map<std::string, RenderObject> _renderObjects;
     std::map<std::string, MeshData> _meshCache;
 };
 }  // namespace rtypeEngine
