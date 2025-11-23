@@ -46,6 +46,12 @@ if(NOT cppzmq_FOUND OR NOT ZeroMQ_FOUND)
     message(WARNING "ZeroMQ or cppzmq not found. Please install via vcpkg: vcpkg install zeromq cppzmq")
 endif()
 
+message(STATUS "Looking for Bullet...")
+find_package(Bullet CONFIG REQUIRED PATHS "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/share/bullet3")
+if(NOT Bullet_FOUND)
+    message(WARNING "Bullet not found. Please install via vcpkg: vcpkg install bullet3")
+endif()
+
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -58,18 +64,24 @@ include_directories(
 
 # Add subdirectories for modules
 if(SFML_FOUND)
-    add_subdirectory(src/engine/modules/windowManager/SFML)
+    add_subdirectory(src/engine/modules/WindowManager/SFML)
 else()
     message(WARNING "Skipping SFML Window Manager module")
 endif()
 
 if(GLEW_FOUND AND OpenGL_FOUND)
-    add_subdirectory(src/engine/modules/3DRenderer/GLEW)
+    add_subdirectory(src/engine/modules/Renderer/GLEW)
 else()
     message(WARNING "Skipping GLEW Renderer module")
 endif()
 
 add_subdirectory(src/engine/modules/LuaECS)
+
+if(Bullet_FOUND)
+    add_subdirectory(src/engine/modules/PhysicEngine/Bullet)
+else()
+    message(WARNING "Skipping Bullet Physics Engine module")
+endif()
 
 # Add subdirectory for game executable
 add_subdirectory(src/game)

@@ -23,6 +23,7 @@ GLEWRenderer::GLEWRenderer(const char* pubEndpoint, const char* subEndpoint)
       _hdc(nullptr),
       _hglrc(nullptr),
       _cameraPos{0.0f, 0.0f, 5.0f},
+      _cameraRot{0.0f, 0.0f, 0.0f},
       _lightPos{0.0f, 5.0f, 0.0f},
       _lightColor{1.0f, 1.0f, 1.0f},
       _lightIntensity(1.0f) {
@@ -34,8 +35,8 @@ GLEWRenderer::~GLEWRenderer() {
 }
 
 void GLEWRenderer::init() {
-    subscribe("EntityCommand", [this](const std::string& msg) {
-        this->onEntityCommand(msg);
+    subscribe("RenderEntityCommand", [this](const std::string& msg) {
+        this->onRenderEntityCommand(msg);
     });
 
     initContext();
@@ -45,7 +46,7 @@ void GLEWRenderer::init() {
 
     glEnable(GL_DEPTH_TEST);
 
-    std::cout << "[GLEWRenderer] Initialized and subscribed to EntityCommand" << std::endl;
+    std::cout << "[GLEWRenderer] Initialized" << std::endl;
 }
 
 void GLEWRenderer::ensureGLEWInitialized() {
@@ -63,7 +64,7 @@ void GLEWRenderer::loop() {
     render();
 }
 
-void GLEWRenderer::onEntityCommand(const std::string& message) {
+void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
     std::stringstream ss(message);
     std::string segment;
     while (std::getline(ss, segment, ';')) {
@@ -82,6 +83,13 @@ void GLEWRenderer::onEntityCommand(const std::string& message) {
                  std::string id = data.substr(split + 1);
 
                  if (type == "Camera" || type == "CAMERA") {
+                     RenderObject obj;
+                     obj.id = id;
+                     obj.meshPath = "";
+                     obj.position = {0,0,0};
+                     obj.rotation = {0,0,0};
+                     obj.scale = {1,1,1};
+                     _renderObjects[id] = obj;
                  } else if (type == "Light" || type == "LIGHT") {
                      _activeLightId = id;
                  } else {
@@ -123,8 +131,12 @@ void GLEWRenderer::onEntityCommand(const std::string& message) {
             std::vector<float> v;
             while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
 
-            if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
-                _renderObjects[id].rotation = {v[0], v[1], v[2]};
+            if (v.size() >= 3) {
+                if (_renderObjects.find(id) != _renderObjects.end()) {
+                    _renderObjects[id].rotation = {v[0], v[1], v[2]};
+                } else if (id == _activeCameraId) {
+                    _cameraRot = {v[0], v[1], v[2]};
+                }
             }
         } else if (command == "SetScale") {
             std::stringstream dss(data);
@@ -200,7 +212,7 @@ void GLEWRenderer::loadMesh(const std::string& path) {
     }
 
     _meshCache[path] = meshData;
-    std::cout << "Loaded mesh: " << path << " with " << meshData.vertices.size() / 3 << " vertices and " << meshData.indices.size() / 3 << " faces." << std::endl;
+    std::cout << "[GLEWRenderer] Loaded mesh: " << path << " with " << meshData.vertices.size() / 3 << " vertices and " << meshData.indices.size() / 3 << " faces." << std::endl;
 }
 
 void GLEWRenderer::cleanup() {
@@ -293,6 +305,16 @@ void GLEWRenderer::render() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
+    // Update camera from render objects if active
+    if (!_activeCameraId.empty() && _renderObjects.find(_activeCameraId) != _renderObjects.end()) {
+        _cameraPos = _renderObjects[_activeCameraId].position;
+        _cameraRot = _renderObjects[_activeCameraId].rotation;
+    }
+
+    // Apply camera rotation (convert radians to degrees)
+    glRotatef(-_cameraRot.x * 180.0f / 3.14159f, 1.0f, 0.0f, 0.0f);
+    glRotatef(-_cameraRot.y * 180.0f / 3.14159f, 0.0f, 1.0f, 0.0f);
+    glRotatef(-_cameraRot.z * 180.0f / 3.14159f, 0.0f, 0.0f, 1.0f);
     glTranslatef(-_cameraPos.x, -_cameraPos.y, -_cameraPos.z);
 
     glEnable(GL_LIGHTING);

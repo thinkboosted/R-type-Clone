@@ -1,0 +1,352 @@
+#include "BulletPhysicEngine.hpp"
+#include <iostream>
+#include <sstream>
+#include <vector>
+
+namespace rtypeEngine {
+
+BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
+    : IPhysicEngine(pubEndpoint, subEndpoint),
+      _collisionConfiguration(nullptr),
+      _dispatcher(nullptr),
+      _overlappingPairCache(nullptr),
+      _solver(nullptr),
+      _dynamicsWorld(nullptr) {}
+
+BulletPhysicEngine::~BulletPhysicEngine() {
+    cleanup();
+}
+
+void BulletPhysicEngine::init() {
+    _collisionConfiguration = new btDefaultCollisionConfiguration();
+    _dispatcher = new btCollisionDispatcher(_collisionConfiguration);
+    _overlappingPairCache = new btDbvtBroadphase();
+    _solver = new btSequentialImpulseConstraintSolver;
+    _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
+
+    _lastFrameTime = std::chrono::high_resolution_clock::now();
+
+    _dynamicsWorld->setGravity(btVector3(0, -10, 0));
+
+    subscribe("PhysicCommand", [this](const std::string& msg) {
+        this->onPhysicCommand(msg);
+    });
+
+    std::cout << "[BulletPhysicEngine] Initialized" << std::endl;
+}
+
+void BulletPhysicEngine::cleanup() {
+    for (auto& pair : _bodies) {
+        _dynamicsWorld->removeRigidBody(pair.second);
+        delete pair.second->getMotionState();
+        delete pair.second->getCollisionShape();
+        delete pair.second;
+    }
+    _bodies.clear();
+    _bodyIds.clear();
+
+    delete _dynamicsWorld;
+    delete _solver;
+    delete _overlappingPairCache;
+    delete _dispatcher;
+    delete _collisionConfiguration;
+}
+
+void BulletPhysicEngine::loop() {
+    stepSimulation();
+    checkCollisions();
+    sendUpdates();
+}
+
+void BulletPhysicEngine::stepSimulation() {
+    if (!_dynamicsWorld) return;
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<float> elapsedTime = currentTime - _lastFrameTime;
+    _lastFrameTime = currentTime;
+
+    float deltaTime = elapsedTime.count();
+
+    if (deltaTime > _maxDeltaTime) {
+        deltaTime = _maxDeltaTime;
+    }
+
+    _timeAccumulator += deltaTime;
+    const float fixedTimeStep = 1.0f / 60.0f;
+
+    while (_timeAccumulator >= fixedTimeStep) {
+        _dynamicsWorld->stepSimulation(fixedTimeStep, 10);
+        _timeAccumulator -= fixedTimeStep;
+    }
+}
+
+void BulletPhysicEngine::checkCollisions() {
+    if (!_dispatcher) return;
+
+    int numManifolds = _dispatcher->getNumManifolds();
+    for (int i = 0; i < numManifolds; i++) {
+        btPersistentManifold* contactManifold = _dispatcher->getManifoldByIndexInternal(i);
+        const btCollisionObject* obA = contactManifold->getBody0();
+        const btCollisionObject* obB = contactManifold->getBody1();
+
+        int numContacts = contactManifold->getNumContacts();
+        for (int j = 0; j < numContacts; j++) {
+            btManifoldPoint& pt = contactManifold->getContactPoint(j);
+            if (pt.getDistance() < 0.f) {
+                const btRigidBody* bodyA = btRigidBody::upcast(obA);
+                const btRigidBody* bodyB = btRigidBody::upcast(obB);
+
+                if (bodyA && bodyB) {
+                    auto itA = _bodyIds.find(const_cast<btRigidBody*>(bodyA));
+                    auto itB = _bodyIds.find(const_cast<btRigidBody*>(bodyB));
+
+                    if (itA != _bodyIds.end() && itB != _bodyIds.end()) {
+                        std::stringstream ss;
+                        ss << "Collision:" << itA->second << ":" << itB->second << ";";
+                        sendMessage("PhysicEvent", ss.str());
+                    }
+                }
+                // Only report one contact point per manifold to avoid spamming
+                break;
+            }
+        }
+    }
+}
+
+void BulletPhysicEngine::sendUpdates() {
+    std::stringstream ss;
+    for (auto& pair : _bodies) {
+        btTransform trans;
+        if (pair.second && pair.second->getMotionState()) {
+            pair.second->getMotionState()->getWorldTransform(trans);
+            btVector3 pos = trans.getOrigin();
+
+            btScalar yaw, pitch, roll;
+            trans.getBasis().getEulerYPR(yaw, pitch, roll);
+
+            ss << "EntityUpdated:" << pair.first << ":"
+               << pos.x() << "," << pos.y() << "," << pos.z() << ":"
+               << pitch << "," << yaw << "," << roll << ";";
+        }
+    }
+    std::string msg = ss.str();
+    if (!msg.empty()) {
+        sendMessage("EntityUpdated", msg);
+    }
+}
+
+void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
+    std::stringstream ss(message);
+    std::string segment;
+    while (std::getline(ss, segment, ';')) {
+        if (segment.empty()) continue;
+        size_t colonPos = segment.find(':');
+        if (colonPos == std::string::npos) continue;
+
+        std::string command = segment.substr(0, colonPos);
+        std::string data = segment.substr(colonPos + 1);
+
+        if (command == "CreateBody") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                std::string rest = data.substr(split1 + 1);
+                size_t split2 = rest.find(':');
+                if (split2 != std::string::npos) {
+                    std::string type = rest.substr(0, split2);
+                    std::string paramsStr = rest.substr(split2 + 1);
+
+                    std::vector<float> params;
+                    std::stringstream pss(paramsStr);
+                    std::string p;
+                    while (std::getline(pss, p, ',')) {
+                        params.push_back(std::stof(p));
+                    }
+                    createBody(id, type, params);
+                }
+            }
+        } else if (command == "ApplyForce") {
+             size_t split = data.find(':');
+             if (split != std::string::npos) {
+                 std::string id = data.substr(0, split);
+                 std::string forceStr = data.substr(split + 1);
+                 std::vector<float> force;
+                 std::stringstream fss(forceStr);
+                 std::string f;
+                 while (std::getline(fss, f, ',')) {
+                     force.push_back(std::stof(f));
+                 }
+                 if (force.size() == 3) {
+                     applyForce(id, force);
+                 }
+             }
+        } else if (command == "SetTransform") {
+             // SetTransform:id:x,y,z:rx,ry,rz
+             size_t split1 = data.find(':');
+             if (split1 != std::string::npos) {
+                 std::string id = data.substr(0, split1);
+                 std::string rest = data.substr(split1 + 1);
+                 size_t split2 = rest.find(':');
+                 if (split2 != std::string::npos) {
+                     std::string posStr = rest.substr(0, split2);
+                     std::string rotStr = rest.substr(split2 + 1);
+
+                     std::vector<float> pos;
+                     std::stringstream pss(posStr);
+                     std::string p;
+                     while (std::getline(pss, p, ',')) {
+                         pos.push_back(std::stof(p));
+                     }
+
+                     std::vector<float> rot;
+                     std::stringstream rss(rotStr);
+                     std::string r;
+                     while (std::getline(rss, r, ',')) {
+                         rot.push_back(std::stof(r));
+                     }
+
+                     if (pos.size() == 3 && rot.size() == 3) {
+                         setTransform(id, pos, rot);
+                     }
+                 }
+             }
+        } else if (command == "Raycast") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string originStr = data.substr(0, split1);
+                std::string dirStr = data.substr(split1 + 1);
+
+                std::vector<float> origin;
+                std::stringstream oss(originStr);
+                std::string o;
+                while (std::getline(oss, o, ',')) {
+                    origin.push_back(std::stof(o));
+                }
+
+                std::vector<float> dir;
+                std::stringstream dss(dirStr);
+                std::string d;
+                while (std::getline(dss, d, ',')) {
+                    dir.push_back(std::stof(d));
+                }
+
+                if (origin.size() == 3 && dir.size() == 3) {
+                    raycast(origin, dir);
+                }
+            }
+        } else if (command == "SetLinearVelocity") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                std::string velStr = data.substr(split1 + 1);
+
+                std::vector<float> vel;
+                std::stringstream vss(velStr);
+                std::string v;
+                while (std::getline(vss, v, ',')) {
+                    vel.push_back(std::stof(v));
+                }
+
+                if (vel.size() == 3) {
+                    setLinearVelocity(id, vel);
+                }
+            }
+        }
+    }
+}
+
+void BulletPhysicEngine::createBody(const std::string& id, const std::string& type, const std::vector<float>& params) {
+    btCollisionShape* shape = nullptr;
+    btScalar mass(1.f);
+
+    if (type == "Box" && params.size() >= 3) {
+        shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
+        if (params.size() >= 4) mass = params[3];
+    } else if (type == "Sphere" && params.size() >= 1) {
+        shape = new btSphereShape(params[0]);
+        if (params.size() >= 2) mass = params[1];
+    }
+
+    if (shape) {
+        btTransform startTransform;
+        startTransform.setIdentity();
+        startTransform.setOrigin(btVector3(0, 0, 0));
+
+        bool isDynamic = (mass != 0.f);
+
+        btVector3 localInertia(0, 0, 0);
+        if (isDynamic)
+            shape->calculateLocalInertia(mass, localInertia);
+
+        btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
+        btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
+        btRigidBody* body = new btRigidBody(rbInfo);
+
+        _dynamicsWorld->addRigidBody(body);
+        _bodies[id] = body;
+        _bodyIds[body] = id;
+    }
+}
+
+void BulletPhysicEngine::applyForce(const std::string& id, const std::vector<float>& force) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->activate(true);
+        _bodies[id]->applyCentralForce(btVector3(force[0], force[1], force[2]));
+    }
+}
+
+void BulletPhysicEngine::setTransform(const std::string& id, const std::vector<float>& pos, const std::vector<float>& rot) {
+    if (_bodies.find(id) != _bodies.end()) {
+        btRigidBody* body = _bodies[id];
+        btTransform trans;
+        trans.setIdentity();
+        trans.setOrigin(btVector3(pos[0], pos[1], pos[2]));
+
+        btQuaternion quat;
+        quat.setEulerZYX(rot[2], rot[1], rot[0]); // Yaw, Pitch, Roll? Bullet uses ZYX order usually.
+        trans.setRotation(quat);
+
+        body->setWorldTransform(trans);
+        if (body->getMotionState()) {
+            body->getMotionState()->setWorldTransform(trans);
+        }
+        body->activate(true);
+    }
+}
+
+void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::vector<float>& direction) {
+    if (!_dynamicsWorld) return;
+
+    btVector3 from(origin[0], origin[1], origin[2]);
+    btVector3 to = from + btVector3(direction[0], direction[1], direction[2]) * 1000.0f; // Ray length 1000
+
+    btCollisionWorld::ClosestRayResultCallback rayCallback(from, to);
+    _dynamicsWorld->rayTest(from, to, rayCallback);
+
+    if (rayCallback.hasHit()) {
+        const btRigidBody* body = btRigidBody::upcast(rayCallback.m_collisionObject);
+        if (body) {
+            auto it = _bodyIds.find(const_cast<btRigidBody*>(body));
+            if (it != _bodyIds.end()) {
+                std::stringstream ss;
+                // RaycastHit:id:distance
+                float dist = (rayCallback.m_hitPointWorld - from).length();
+                ss << "RaycastHit:" << it->second << ":" << dist << ";";
+                sendMessage("PhysicEvent", ss.str());
+            }
+        }
+    }
+}
+
+void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& velocity) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->activate(true);
+        _bodies[id]->setLinearVelocity(btVector3(velocity[0], velocity[1], velocity[2]));
+    }
+}
+
+} // namespace rtypeEngine
+
+extern "C" rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+    return new rtypeEngine::BulletPhysicEngine(pubEndpoint, subEndpoint);
+}

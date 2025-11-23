@@ -17,7 +17,7 @@ class GLEWRenderer : public I3DRenderer {
     void loop() override;
     void cleanup() override;
 
-    void onEntityCommand(const std::string& message);
+    void onRenderEntityCommand(const std::string& message);
 
     void addMesh(/* mesh parameters */) override;
     void clearBuffer() override;
@@ -51,12 +51,13 @@ class GLEWRenderer : public I3DRenderer {
     GLuint _depthBuffer;
     std::vector<uint32_t> _pixelBuffer;
     bool _glewInitialized;
-    
+
     void* _hwnd;
     void* _hdc;
     void* _hglrc;
 
     Vector3f _cameraPos;
+    Vector3f _cameraRot;
     Vector3f _lightPos;
     Vector3f _lightColor;
     float _lightIntensity;

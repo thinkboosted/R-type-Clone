@@ -17,15 +17,16 @@ namespace rtypeEngine {
         void loop() override;
         void cleanup() override;
 
-        void loadComponentScript(const std::string& path);
-        void loadSystemScript(const std::string& path);
+        void loadScript(const std::string& path);
 
     private:
         sol::state _lua;
         std::vector<sol::table> _systems;
+        std::vector<std::string> _entities;
+        std::map<std::string, std::map<std::string, sol::table>> _components;
 
         void setupLuaBindings();
-        void registerComponent(const std::string& name, const sol::table& componentDef);
+        std::string generateUuid();
     };
 
 }

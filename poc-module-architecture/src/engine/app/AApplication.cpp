@@ -24,8 +24,8 @@ void AApplication::initializeMessageBroker() {
   try {
     _xpubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xpub);
     _xsubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xsub);
-    _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
     _subscriber = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::sub);
+    _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
 
     std::string pubEndpoint = _endpoint;
     std::string subEndpoint = _endpoint;

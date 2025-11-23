@@ -1,7 +1,11 @@
 #include "SFMLWindowManager.hpp"
+#include "KeysMap.hpp"
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <utility>
+#include <map>
+#include <sstream>
 
 namespace rtypeEngine {
 
@@ -16,6 +20,7 @@ void SFMLWindowManager::init() {
     subscribe("CloseWindow", [this](const std::string&) {
         this->close();
     });
+    std::cout << "[SFMLWindowManager] Initialized" << std::endl;
 }
 
 void SFMLWindowManager::loop() {
@@ -25,6 +30,28 @@ void SFMLWindowManager::loop() {
                 _window->close();
                 sendMessage("ExitApplication", "");
             }
+            if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+                std::stringstream ss;
+                ss << static_cast<int>(mousePressed->button) << ":" << mousePressed->position.x << "," << mousePressed->position.y;
+                sendMessage("MousePressed", ss.str());
+            }
+            if (const auto* mouseReleased = event->getIf<sf::Event::MouseButtonReleased>()) {
+                std::stringstream ss;
+                ss << static_cast<int>(mouseReleased->button) << ":" << mouseReleased->position.x << "," << mouseReleased->position.y;
+                sendMessage("MouseReleased", ss.str());
+            }
+            if (const auto* mouseMoved = event->getIf<sf::Event::MouseMoved>()) {
+                std::stringstream ss;
+                ss << mouseMoved->position.x << "," << mouseMoved->position.y;
+                sendMessage("MouseMoved", ss.str());
+            }
+        }
+    }
+
+    for (int k = 0; k < sf::Keyboard::KeyCount; ++k) {
+        auto key = static_cast<sf::Keyboard::Key>(k);
+        if (sf::Keyboard::isKeyPressed(key)) {
+            sendMessage("KeyPressed", keyMappings.at(key));
         }
     }
 }

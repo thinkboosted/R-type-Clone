@@ -124,14 +124,29 @@ void AModule::unsubscribe(const std::string& topic) {
 }
 
 void AModule::processMessages() {
-    for (const auto& subscription : _subscriptions) {
-        const std::string& topic = subscription.first;
-        const MessageHandler& handler = subscription.second;
+    while (true) {
+        zmq::message_t zmqMessage;
+        auto result = _subscriber->recv(zmqMessage, zmq::recv_flags::dontwait);
 
-        std::string message = getMessage(topic);
+        if (!result) {
+            break;
+        }
 
-        if (!message.empty()) {
-            handler(message);
+        std::string fullMessage(static_cast<char*>(zmqMessage.data()), zmqMessage.size());
+
+        for (const auto& subscription : _subscriptions) {
+            const std::string& topic = subscription.first;
+            const MessageHandler& handler = subscription.second;
+
+            if (fullMessage.find(topic) == 0) {
+                if (fullMessage.length() == topic.length() || fullMessage[topic.length()] == ' ') {
+                    std::string payload = "";
+                    if (fullMessage.length() > topic.length() + 1) {
+                        payload = fullMessage.substr(topic.length() + 1);
+                    }
+                    handler(payload);
+                }
+            }
         }
     }
 }
