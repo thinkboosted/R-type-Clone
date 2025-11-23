@@ -160,7 +160,13 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                     std::stringstream pss(paramsStr);
                     std::string p;
                     while (std::getline(pss, p, ',')) {
-                        params.push_back(std::stof(p));
+                        try {
+                            if (!p.empty()) {
+                                params.push_back(std::stof(p));
+                            }
+                        } catch (const std::exception& e) {
+                            std::cerr << "[BulletPhysicEngine] Error parsing float '" << p << "' in '" << paramsStr << "': " << e.what() << std::endl;
+                        }
                     }
                     createBody(id, type, params);
                 }
