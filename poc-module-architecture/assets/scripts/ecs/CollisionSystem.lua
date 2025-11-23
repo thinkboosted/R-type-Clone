@@ -1,0 +1,42 @@
+local CollisionSystem = {}
+
+CollisionSystem.initializedEntities = {}
+
+function CollisionSystem.init()
+    print("[CollisionSystem] Initialized")
+end
+
+function CollisionSystem.update(dt)
+    local entities = ECS.getEntitiesWith({"Transform", "Collider"})
+
+    for _, id in ipairs(entities) do
+        local transform = ECS.getComponent(id, "Transform")
+        local collider = ECS.getComponent(id, "Collider")
+        local physic = ECS.getComponent(id, "Physic") -- Optional
+
+        if not CollisionSystem.initializedEntities[id] then
+            local params = ""
+            if collider.type == "Box" then
+                params = collider.size[1] .. "," .. collider.size[2] .. "," .. collider.size[3]
+            elseif collider.type == "Sphere" then
+                params = tostring(collider.size)
+            end
+
+            local mass = 0.0
+            if physic then
+                mass = physic.mass
+            end
+
+            local msg = "CreateBody:" .. id .. ":" .. collider.type .. ":" .. params .. "," .. mass .. ";"
+            ECS.sendMessage("PhysicCommand", msg)
+
+            -- Set initial transform
+            local tMsg = "SetTransform:" .. id .. ":" .. transform.x .. "," .. transform.y .. "," .. transform.z .. ":" .. transform.rx .. "," .. transform.ry .. "," .. transform.rz .. ";"
+            ECS.sendMessage("PhysicCommand", tMsg)
+
+            CollisionSystem.initializedEntities[id] = true
+        end
+    end
+end
+
+ECS.registerSystem(CollisionSystem)

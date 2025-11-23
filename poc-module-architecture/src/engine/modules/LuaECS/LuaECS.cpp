@@ -37,6 +37,7 @@ namespace rtypeEngine {
         };
 
         subscribe("KeyPressed", [=](const std::string& msg) { forwardEvent("onKeyPressed", msg); });
+        subscribe("KeyReleased", [=](const std::string& msg) { forwardEvent("onKeyReleased", msg); });
         subscribe("MousePressed", [=](const std::string& msg) { forwardEvent("onMousePressed", msg); });
         subscribe("MouseReleased", [=](const std::string& msg) { forwardEvent("onMouseReleased", msg); });
         subscribe("MouseMoved", [=](const std::string& msg) { forwardEvent("onMouseMoved", msg); });

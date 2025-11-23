@@ -7,39 +7,43 @@ function PhysicSystem.init()
 end
 
 function PhysicSystem.update(dt)
-    local entities = ECS.getEntitiesWith({"Transform", "Physic", "Collider"})
+    local entities = ECS.getEntitiesWith({"Transform", "Physic"})
 
     for _, id in ipairs(entities) do
         local transform = ECS.getComponent(id, "Transform")
         local physic = ECS.getComponent(id, "Physic")
-        local collider = ECS.getComponent(id, "Collider")
+        local collider = ECS.getComponent(id, "Collider") -- Optional
 
-        if not PhysicSystem.initializedEntities[id] then
+        if collider then
+            -- Managed by C++ Physics Engine (via CollisionSystem creation)
+            if physic.mass > 0 then
+                local vMsg = "SetLinearVelocity:" .. id .. ":" .. physic.vx .. "," .. physic.vy .. "," .. physic.vz .. ";"
+                ECS.sendMessage("PhysicCommand", vMsg)
 
-            local params = ""
-            if collider.type == "Box" then
-                params = collider.size[1] .. "," .. collider.size[2] .. "," .. collider.size[3]
-            elseif collider.type == "Sphere" then
-                params = tostring(collider.size)
+                local vaMsg = "SetAngularVelocity:" .. id .. ":" .. physic.vax .. "," .. physic.vay .. "," .. physic.vaz .. ";"
+                ECS.sendMessage("PhysicCommand", vaMsg)
+            end
+        else
+            -- Managed by Lua (Simple Physics)
+            -- Apply Gravity
+            if physic.mass > 0 then
+                physic.vy = physic.vy - 9.81 * dt
             end
 
-            local msg = "CreateBody:" .. id .. ":" .. collider.type .. ":" .. params .. "," .. physic.mass .. ";"
-            ECS.sendMessage("PhysicCommand", msg)
+            -- Apply Velocity
+            transform.x = transform.x + physic.vx * dt
+            transform.y = transform.y + physic.vy * dt
+            transform.z = transform.z + physic.vz * dt
 
-            -- Set initial transform
-            local tMsg = "SetTransform:" .. id .. ":" .. transform.x .. "," .. transform.y .. "," .. transform.z .. ":" .. transform.rx .. "," .. transform.ry .. "," .. transform.rz .. ";"
-            ECS.sendMessage("PhysicCommand", tMsg)
-
-            PhysicSystem.initializedEntities[id] = true
+            -- Apply Angular Velocity
+            transform.rx = transform.rx + physic.vax * dt
+            transform.ry = transform.ry + physic.vay * dt
+            transform.rz = transform.rz + physic.vaz * dt
         end
-
-        local vMsg = "SetLinearVelocity:" .. id .. ":" .. physic.vx .. "," .. physic.vy .. "," .. physic.vz .. ";"
-        ECS.sendMessage("PhysicCommand", vMsg)
     end
 end
 
 function PhysicSystem.onCollision(id1, id2)
-    print("[PhysicSystem] Collision detected between " .. id1 .. " and " .. id2)
 end
 
 function PhysicSystem.onEntityUpdated(id, x, y, z, rx, ry, rz)

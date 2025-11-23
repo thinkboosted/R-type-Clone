@@ -15,7 +15,7 @@ local floor = ECS.createEntity()
 ECS.addComponent(floor, "Transform", Transform(0, -2, 0))
 ECS.addComponent(floor, "Mesh", Mesh("assets/models/cube.obj"))
 ECS.addComponent(floor, "Collider", Collider("Box", {50, 0.5, 50}))
-ECS.addComponent(floor, "Physic", Physic(0.0))
+-- Floor is static (no Physic component)
 local floorTrans = ECS.getComponent(floor, "Transform")
 floorTrans.sx = 50
 floorTrans.sy = 0.1
@@ -27,5 +27,16 @@ ECS.addComponent(player, "Mesh", Mesh("assets/models/cube.obj"))
 ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
 ECS.addComponent(player, "Physic", Physic(1.0))
 ECS.addComponent(player, "Player", Player(5.0))
+
+-- 4. Create Random Boxes
+for i = 1, 5 do
+    local box = ECS.createEntity()
+    local x = math.random(-10, 10)
+    local z = math.random(-10, 10)
+    ECS.addComponent(box, "Transform", Transform(x, 5 + i * 2, z))
+    ECS.addComponent(box, "Mesh", Mesh("assets/models/cube.obj"))
+    ECS.addComponent(box, "Collider", Collider("Box", {1, 1, 1}))
+    ECS.addComponent(box, "Physic", Physic(1.0))
+end
 
 print("[Game] Scene Created")

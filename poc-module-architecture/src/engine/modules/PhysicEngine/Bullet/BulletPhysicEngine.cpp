@@ -26,7 +26,7 @@ void BulletPhysicEngine::init() {
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
 
-    _dynamicsWorld->setGravity(btVector3(0, -10, 0));
+    _dynamicsWorld->setGravity(btVector3(0, -30, 0));
 
     subscribe("PhysicCommand", [this](const std::string& msg) {
         this->onPhysicCommand(msg);
@@ -85,7 +85,10 @@ void BulletPhysicEngine::checkCollisions() {
 
     int numManifolds = _dispatcher->getNumManifolds();
     for (int i = 0; i < numManifolds; i++) {
+        if (i >= _dispatcher->getNumManifolds()) break;
         btPersistentManifold* contactManifold = _dispatcher->getManifoldByIndexInternal(i);
+        if (!contactManifold) continue;
+
         const btCollisionObject* obA = contactManifold->getBody0();
         const btCollisionObject* obB = contactManifold->getBody1();
 
@@ -250,11 +253,32 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                 std::stringstream vss(velStr);
                 std::string v;
                 while (std::getline(vss, v, ',')) {
-                    vel.push_back(std::stof(v));
+                    try {
+                        if (!v.empty()) vel.push_back(std::stof(v));
+                    } catch (...) {}
                 }
 
                 if (vel.size() == 3) {
                     setLinearVelocity(id, vel);
+                }
+            }
+        } else if (command == "SetAngularVelocity") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                std::string velStr = data.substr(split1 + 1);
+
+                std::vector<float> vel;
+                std::stringstream vss(velStr);
+                std::string v;
+                while (std::getline(vss, v, ',')) {
+                    try {
+                        if (!v.empty()) vel.push_back(std::stof(v));
+                    } catch (...) {}
+                }
+
+                if (vel.size() == 3) {
+                    setAngularVelocity(id, vel);
                 }
             }
         }
@@ -344,10 +368,17 @@ void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::ve
     }
 }
 
-void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& velocity) {
+void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& vel) {
     if (_bodies.find(id) != _bodies.end()) {
         _bodies[id]->activate(true);
-        _bodies[id]->setLinearVelocity(btVector3(velocity[0], velocity[1], velocity[2]));
+        _bodies[id]->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
+    }
+}
+
+void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->activate(true);
+        _bodies[id]->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
     }
 }
 

@@ -1,6 +1,6 @@
 -- Render System
 local RenderSystem = {}
-
+local CameraInitialized = false
 RenderSystem.initializedEntities = {}
 
 function RenderSystem.init()
@@ -11,8 +11,9 @@ function RenderSystem.update(dt)
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
     for _, id in ipairs(cameras) do
         local cam = ECS.getComponent(id, "Camera")
-        if cam.isActive then
+        if cam.isActive and not CameraInitialized then
             ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
+            CameraInitialized = true
 
             local t = ECS.getComponent(id, "Transform")
             ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)

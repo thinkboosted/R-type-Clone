@@ -23,6 +23,7 @@ class BulletPhysicEngine : public IPhysicEngine {
     void applyForce(const std::string& id, const std::vector<float>& force) override;
     void raycast(const std::vector<float>& origin, const std::vector<float>& direction);
     void setLinearVelocity(const std::string& id, const std::vector<float>& velocity);
+    void setAngularVelocity(const std::string& id, const std::vector<float>& velocity);
 
   private:
     void onPhysicCommand(const std::string& message);

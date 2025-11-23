@@ -28,6 +28,7 @@ function Physic(mass, friction)
         mass = mass or 1.0,
         friction = friction or 0.5,
         vx = 0, vy = 0, vz = 0,
+        vax = 0, vay = 0, vaz = 0,
         ax = 0, ay = 0, az = 0
     }
 end
