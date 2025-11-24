@@ -24,6 +24,11 @@ class BulletPhysicEngine : public IPhysicEngine {
     void raycast(const std::vector<float>& origin, const std::vector<float>& direction);
     void setLinearVelocity(const std::string& id, const std::vector<float>& velocity);
     void setAngularVelocity(const std::string& id, const std::vector<float>& velocity);
+    void setMass(const std::string& id, float mass);
+    void setFriction(const std::string& id, float friction);
+    void setVelocityXZ(const std::string& id, float vx, float vz);
+    void applyImpulse(const std::string& id, const std::vector<float>& impulse);
+    void setAngularFactor(const std::string& id, const std::vector<float>& factor);
 
   private:
     void onPhysicCommand(const std::string& message);

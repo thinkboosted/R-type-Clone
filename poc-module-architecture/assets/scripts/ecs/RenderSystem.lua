@@ -40,6 +40,13 @@ function RenderSystem.update(dt)
         ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
         ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
     end
+
+    local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
+    for _, id in ipairs(cameras) do
+        local transform = ECS.getComponent(id, "Transform")
+        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+    end
 end
 
 ECS.registerSystem(RenderSystem)

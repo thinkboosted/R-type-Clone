@@ -281,6 +281,69 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                     setAngularVelocity(id, vel);
                 }
             }
+        } else if (command == "SetVelocityXZ") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                std::string velStr = data.substr(split1 + 1);
+                std::vector<float> vel;
+                std::stringstream vss(velStr);
+                std::string v;
+                while (std::getline(vss, v, ',')) {
+                    try {
+                        if (!v.empty()) vel.push_back(std::stof(v));
+                    } catch (...) {}
+                }
+                if (vel.size() == 2) {
+                    setVelocityXZ(id, vel[0], vel[1]);
+                }
+            }
+        } else if (command == "ApplyImpulse") {
+             size_t split = data.find(':');
+             if (split != std::string::npos) {
+                 std::string id = data.substr(0, split);
+                 std::string forceStr = data.substr(split + 1);
+                 std::vector<float> force;
+                 std::stringstream fss(forceStr);
+                 std::string f;
+                 while (std::getline(fss, f, ',')) {
+                     force.push_back(std::stof(f));
+                 }
+                 if (force.size() == 3) {
+                     applyImpulse(id, force);
+                 }
+             }
+        } else if (command == "SetAngularFactor") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                std::string factorStr = data.substr(split1 + 1);
+                std::vector<float> factor;
+                std::stringstream fss(factorStr);
+                std::string f;
+                while (std::getline(fss, f, ',')) {
+                    try {
+                        if (!f.empty()) factor.push_back(std::stof(f));
+                    } catch (...) {}
+                }
+                if (factor.size() == 3) {
+                    setAngularFactor(id, factor);
+                }
+            }
+        } else if (command == "SetMass") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                float mass = std::stof(data.substr(split1 + 1));
+                setMass(id, mass);
+            }
+        } else if (command == "SetFriction") {
+            size_t split1 = data.find(':');
+            if (split1 != std::string::npos) {
+                std::string id = data.substr(0, split1);
+                float friction = std::stof(data.substr(split1 + 1));
+                setFriction(id, friction);
+            }
         }
     }
 }
@@ -288,13 +351,16 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
 void BulletPhysicEngine::createBody(const std::string& id, const std::string& type, const std::vector<float>& params) {
     btCollisionShape* shape = nullptr;
     btScalar mass(1.f);
+    btScalar friction(0.5f);
 
     if (type == "Box" && params.size() >= 3) {
         shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
         if (params.size() >= 4) mass = params[3];
+        if (params.size() >= 5) friction = params[4];
     } else if (type == "Sphere" && params.size() >= 1) {
         shape = new btSphereShape(params[0]);
         if (params.size() >= 2) mass = params[1];
+        if (params.size() >= 3) friction = params[2];
     }
 
     if (shape) {
@@ -310,6 +376,7 @@ void BulletPhysicEngine::createBody(const std::string& id, const std::string& ty
 
         btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
         btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
+        rbInfo.m_friction = friction;
         btRigidBody* body = new btRigidBody(rbInfo);
 
         _dynamicsWorld->addRigidBody(body);
@@ -379,6 +446,51 @@ void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::ve
     if (_bodies.find(id) != _bodies.end()) {
         _bodies[id]->activate(true);
         _bodies[id]->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
+    }
+}
+
+void BulletPhysicEngine::setMass(const std::string& id, float mass) {
+    if (_bodies.find(id) != _bodies.end()) {
+        btRigidBody* body = _bodies[id];
+        btVector3 localInertia(0, 0, 0);
+        if (mass != 0.f) {
+            body->getCollisionShape()->calculateLocalInertia(mass, localInertia);
+        }
+        body->setMassProps(mass, localInertia);
+        body->updateInertiaTensor();
+        body->activate(true);
+    }
+}
+
+void BulletPhysicEngine::setFriction(const std::string& id, float friction) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->setFriction(friction);
+        _bodies[id]->activate(true);
+    }
+}
+
+void BulletPhysicEngine::setVelocityXZ(const std::string& id, float vx, float vz) {
+    if (_bodies.find(id) != _bodies.end()) {
+        btRigidBody* body = _bodies[id];
+        body->activate(true);
+        btVector3 vel = body->getLinearVelocity();
+        vel.setX(vx);
+        vel.setZ(vz);
+        body->setLinearVelocity(vel);
+    }
+}
+
+void BulletPhysicEngine::applyImpulse(const std::string& id, const std::vector<float>& impulse) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->activate(true);
+        _bodies[id]->applyCentralImpulse(btVector3(impulse[0], impulse[1], impulse[2]));
+    }
+}
+
+void BulletPhysicEngine::setAngularFactor(const std::string& id, const std::vector<float>& factor) {
+    if (_bodies.find(id) != _bodies.end()) {
+        _bodies[id]->activate(true);
+        _bodies[id]->setAngularFactor(btVector3(factor[0], factor[1], factor[2]));
     }
 }
 

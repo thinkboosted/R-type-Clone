@@ -12,7 +12,7 @@ function CollisionSystem.update(dt)
     for _, id in ipairs(entities) do
         local transform = ECS.getComponent(id, "Transform")
         local collider = ECS.getComponent(id, "Collider")
-        local physic = ECS.getComponent(id, "Physic") -- Optional
+        local physic = ECS.getComponent(id, "Physic")
 
         if not CollisionSystem.initializedEntities[id] then
             local params = ""
@@ -23,12 +23,20 @@ function CollisionSystem.update(dt)
             end
 
             local mass = 0.0
+            local friction = 0.5
+            local fixedRotation = false
             if physic then
                 mass = physic.mass
+                friction = physic.friction
+                fixedRotation = physic.fixedRotation
             end
 
-            local msg = "CreateBody:" .. id .. ":" .. collider.type .. ":" .. params .. "," .. mass .. ";"
+            local msg = "CreateBody:" .. id .. ":" .. collider.type .. ":" .. params .. "," .. mass .. "," .. friction .. ";"
             ECS.sendMessage("PhysicCommand", msg)
+
+            if fixedRotation then
+                ECS.sendMessage("PhysicCommand", "SetAngularFactor:" .. id .. ":0,0,0;")
+            end
 
             -- Set initial transform
             local tMsg = "SetTransform:" .. id .. ":" .. transform.x .. "," .. transform.y .. "," .. transform.z .. ":" .. transform.rx .. "," .. transform.ry .. "," .. transform.rz .. ";"

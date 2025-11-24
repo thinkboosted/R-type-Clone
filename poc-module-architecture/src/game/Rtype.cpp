@@ -23,15 +23,15 @@ void Rtype::init() {
   }
   try {
 #ifdef _WIN32
-    this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
-    this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
-    this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
-    this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
+  this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
+  this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
+  this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
+  this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
 #else
-    this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
-    this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
-    this->addModule("LuaECS.so", pubEndpoint, subEndpoint);
-    this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);
+  this->addModule("LuaECS.so", pubEndpoint, subEndpoint);
+  this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
+  this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
+  this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;
@@ -45,7 +45,7 @@ void Rtype::loop() {
         sendMessage("LoadScript", "assets/scripts/ecs/RenderSystem.lua");
         sendMessage("LoadScript", "assets/scripts/ecs/CollisionSystem.lua");
         sendMessage("LoadScript", "assets/scripts/ecs/PhysicSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/PlayerInputSystem.lua");
+        sendMessage("LoadScript", "assets/scripts/ecs/PlayerSystem.lua");
         sendMessage("LoadScript", "assets/scripts/ecs/CameraSystem.lua");
         sendMessage("LoadScript", "assets/scripts/ecs/Game.lua");
 

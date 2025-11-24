@@ -45,6 +45,12 @@ void SFMLWindowManager::loop() {
                 ss << mouseMoved->position.x << "," << mouseMoved->position.y;
                 sendMessage("MouseMoved", ss.str());
             }
+            if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
+                auto it = keyMappings.find(keyReleased->code);
+                if (it != keyMappings.end()) {
+                    sendMessage("KeyReleased", it->second);
+                }
+            }
         }
     }
 

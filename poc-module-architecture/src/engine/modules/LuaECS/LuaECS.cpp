@@ -94,28 +94,28 @@ namespace rtypeEngine {
                 // Format: EntityUpdated:id:x,y,z:rx,ry,rz
                 size_t split1 = segment.find(':'); // After EntityUpdated
                 if (split1 == std::string::npos) continue;
-                
+
                 std::string rest = segment.substr(split1 + 1);
                 size_t split2 = rest.find(':'); // After id
                 if (split2 == std::string::npos) continue;
-                
+
                 std::string id = rest.substr(0, split2);
                 std::string coords = rest.substr(split2 + 1);
-                
+
                 size_t split3 = coords.find(':'); // After pos
                 if (split3 == std::string::npos) continue;
-                
+
                 std::string posStr = coords.substr(0, split3);
                 std::string rotStr = coords.substr(split3 + 1);
-                
+
                 float x, y, z, rx, ry, rz;
                 char comma;
                 std::stringstream pss(posStr);
                 pss >> x >> comma >> y >> comma >> z;
-                
+
                 std::stringstream rss(rotStr);
                 rss >> rx >> comma >> ry >> comma >> rz;
-                
+
                 for (auto& system : _systems) {
                     if (system["onEntityUpdated"].valid()) {
                         try {
