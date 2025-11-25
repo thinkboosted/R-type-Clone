@@ -21,6 +21,7 @@ void Rtype::init() {
     pubEndpoint = base + ":" + std::to_string(port);
     subEndpoint = base + ":" + std::to_string(port + 1);
   }
+
   try {
 #ifdef _WIN32
   this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
@@ -41,15 +42,9 @@ void Rtype::init() {
 
 void Rtype::loop() {
     if (!_scriptsLoaded) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        sendMessage("LoadScript", "assets/scripts/ecs/RenderSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/CollisionSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/PhysicSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/PlayerSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/CameraSystem.lua");
-        sendMessage("LoadScript", "assets/scripts/ecs/Game.lua");
-
-        _scriptsLoaded = true;
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
+      _scriptsLoaded = true;
     }
 }
 

@@ -1,7 +1,7 @@
 -- Game Definition
 
 -- Load Components
-dofile("assets/scripts/ecs/Components.lua")
+dofile("assets/scripts/test-minigame/Components.lua")
 
 
 local camera = ECS.createEntity()
@@ -27,6 +27,15 @@ ECS.addComponent(player, "Mesh", Mesh("assets/models/cube.obj"))
 ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
 ECS.addComponent(player, "Physic", Physic(4.0, 10.0, true))
 ECS.addComponent(player, "Player", Player(15.0))
+
+local winCube = ECS.createEntity()
+ECS.addComponent(winCube, "Transform", Transform(5, 2, 5))
+ECS.addComponent(winCube, "Mesh", Mesh("assets/models/cube.obj"))
+ECS.addComponent(winCube, "Collider", Collider("Box", {1, 1, 1}))
+ECS.addComponent(winCube, "WinCube", WinCube())
+ECS.addComponent(winCube, "Physic", Physic(4.0, 10.0, true))
+ECS.addComponent(winCube, "Color", Color(1.0, 0.0, 0.0))
+
 
 -- -- 4. Create Random Boxes
 -- for i = 1, 1000 do

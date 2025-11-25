@@ -89,6 +89,7 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
                      obj.position = {0,0,0};
                      obj.rotation = {0,0,0};
                      obj.scale = {1,1,1};
+                     obj.color = {1.0f, 1.0f, 1.0f};
                      _renderObjects[id] = obj;
                  } else if (type == "Light" || type == "LIGHT") {
                      _activeLightId = id;
@@ -101,6 +102,7 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
                      obj.position = {0,0,0};
                      obj.rotation = {0,0,0};
                      obj.scale = {1,1,1};
+                     obj.color = {1.0f, 0.5f, 0.2f};
                      _renderObjects[id] = obj;
 
                      if (_meshCache.find(obj.meshPath) == _meshCache.end()) {
@@ -148,6 +150,16 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
             if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
                 _renderObjects[id].scale = {v[0], v[1], v[2]};
             }
+        } else if (command == "SetColor") {
+            std::stringstream dss(data);
+            std::string id, val;
+            std::getline(dss, id, ',');
+            std::vector<float> v;
+            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+
+            if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
+                _renderObjects[id].color = {v[0], v[1], v[2]};
+            }
         } else if (command == "SetLightProperties") {
             std::stringstream dss(data);
             std::string id, val;
@@ -161,6 +173,10 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
             }
         } else if (command == "SetActiveCamera") {
             _activeCameraId = data;
+        } else if (command == "DestroyEntity") {
+            if (_renderObjects.find(data) != _renderObjects.end()) {
+                _renderObjects.erase(data);
+            }
         }
     }
 }
@@ -204,7 +220,6 @@ void GLEWRenderer::loadMesh(const std::string& path) {
         }
     }
 
-    // Flatten vertices for simple rendering (indexed)
     for (const auto& v : tempVertices) {
         meshData.vertices.push_back(v.x);
         meshData.vertices.push_back(v.y);
@@ -281,7 +296,7 @@ void GLEWRenderer::render() {
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
     glViewport(0, 0, _resolution.x, _resolution.y);
 
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glMatrixMode(GL_PROJECTION);
@@ -320,10 +335,15 @@ void GLEWRenderer::render() {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
 
-    GLfloat lightPos[] = {_lightPos.x, _lightPos.y, _lightPos.z, 1.0f};
-    GLfloat lightColor[] = {_lightColor.x, _lightColor.y, _lightColor.z, 1.0f};
+    GLfloat lightPos[] = {0.0f, 10.0f, 0.0f, 0.0f};
+    GLfloat lightDiffuse[] = {_lightColor.x, _lightColor.y, _lightColor.z, 1.0f};
+    GLfloat lightAmbient[] = {0.4f, 0.4f, 0.4f, 1.0f};
+    GLfloat lightSpecular[] = {0.3f, 0.3f, 0.3f, 1.0f};
+
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+    glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
 
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
@@ -341,7 +361,7 @@ void GLEWRenderer::render() {
         if (_meshCache.find(obj.meshPath) != _meshCache.end()) {
             const auto& mesh = _meshCache[obj.meshPath];
 
-            glColor3f(1.0f, 0.5f, 0.2f); // Orange cube
+            glColor3f(obj.color.x, obj.color.y, obj.color.z);
 
             glBegin(GL_TRIANGLES);
             for (size_t i = 0; i < mesh.indices.size(); ++i) {

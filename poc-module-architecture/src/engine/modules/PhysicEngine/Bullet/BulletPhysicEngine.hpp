@@ -29,6 +29,7 @@ class BulletPhysicEngine : public IPhysicEngine {
     void setVelocityXZ(const std::string& id, float vx, float vz);
     void applyImpulse(const std::string& id, const std::vector<float>& impulse);
     void setAngularFactor(const std::string& id, const std::vector<float>& factor);
+    void destroyBody(const std::string& id);
 
   private:
     void onPhysicCommand(const std::string& message);

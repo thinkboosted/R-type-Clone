@@ -178,6 +178,8 @@ namespace rtypeEngine {
             if (it != _entities.end()) {
                 _entities.erase(it);
                 _components.erase(id);
+                sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+                sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
             }
         });
 

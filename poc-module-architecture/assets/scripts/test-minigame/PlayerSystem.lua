@@ -23,7 +23,6 @@ function PlayerInputSystem.update(dt)
     local transform = ECS.getComponent(id, "Transform")
     local playerComp = ECS.getComponent(id, "Player")
 
-    -- Update Rotation
     local rotationSpeed = playerComp.speed * 0.2
     local vaz = 0
     if PlayerInputSystem.keys.rotateLeft then
@@ -34,7 +33,6 @@ function PlayerInputSystem.update(dt)
     end
     physic.vaz = vaz
 
-    -- Update Velocity based on current rotation
     local speed = playerComp.speed
     local ry = transform.ry
     local forwardX = math.sin(ry)

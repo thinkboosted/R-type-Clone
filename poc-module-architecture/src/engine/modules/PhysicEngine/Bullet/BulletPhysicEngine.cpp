@@ -344,7 +344,21 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                 float friction = std::stof(data.substr(split1 + 1));
                 setFriction(id, friction);
             }
+        } else if (command == "DestroyBody") {
+            destroyBody(data);
         }
+    }
+}
+
+void BulletPhysicEngine::destroyBody(const std::string& id) {
+    if (_bodies.find(id) != _bodies.end()) {
+        btRigidBody* body = _bodies[id];
+        _dynamicsWorld->removeRigidBody(body);
+        delete body->getMotionState();
+        delete body->getCollisionShape();
+        delete body;
+        _bodies.erase(id);
+        _bodyIds.erase(body);
     }
 }
 

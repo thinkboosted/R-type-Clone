@@ -48,3 +48,15 @@ function Player(speed)
         inputY = 0
     }
 end
+
+function WinCube()
+    return {}
+end
+
+function Color(r, g, b)
+    return {
+        r = r or 1.0,
+        g = g or 1.0,
+        b = b or 1.0
+    }
+end

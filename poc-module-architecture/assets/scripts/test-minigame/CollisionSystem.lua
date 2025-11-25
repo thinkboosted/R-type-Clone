@@ -38,7 +38,6 @@ function CollisionSystem.update(dt)
                 ECS.sendMessage("PhysicCommand", "SetAngularFactor:" .. id .. ":0,0,0;")
             end
 
-            -- Set initial transform
             local tMsg = "SetTransform:" .. id .. ":" .. transform.x .. "," .. transform.y .. "," .. transform.z .. ":" .. transform.rx .. "," .. transform.ry .. "," .. transform.rz .. ";"
             ECS.sendMessage("PhysicCommand", tMsg)
 

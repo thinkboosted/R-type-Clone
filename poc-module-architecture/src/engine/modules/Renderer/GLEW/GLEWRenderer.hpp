@@ -38,6 +38,7 @@ class GLEWRenderer : public I3DRenderer {
         Vector3f position;
         Vector3f rotation;
         Vector3f scale;
+        Vector3f color;
     };
 
     struct MeshData {
