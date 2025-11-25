@@ -1,4 +1,0 @@
-vcpkg_installed/
-build/
-.vscode/
-docs/*.txt
