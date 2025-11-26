@@ -12,6 +12,8 @@ target_include_directories(LuaECS PUBLIC
 
 find_package(Lua REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
+find_package(ZeroMQ CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(LuaECS
     cppzmq

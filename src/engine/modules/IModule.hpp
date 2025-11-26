@@ -22,6 +22,7 @@ class IModule {
     virtual void loop() = 0;
     virtual void stop() = 0;
     virtual void cleanup() = 0;
+    virtual void release() = 0;
 
     virtual void sendMessage(const std::string& topic, const std::string& message) = 0;
     virtual std::string getMessage(const std::string& topic) = 0;

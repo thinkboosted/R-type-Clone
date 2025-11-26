@@ -46,6 +46,10 @@ if(NOT cppzmq_FOUND OR NOT ZeroMQ_FOUND)
     message(WARNING "ZeroMQ or cppzmq not found. Please install via vcpkg: vcpkg install zeromq cppzmq")
 endif()
 
+if(NOT TARGET libzmq AND TARGET libzmq-static)
+    add_library(libzmq ALIAS libzmq-static)
+endif()
+
 message(STATUS "Looking for Bullet...")
 find_package(Bullet CONFIG REQUIRED PATHS "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/share/bullet3")
 if(NOT Bullet_FOUND)

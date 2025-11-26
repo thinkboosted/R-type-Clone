@@ -11,7 +11,7 @@ namespace rtypeEngine {
 class GLEWRenderer : public I3DRenderer {
   public:
     explicit GLEWRenderer(const char* pubEndpoint, const char* subEndpoint);
-    ~GLEWRenderer() override;
+    ~GLEWRenderer() override = default;
 
     void init() override;
     void loop() override;

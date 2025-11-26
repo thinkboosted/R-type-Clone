@@ -13,10 +13,6 @@ BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subE
       _solver(nullptr),
       _dynamicsWorld(nullptr) {}
 
-BulletPhysicEngine::~BulletPhysicEngine() {
-    cleanup();
-}
-
 void BulletPhysicEngine::init() {
     _collisionConfiguration = new btDefaultCollisionConfiguration();
     _dispatcher = new btCollisionDispatcher(_collisionConfiguration);
@@ -45,11 +41,11 @@ void BulletPhysicEngine::cleanup() {
     _bodies.clear();
     _bodyIds.clear();
 
-    delete _dynamicsWorld;
-    delete _solver;
-    delete _overlappingPairCache;
-    delete _dispatcher;
-    delete _collisionConfiguration;
+    if (_dynamicsWorld) { delete _dynamicsWorld; _dynamicsWorld = nullptr; }
+    if (_solver) { delete _solver; _solver = nullptr; }
+    if (_overlappingPairCache) { delete _overlappingPairCache; _overlappingPairCache = nullptr; }
+    if (_dispatcher) { delete _dispatcher; _dispatcher = nullptr; }
+    if (_collisionConfiguration) { delete _collisionConfiguration; _collisionConfiguration = nullptr; }
 }
 
 void BulletPhysicEngine::loop() {
