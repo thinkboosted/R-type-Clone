@@ -75,7 +75,7 @@ else()
     message(WARNING "Skipping GLEW Renderer module")
 endif()
 
-add_subdirectory(src/engine/modules/LuaECS)
+add_subdirectory(src/engine/modules/ECSManager/LuaECSManager)
 
 if(Bullet_FOUND)
     add_subdirectory(src/engine/modules/PhysicEngine/Bullet)

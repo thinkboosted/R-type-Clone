@@ -10,8 +10,7 @@
 namespace rtypeEngine {
 class IWindowManager : public AModule {
   public:
-    explicit IWindowManager(const char* pubEndpoint, const char* subEndpoint)
-        : AModule(pubEndpoint, subEndpoint) {}
+    using AModule::AModule;
     virtual ~IWindowManager() = default;
 
     protected:

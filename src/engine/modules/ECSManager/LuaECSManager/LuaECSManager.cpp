@@ -1,4 +1,4 @@
-#include "LuaECS.hpp"
+#include "LuaECSManager.hpp"
 #include <iostream>
 #include <sstream>
 #include <random>
@@ -9,14 +9,14 @@
 
 namespace rtypeEngine {
 
-    LuaECS::LuaECS(const char* pubEndpoint, const char* subEndpoint)
-        : AModule(pubEndpoint, subEndpoint) {
+    LuaECSManager::LuaECSManager(const char* pubEndpoint, const char* subEndpoint)
+        : IECSManager(pubEndpoint, subEndpoint) {
     }
 
-    LuaECS::~LuaECS() {
+    LuaECSManager::~LuaECSManager() {
     }
 
-    void LuaECS::init() {
+    void LuaECSManager::init() {
         _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math);
         setupLuaBindings();
 
@@ -30,7 +30,7 @@ namespace rtypeEngine {
                     try {
                         system[eventName](msg);
                     } catch (const sol::error& e) {
-                        std::cerr << "[LuaECS] Error in system " << eventName << ": " << e.what() << std::endl;
+                        std::cerr << "[LuaECSManager] Error in system " << eventName << ": " << e.what() << std::endl;
                     }
                 }
             }
@@ -62,7 +62,7 @@ namespace rtypeEngine {
                                 try {
                                     system["onCollision"](id1, id2);
                                 } catch (const sol::error& e) {
-                                    std::cerr << "[LuaECS] Error in onCollision: " << e.what() << std::endl;
+                                    std::cerr << "[LuaECSManager] Error in onCollision: " << e.what() << std::endl;
                                 }
                             }
                         }
@@ -77,7 +77,7 @@ namespace rtypeEngine {
                                 try {
                                     system["onRaycastHit"](id, distance);
                                 } catch (const sol::error& e) {
-                                    std::cerr << "[LuaECS] Error in onRaycastHit: " << e.what() << std::endl;
+                                    std::cerr << "[LuaECSManager] Error in onRaycastHit: " << e.what() << std::endl;
                                 }
                             }
                         }
@@ -121,17 +121,17 @@ namespace rtypeEngine {
                         try {
                             system["onEntityUpdated"](id, x, y, z, rx, ry, rz);
                         } catch (const sol::error& e) {
-                            std::cerr << "[LuaECS] Error in onEntityUpdated: " << e.what() << std::endl;
+                            std::cerr << "[LuaECSManager] Error in onEntityUpdated: " << e.what() << std::endl;
                         }
                     }
                 }
             }
         });
 
-        std::cout << "[LuaECS] Initialized" << std::endl;
+        std::cout << "[LuaECSManager] Initialized" << std::endl;
     }
 
-    std::string LuaECS::generateUuid() {
+    std::string LuaECSManager::generateUuid() {
         static std::random_device rd;
         static std::mt19937 gen(rd());
         static std::uniform_int_distribution<> dis(0, 15);
@@ -163,7 +163,7 @@ namespace rtypeEngine {
         return ss.str();
     }
 
-    void LuaECS::setupLuaBindings() {
+    void LuaECSManager::setupLuaBindings() {
         auto ecs = _lua.create_named_table("ECS");
 
         ecs.set_function("createEntity", [this]() -> std::string {
@@ -291,36 +291,36 @@ namespace rtypeEngine {
                 try {
                     system["init"]();
                 } catch (const sol::error& e) {
-                    std::cerr << "[LuaECS] Error in system init: " << e.what() << std::endl;
+                    std::cerr << "[LuaECSManager] Error in system init: " << e.what() << std::endl;
                 }
             }
         });
     }
 
-    void LuaECS::loadScript(const std::string& path) {
+    void LuaECSManager::loadScript(const std::string& path) {
         try {
             _lua.script_file(path);
-            std::cout << "[LuaECS] Loaded script: " << path << std::endl;
+            std::cout << "[LuaECSManager] Loaded script: " << path << std::endl;
         } catch (const sol::error& e) {
-            std::cerr << "[LuaECS] Error loading script: " << e.what() << std::endl;
+            std::cerr << "[LuaECSManager] Error loading script: " << e.what() << std::endl;
         }
     }
 
-    void LuaECS::loop() {
+    void LuaECSManager::loop() {
         auto frameDuration = std::chrono::milliseconds(16);
         for (auto& system : _systems) {
             if (system["update"].valid()) {
                 try {
                     system["update"](0.016f);
                 } catch (const sol::error& e) {
-                    std::cerr << "[LuaECS] Error in system update: " << e.what() << std::endl;
+                    std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
                 }
             }
         }
         std::this_thread::sleep_for(frameDuration);
     }
 
-    void LuaECS::cleanup() {
+    void LuaECSManager::cleanup() {
         _systems.clear();
         _entities.clear();
         _pools.clear();
@@ -329,5 +329,5 @@ namespace rtypeEngine {
 }
 
 extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
-    return new rtypeEngine::LuaECS(pubEndpoint, subEndpoint);
+    return new rtypeEngine::LuaECSManager(pubEndpoint, subEndpoint);
 }

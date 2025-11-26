@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../AModule.hpp"
+#include "../IECSManager.hpp"
+#include "../../../types/ecs.hpp"
 #include <sol/sol.hpp>
 #include <vector>
 #include <string>
@@ -9,16 +10,10 @@
 
 namespace rtypeEngine {
 
-    struct ComponentPool {
-        std::vector<sol::table> dense;
-        std::vector<std::string> entities;
-        std::unordered_map<std::string, size_t> sparse;
-    };
-
-    class LuaECS : public AModule {
+    class LuaECSManager : public IECSManager {
     public:
-        LuaECS(const char* pubEndpoint, const char* subEndpoint);
-        ~LuaECS() override;
+        LuaECSManager(const char* pubEndpoint, const char* subEndpoint);
+        ~LuaECSManager() override;
 
         void init() override;
         void loop() override;

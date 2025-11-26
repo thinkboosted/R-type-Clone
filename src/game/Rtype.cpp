@@ -24,12 +24,12 @@ void Rtype::init() {
 
   try {
 #ifdef _WIN32
-  this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
+  this->addModule("LuaECSManager.dll", pubEndpoint, subEndpoint);
   this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
 #else
-  this->addModule("LuaECS.so", pubEndpoint, subEndpoint);
+  this->addModule("LuaECSManager.so", pubEndpoint, subEndpoint);
   this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);

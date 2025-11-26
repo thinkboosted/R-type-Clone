@@ -5,8 +5,7 @@
 namespace rtypeEngine {
 class IPhysicEngine : public AModule {
   public:
-    explicit IPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
-        : AModule(pubEndpoint, subEndpoint) {}
+    using AModule::AModule;
     virtual ~IPhysicEngine() = default;
 
   protected:
