@@ -5,8 +5,15 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <unordered_map>
 
 namespace rtypeEngine {
+
+    struct ComponentPool {
+        std::vector<sol::table> dense;
+        std::vector<std::string> entities;
+        std::unordered_map<std::string, size_t> sparse;
+    };
 
     class LuaECS : public AModule {
     public:
@@ -23,7 +30,7 @@ namespace rtypeEngine {
         sol::state _lua;
         std::vector<sol::table> _systems;
         std::vector<std::string> _entities;
-        std::map<std::string, std::map<std::string, sol::table>> _components;
+        std::unordered_map<std::string, ComponentPool> _pools;
 
         void setupLuaBindings();
         std::string generateUuid();

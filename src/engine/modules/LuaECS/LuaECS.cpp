@@ -169,7 +169,6 @@ namespace rtypeEngine {
         ecs.set_function("createEntity", [this]() -> std::string {
             std::string id = generateUuid();
             _entities.push_back(id);
-            _components[id] = std::map<std::string, sol::table>();
             return id;
         });
 
@@ -177,36 +176,73 @@ namespace rtypeEngine {
             auto it = std::find(_entities.begin(), _entities.end(), id);
             if (it != _entities.end()) {
                 _entities.erase(it);
-                _components.erase(id);
+
+                for (auto& pair : _pools) {
+                    ComponentPool& pool = pair.second;
+                    if (pool.sparse.count(id)) {
+                        size_t index = pool.sparse[id];
+                        size_t lastIndex = pool.dense.size() - 1;
+                        std::string lastEntity = pool.entities[lastIndex];
+
+                        std::swap(pool.dense[index], pool.dense[lastIndex]);
+                        std::swap(pool.entities[index], pool.entities[lastIndex]);
+
+                        pool.sparse[lastEntity] = index;
+                        pool.dense.pop_back();
+                        pool.entities.pop_back();
+                        pool.sparse.erase(id);
+                    }
+                }
+
                 sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
                 sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
             }
         });
 
         ecs.set_function("addComponent", [this](const std::string& id, const std::string& name, sol::table data) {
-            if (_components.find(id) != _components.end()) {
-                _components[id][name] = data;
+            auto it = std::find(_entities.begin(), _entities.end(), id);
+            if (it != _entities.end()) {
+                ComponentPool& pool = _pools[name];
+                if (pool.sparse.count(id)) {
+                    pool.dense[pool.sparse[id]] = data;
+                } else {
+                    pool.dense.push_back(data);
+                    pool.entities.push_back(id);
+                    pool.sparse[id] = pool.dense.size() - 1;
+                }
             }
         });
 
         ecs.set_function("removeComponent", [this](const std::string& id, const std::string& name) {
-            if (_components.find(id) != _components.end()) {
-                _components[id].erase(name);
+            if (_pools.find(name) != _pools.end()) {
+                ComponentPool& pool = _pools[name];
+                if (pool.sparse.count(id)) {
+                    size_t index = pool.sparse[id];
+                    size_t lastIndex = pool.dense.size() - 1;
+                    std::string lastEntity = pool.entities[lastIndex];
+
+                    std::swap(pool.dense[index], pool.dense[lastIndex]);
+                    std::swap(pool.entities[index], pool.entities[lastIndex]);
+
+                    pool.sparse[lastEntity] = index;
+                    pool.dense.pop_back();
+                    pool.entities.pop_back();
+                    pool.sparse.erase(id);
+                }
             }
         });
 
         ecs.set_function("getComponent", [this](const std::string& id, const std::string& name) -> sol::object {
-            if (_components.find(id) != _components.end()) {
-                auto& comps = _components[id];
-                if (comps.find(name) != comps.end()) {
-                    return comps[name];
+            if (_pools.find(name) != _pools.end()) {
+                ComponentPool& pool = _pools[name];
+                if (pool.sparse.count(id)) {
+                    return pool.dense[pool.sparse[id]];
                 }
             }
             return sol::nil;
         });
 
         ecs.set_function("getEntitiesWith", [this](sol::table components) -> std::vector<std::string> {
-            std::vector<std::string> result;
             std::vector<std::string> required;
             for (auto& kv : components) {
                 if (kv.second.is<std::string>()) {
@@ -214,11 +250,26 @@ namespace rtypeEngine {
                 }
             }
 
-            for (const auto& entityId : _entities) {
+            if (required.empty()) return {};
+
+            ComponentPool* smallestPool = nullptr;
+            size_t minSize = SIZE_MAX;
+
+            for (const auto& req : required) {
+                if (_pools.find(req) == _pools.end()) return {};
+                if (_pools[req].dense.size() < minSize) {
+                    minSize = _pools[req].dense.size();
+                    smallestPool = &_pools[req];
+                }
+            }
+
+            if (!smallestPool) return {};
+
+            std::vector<std::string> result;
+            for (const auto& entityId : smallestPool->entities) {
                 bool hasAll = true;
-                const auto& entityComps = _components[entityId];
                 for (const auto& req : required) {
-                    if (entityComps.find(req) == entityComps.end()) {
+                    if (_pools[req].sparse.find(entityId) == _pools[req].sparse.end()) {
                         hasAll = false;
                         break;
                     }
@@ -272,7 +323,7 @@ namespace rtypeEngine {
     void LuaECS::cleanup() {
         _systems.clear();
         _entities.clear();
-        _components.clear();
+        _pools.clear();
     }
 
 }

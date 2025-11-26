@@ -24,7 +24,7 @@ ECS.addComponent(player, "Transform", Transform(-8, 0, 0))
 ECS.addComponent(player, "Mesh", Mesh("assets/models/cube.obj"))
 ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
 ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false)) -- mass 1, friction 0, fixedRot, noGravity
-ECS.addComponent(player, "Player", Player(10.0))
+ECS.addComponent(player, "Player", Player(20.0))
 ECS.addComponent(player, "Life", Life(3))
 ECS.addComponent(player, "Color", Color(0.0, 1.0, 0.0)) -- Green player
 
