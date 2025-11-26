@@ -1,3 +1,9 @@
+#ifdef _WIN32
+    #define LUA_ECS_EXPORT __declspec(dllexport)
+#else
+    #define LUA_ECS_EXPORT
+#endif
+
 #include "LuaECS.hpp"
 #include <iostream>
 #include <sstream>
@@ -277,6 +283,6 @@ namespace rtypeEngine {
 
 }
 
-extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+extern "C" LUA_ECS_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::LuaECS(pubEndpoint, subEndpoint);
 }

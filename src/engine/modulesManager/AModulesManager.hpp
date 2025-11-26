@@ -12,6 +12,9 @@
 #endif
 
 namespace rtypeEngine {
+
+typedef IModule* (*createModule_t)(const char*, const char*);
+
 class AModulesManager : public IModulesManager {
   public:
     ~AModulesManager() override;

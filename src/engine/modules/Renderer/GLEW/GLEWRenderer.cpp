@@ -1,6 +1,16 @@
+#ifdef _WIN32
+    #define GLEW_RENDERER_EXPORT __declspec(dllexport)
+#else
+    #define GLEW_RENDERER_EXPORT
+#endif
+
 #include "GLEWRenderer.hpp"
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <GL/glx.h>
 #endif
 #include <stdexcept>
 #include <iostream>
@@ -30,10 +40,6 @@ GLEWRenderer::GLEWRenderer(const char* pubEndpoint, const char* subEndpoint)
           _pixelBuffer.resize(_resolution.x * _resolution.y);
       }
 
-GLEWRenderer::~GLEWRenderer() {
-    destroyFramebuffer();
-}
-
 void GLEWRenderer::init() {
     subscribe("RenderEntityCommand", [this](const std::string& msg) {
         this->onRenderEntityCommand(msg);
@@ -51,17 +57,29 @@ void GLEWRenderer::init() {
 
 void GLEWRenderer::ensureGLEWInitialized() {
     if (!_glewInitialized) {
+        glewExperimental = GL_TRUE;
         GLenum err = glewInit();
         if (GLEW_OK != err) {
             std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
         } else {
             _glewInitialized = true;
+            glGetError(); // Clear any error from glewInit
         }
     }
 }
 
 void GLEWRenderer::loop() {
+#ifdef _WIN32
+    wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+#else
+    glXMakeCurrent((Display*)_hdc, (Window)_hwnd, (GLXContext)_hglrc);
+#endif
     render();
+#ifdef _WIN32
+    wglMakeCurrent(NULL, NULL); // Release context
+#else
+    glXMakeCurrent(NULL, None, NULL); // Release context
+#endif
 }
 
 void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
@@ -246,10 +264,26 @@ void GLEWRenderer::cleanup() {
         DestroyWindow((HWND)_hwnd);
         _hwnd = nullptr;
     }
+#else
+    if (_hdc) {
+        Display* display = (Display*)_hdc;
+        if (_hglrc) {
+             glXMakeCurrent(display, None, NULL);
+             glXDestroyContext(display, (GLXContext)_hglrc);
+             _hglrc = nullptr;
+        }
+        if (_hwnd) {
+             XDestroyWindow(display, (Window)_hwnd);
+             _hwnd = nullptr;
+        }
+        XCloseDisplay(display);
+        _hdc = nullptr;
+    }
 #endif
 }
 
 void GLEWRenderer::createFramebuffer() {
+    if (!_glewInitialized) return;
     glGenFramebuffers(1, &_framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
 
@@ -276,9 +310,9 @@ void GLEWRenderer::createFramebuffer() {
 }
 
 void GLEWRenderer::destroyFramebuffer() {
-    if (_framebuffer) glDeleteFramebuffers(1, &_framebuffer);
-    if (_renderTexture) glDeleteTextures(1, &_renderTexture);
-    if (_depthBuffer) glDeleteRenderbuffers(1, &_depthBuffer);
+    if (_framebuffer) { glDeleteFramebuffers(1, &_framebuffer); _framebuffer = 0; }
+    if (_renderTexture) { glDeleteTextures(1, &_renderTexture); _renderTexture = 0; }
+    if (_depthBuffer) { glDeleteRenderbuffers(1, &_depthBuffer); _depthBuffer = 0; }
 }
 
 void GLEWRenderer::addMesh() {
@@ -454,12 +488,56 @@ void GLEWRenderer::initContext() {
     // Create context
     _hglrc = (void*)wglCreateContext((HDC)_hdc);
     wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+#else
+    Display* display = XOpenDisplay(NULL);
+    if (!display) {
+        std::cerr << "Failed to open X display" << std::endl;
+        return;
+    }
+
+    int screen = DefaultScreen(display);
+    int attribs[] = {
+        GLX_RGBA,
+        GLX_DEPTH_SIZE, 24,
+        GLX_DOUBLEBUFFER,
+        None
+    };
+
+    XVisualInfo* visual = glXChooseVisual(display, screen, attribs);
+    if (!visual) {
+        std::cerr << "Failed to choose visual" << std::endl;
+        return;
+    }
+
+    GLXContext context = glXCreateContext(display, visual, NULL, GL_TRUE);
+    if (!context) {
+        std::cerr << "Failed to create GLX context" << std::endl;
+        return;
+    }
+
+    Colormap colormap = XCreateColormap(display, RootWindow(display, screen), visual->visual, AllocNone);
+    XSetWindowAttributes swa;
+    swa.colormap = colormap;
+    swa.event_mask = StructureNotifyMask | KeyPressMask;
+
+    Window window = XCreateWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, visual->depth, InputOutput, visual->visual, CWColormap | CWEventMask, &swa);
+
+    if (!window) {
+        std::cerr << "Failed to create X window" << std::endl;
+        return;
+    }
+
+    glXMakeCurrent(display, window, context);
+
+    _hdc = (void*)display;
+    _hwnd = (void*)window;
+    _hglrc = (void*)context;
 #endif
 }
 
 }  // namespace rtypeEngine
 
 // Factory function for dynamic loading
-extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+extern "C" GLEW_RENDERER_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::GLEWRenderer(pubEndpoint, subEndpoint);
 }

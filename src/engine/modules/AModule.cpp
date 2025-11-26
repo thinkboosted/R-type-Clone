@@ -31,16 +31,17 @@ void AModule::start() {
 }
 
 void AModule::stop() {
-    if (_initialized) {
-        cleanup();
-        _initialized = false;
-    }
-    if (_running) {
-        _running = false;
-    }
+    _running = false; // Signal the thread to stop
+
     if (_moduleThread.joinable()) {
-        _moduleThread.join();
+        _moduleThread.join(); // Wait for the thread to finish its cleanup
     }
+    _initialized = false; // Reset initialized state after thread has cleaned up
+}
+
+void AModule::release() {
+    // Shared_ptr handles deletion, this function is for any other resource cleanup if needed.
+    // As of now, the destructor handles all cleanup.
 }
 
 AModule::AModule(const char* pubEndpoint, const char* subEndpoint)

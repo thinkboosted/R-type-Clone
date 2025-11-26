@@ -17,6 +17,7 @@ class AModule : public IModule {
 
     void start() override;
     void stop() override;
+    void release() override;
 
     void sendMessage(const std::string& topic, const std::string& message) override;
     std::string getMessage(const std::string& topic) override;
