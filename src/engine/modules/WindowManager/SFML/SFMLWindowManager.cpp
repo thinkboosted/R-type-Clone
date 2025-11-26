@@ -1,3 +1,9 @@
+#ifdef _WIN32
+    #define SFML_WINDOW_MANAGER_EXPORT __declspec(dllexport)
+#else
+    #define SFML_WINDOW_MANAGER_EXPORT
+#endif
+
 #include "SFMLWindowManager.hpp"
 #include "KeysMap.hpp"
 #include <iostream>
@@ -109,6 +115,6 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
 
 }  // namespace rtypeEngine
 
-extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+extern "C" SFML_WINDOW_MANAGER_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::SFMLWindowManager(pubEndpoint, subEndpoint);
 }

@@ -12,13 +12,15 @@ target_include_directories(BulletPhysicEngine PUBLIC
 )
 
 find_package(Bullet CONFIG REQUIRED PATHS "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/share/bullet3")
+find_package(ZeroMQ CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(BulletPhysicEngine
     BulletDynamics
     BulletCollision
     LinearMath
-    cppzmq
     libzmq
+    cppzmq
 )
 
 # Set output name without lib prefix

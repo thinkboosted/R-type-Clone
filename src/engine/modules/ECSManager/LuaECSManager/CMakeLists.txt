@@ -13,6 +13,8 @@ target_include_directories(LuaECSManager PUBLIC
 
 find_package(Lua REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
+find_package(ZeroMQ CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(LuaECSManager
     cppzmq

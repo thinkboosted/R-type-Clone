@@ -11,7 +11,7 @@ namespace rtypeEngine {
 class BulletPhysicEngine : public IPhysicEngine {
   public:
     BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint);
-    ~BulletPhysicEngine() override;
+    ~BulletPhysicEngine() override = default;
 
     void init() override;
     void loop() override;

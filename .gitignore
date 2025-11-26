@@ -2,3 +2,5 @@
 vcpkg_installed/
 build/
 docs/*.txt
+libs/
+CMakeFiles/
