@@ -28,11 +28,13 @@ void Rtype::init() {
   this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
+  this->addModule("ECSSavesManager.dll", pubEndpoint, subEndpoint);
 #else
   this->addModule("LuaECSManager.so", pubEndpoint, subEndpoint);
   this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);
+  this->addModule("ECSSavesManager.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;

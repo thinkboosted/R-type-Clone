@@ -13,6 +13,7 @@ dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/BonusSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 
+ECS.loadLastSave("space-shooter-save")
 -- Create Camera
 local camera = ECS.createEntity()
 ECS.addComponent(camera, "Transform", Transform(0, 0, 20))

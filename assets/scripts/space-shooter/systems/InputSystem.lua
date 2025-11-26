@@ -131,6 +131,7 @@ function InputSystem.onKeyReleased(key)
     elseif key == "SPACE" then
         InputSystem.keys.shoot = false
     elseif key == "ESCAPE" then
+        ECS.saveState("space-shooter-save")
         ECS.sendMessage("ExitApplication", "")
     end
 end

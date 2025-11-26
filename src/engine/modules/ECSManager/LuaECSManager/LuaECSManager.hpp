@@ -21,7 +21,11 @@ namespace rtypeEngine {
 
         void loadScript(const std::string& path);
 
+        std::string serializeState();
+        void deserializeState(const std::string& state);
+
     private:
+        std::string serializeTable(const sol::table& table);
         sol::state _lua;
         std::vector<sol::table> _systems;
         std::vector<std::string> _entities;
