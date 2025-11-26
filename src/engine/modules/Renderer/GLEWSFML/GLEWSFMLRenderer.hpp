@@ -1,6 +1,7 @@
 #pragma once
 
 #include <GL/glew.h>
+#include <SFML/Graphics.hpp>
 #include <vector>
 #include <cstdint>
 #include <memory>
@@ -8,10 +9,10 @@
 #include "../I3DRenderer.hpp"
 
 namespace rtypeEngine {
-class GLEWRenderer : public I3DRenderer {
+class GLEWSFMLRenderer : public I3DRenderer {
   public:
-    explicit GLEWRenderer(const char* pubEndpoint, const char* subEndpoint);
-    ~GLEWRenderer() override = default;
+    explicit GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpoint);
+    ~GLEWSFMLRenderer() override = default;
 
     void init() override;
     void loop() override;
@@ -31,14 +32,24 @@ class GLEWRenderer : public I3DRenderer {
     void ensureGLEWInitialized();
     void initContext();
     void loadMesh(const std::string& path);
+    GLuint loadTexture(const std::string& path);
+    GLuint createTextTexture(const std::string& text, const std::string& fontPath, unsigned int fontSize, Vector3f color);
 
     struct RenderObject {
         std::string id;
         std::string meshPath;
+        std::string texturePath;
+        bool isSprite = false;
+        bool isScreenSpace = false;
+        bool isText = false;
+        std::string text;
+        std::string fontPath;
+        unsigned int fontSize = 24;
         Vector3f position;
         Vector3f rotation;
         Vector3f scale;
         Vector3f color;
+        GLuint textureID = 0; // Custom texture ID for texts
     };
 
     struct MeshData {
@@ -51,20 +62,23 @@ class GLEWRenderer : public I3DRenderer {
     GLuint _renderTexture;
     GLuint _depthBuffer;
     std::vector<uint32_t> _pixelBuffer;
-    bool _glewInitialized;
 
-    void* _hwnd;
-    void* _hdc;
-    void* _hglrc;
-
+    std::map<std::string, RenderObject> _renderObjects;
+    std::map<std::string, MeshData> _meshCache;
+    std::map<std::string, GLuint> _textureCache;
+    std::map<std::string, sf::Font> _fontCache;
+    std::string _activeCameraId;
     Vector3f _cameraPos;
     Vector3f _cameraRot;
     Vector3f _lightPos;
     Vector3f _lightColor;
     float _lightIntensity;
-    std::string _activeCameraId;
     std::string _activeLightId;
-    std::map<std::string, RenderObject> _renderObjects;
-    std::map<std::string, MeshData> _meshCache;
+    bool _glewInitialized = false;
+#ifdef _WIN32
+    void* _hwnd = nullptr;
+    void* _hdc = nullptr;
+    void* _hglrc = nullptr;
+#endif
 };
 }  // namespace rtypeEngine

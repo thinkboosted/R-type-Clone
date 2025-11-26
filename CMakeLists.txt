@@ -74,12 +74,13 @@ else()
 endif()
 
 if(GLEW_FOUND AND OpenGL_FOUND)
-    add_subdirectory(src/engine/modules/Renderer/GLEW)
+    add_subdirectory(src/engine/modules/Renderer/GLEWSFML)
 else()
     message(WARNING "Skipping GLEW Renderer module")
 endif()
 
-add_subdirectory(src/engine/modules/LuaECS)
+add_subdirectory(src/engine/modules/ECSManager/LuaECSManager)
+add_subdirectory(src/engine/modules/ECSSavesManager/BasicECSSavesManager)
 
 if(Bullet_FOUND)
     add_subdirectory(src/engine/modules/PhysicEngine/Bullet)

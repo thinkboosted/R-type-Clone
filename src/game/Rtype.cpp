@@ -24,15 +24,17 @@ void Rtype::init() {
 
   try {
 #ifdef _WIN32
-  this->addModule("LuaECS.dll", pubEndpoint, subEndpoint);
-  this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
+  this->addModule("LuaECSManager.dll", pubEndpoint, subEndpoint);
+  this->addModule("GLEWSFMLRenderer.dll", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
+  this->addModule("ECSSavesManager.dll", pubEndpoint, subEndpoint);
 #else
-  this->addModule("LuaECS.so", pubEndpoint, subEndpoint);
-  this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
+  this->addModule("LuaECSManager.so", pubEndpoint, subEndpoint);
+  this->addModule("GLEWSFMLRenderer.so", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);
+  this->addModule("ECSSavesManager.so", pubEndpoint, subEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;
@@ -43,6 +45,7 @@ void Rtype::init() {
 void Rtype::loop() {
     if (!_scriptsLoaded) {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      std::cout << "Loading space-shooter game script..." << std::endl;
       sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
       _scriptsLoaded = true;
     }

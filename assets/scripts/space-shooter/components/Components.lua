@@ -16,6 +16,13 @@ function Mesh(modelPath)
     }
 end
 
+function Sprite(texturePath, isScreenSpace)
+    return {
+        texturePath = texturePath,
+        isScreenSpace = isScreenSpace or false
+    }
+end
+
 function Collider(type, size)
     return {
         type = type or "Box",
@@ -98,5 +105,23 @@ end
 function Score(value)
     return {
         value = value or 0
+    }
+end
+
+function Text(text, fontPath, fontSize, isScreenSpace)
+    return {
+        text = text or "",
+        fontPath = fontPath or "assets/fonts/arial.ttf",
+        fontSize = fontSize or 24,
+        isScreenSpace = isScreenSpace or false
+    }
+end
+
+function Follow(targetId, offsetX, offsetY, offsetZ)
+    return {
+        targetId = targetId,
+        offsetX = offsetX or 0,
+        offsetY = offsetY or 0,
+        offsetZ = offsetZ or 0
     }
 end

@@ -1,17 +1,19 @@
 #pragma once
 
-#include "../AModule.hpp"
+#include "../IECSManager.hpp"
+#include "../../../types/ecs.hpp"
 #include <sol/sol.hpp>
 #include <vector>
 #include <string>
 #include <map>
+#include <unordered_map>
 
 namespace rtypeEngine {
 
-    class LuaECS : public AModule {
+    class LuaECSManager : public IECSManager {
     public:
-        LuaECS(const char* pubEndpoint, const char* subEndpoint);
-        ~LuaECS() override;
+        LuaECSManager(const char* pubEndpoint, const char* subEndpoint);
+        ~LuaECSManager() override;
 
         void init() override;
         void loop() override;
@@ -19,11 +21,15 @@ namespace rtypeEngine {
 
         void loadScript(const std::string& path);
 
+        std::string serializeState();
+        void deserializeState(const std::string& state);
+
     private:
+        std::string serializeTable(const sol::table& table);
         sol::state _lua;
         std::vector<sol::table> _systems;
         std::vector<std::string> _entities;
-        std::map<std::string, std::map<std::string, sol::table>> _components;
+        std::unordered_map<std::string, ComponentPool> _pools;
 
         void setupLuaBindings();
         std::string generateUuid();

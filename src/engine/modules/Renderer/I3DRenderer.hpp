@@ -8,8 +8,7 @@
 namespace rtypeEngine {
 class I3DRenderer : public AModule {
   public:
-    explicit I3DRenderer(const char* pubEndpoint, const char* subEndpoint)
-        : AModule(pubEndpoint, subEndpoint) {}
+    using AModule::AModule;
     virtual ~I3DRenderer() = default;
 
   protected:

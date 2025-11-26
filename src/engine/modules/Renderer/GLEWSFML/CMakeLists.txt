@@ -1,14 +1,14 @@
-# GLEW 3D Renderer Module
-add_library(GLEWRenderer SHARED
-    GLEWRenderer.cpp
-    GLEWRenderer.hpp
+# GLEWSFML 3D Renderer Module
+add_library(GLEWSFMLRenderer SHARED
+    GLEWSFMLRenderer.cpp
+    GLEWSFMLRenderer.hpp
     ../I3DRenderer.hpp
     ../../IModule.hpp
     ../../AModule.hpp
     ../../AModule.cpp
 )
 
-target_include_directories(GLEWRenderer PUBLIC
+target_include_directories(GLEWSFMLRenderer PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 
@@ -19,25 +19,26 @@ if(NOT WIN32)
     find_package(X11 REQUIRED)
 endif()
 
-target_link_libraries(GLEWRenderer
+target_link_libraries(GLEWSFMLRenderer
     GLEW::GLEW
     OpenGL::GL
+    SFML::Graphics
     libzmq
     cppzmq
 )
 
 if(NOT WIN32)
-    target_link_libraries(GLEWRenderer X11::X11)
+    target_link_libraries(GLEWSFMLRenderer X11::X11)
 endif()
 
 # Set output name without lib prefix
-set_target_properties(GLEWRenderer PROPERTIES
+set_target_properties(GLEWSFMLRenderer PROPERTIES
     PREFIX ""
-    OUTPUT_NAME "GLEWRenderer"
+    OUTPUT_NAME "GLEWSFMLRenderer"
 )
 
 # Install rules
-install(TARGETS GLEWRenderer
+install(TARGETS GLEWSFMLRenderer
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )

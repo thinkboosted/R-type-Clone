@@ -19,11 +19,16 @@ function RenderSystem.update(dt)
             local t = ECS.getComponent(id, "Transform")
             ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
             ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
-            break
+        end
+        -- Update camera position every frame
+        if cam.isActive then
+             local t = ECS.getComponent(id, "Transform")
+             ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
+             ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
         end
     end
 
-    -- Handle Mesh Entities
+    -- Handle Meshes
     local entities = ECS.getEntitiesWith({"Transform", "Mesh"})
     for _, id in ipairs(entities) do
         local transform = ECS.getComponent(id, "Transform")
@@ -45,15 +50,20 @@ function RenderSystem.update(dt)
         ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
     end
 
-    -- Handle Text Entities
-    local textEntities = ECS.getEntitiesWith({"Transform", "Text"})
-    for _, id in ipairs(textEntities) do
+    -- Handle Sprites
+    local sprites = ECS.getEntitiesWith({"Transform", "Sprite"})
+    for _, id in ipairs(sprites) do
         local transform = ECS.getComponent(id, "Transform")
-        local text = ECS.getComponent(id, "Text")
+        local sprite = ECS.getComponent(id, "Sprite")
         local color = ECS.getComponent(id, "Color")
 
         if not RenderSystem.initializedEntities[id] then
-            ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
+            local type = "Sprite"
+            if sprite.isScreenSpace then
+                type = "HUDSprite"
+            end
+            
+            ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. sprite.texturePath .. ":" .. id)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
             RenderSystem.initializedEntities[id] = true
         end
@@ -62,20 +72,6 @@ function RenderSystem.update(dt)
             ECS.sendMessage("RenderEntityCommand", "SetColor:" .. id .. "," .. color.r .. "," .. color.g .. "," .. color.b)
         end
 
-        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
-        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
-
-        if not RenderSystem.lastText then RenderSystem.lastText = {} end
-        if RenderSystem.lastText[id] ~= text.text then
-             ECS.setText(id, text.text)
-             RenderSystem.lastText[id] = text.text
-        end
-    end
-
-    -- Update Camera Position (if it moves)
-    local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
-    for _, id in ipairs(cameras) do
-        local transform = ECS.getComponent(id, "Transform")
         ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
         ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
     end
