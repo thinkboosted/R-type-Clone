@@ -386,7 +386,13 @@ namespace rtypeEngine {
             }
 
             if (kv.second.is<std::string>()) {
-                ss << "\"" << kv.second.as<std::string>() << "\"";
+                std::string str = kv.second.as<std::string>();
+                ss << "\"";
+                for (char c : str) {
+                    if (c == '\"' || c == '\\') ss << '\\';
+                    ss << c;
+                }
+                ss << "\"";
             } else if (kv.second.is<double>()) {
                 ss << kv.second.as<double>();
             } else if (kv.second.is<bool>()) {
