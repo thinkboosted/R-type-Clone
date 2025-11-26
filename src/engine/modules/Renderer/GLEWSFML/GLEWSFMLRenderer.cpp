@@ -98,7 +98,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                      if (split2 != std::string::npos) {
                          std::string texturePath = id.substr(0, split2);
                          std::string realId = id.substr(split2 + 1);
-                         
+
                          RenderObject obj;
                          obj.id = realId;
                          obj.isSprite = true;
@@ -115,7 +115,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                      if (split2 != std::string::npos) {
                          std::string texturePath = id.substr(0, split2);
                          std::string realId = id.substr(split2 + 1);
-                         
+
                          RenderObject obj;
                          obj.id = realId;
                          obj.isSprite = true;
@@ -145,6 +145,55 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                      }
                  }
              }
+        } else if (command == "CreateText") {
+             size_t split = data.find(':');
+             if (split != std::string::npos) {
+                 std::string id = data.substr(0, split);
+                 std::string rest = data.substr(split + 1);
+
+                 std::stringstream ss2(rest);
+                 std::string textContent, fontPath, fontSizeStr, isScreenSpaceStr;
+                 std::getline(ss2, fontPath, ':');
+                 std::getline(ss2, fontSizeStr, ':');
+                 std::getline(ss2, isScreenSpaceStr, ':');
+                 std::getline(ss2, textContent);
+
+                 try {
+                     RenderObject obj;
+                     obj.id = id;
+                     obj.isText = true;
+                     obj.isSprite = true;
+                     obj.text = textContent;
+                     obj.fontPath = fontPath;
+                     obj.fontSize = std::stoi(fontSizeStr);
+                     obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                     obj.position = {0,0,0};
+                     obj.rotation = {0,0,0};
+                     obj.scale = {1,1,1};
+                     obj.color = {1.0f, 1.0f, 1.0f};
+
+                     obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
+                     _renderObjects[id] = obj;
+                     std::cout << "[GLEWSFMLRenderer] Created text: " << id << " '" << textContent << "'" << std::endl;
+                 } catch (const std::exception& e) {
+                     std::cerr << "[GLEWSFMLRenderer] Error creating text: " << e.what() << std::endl;
+                 }
+             }
+        } else if (command == "SetText") {
+            size_t split = data.find(':');
+            if (split != std::string::npos) {
+                std::string id = data.substr(0, split);
+                std::string newText = data.substr(split + 1);
+
+                if (_renderObjects.find(id) != _renderObjects.end()) {
+                    auto& obj = _renderObjects[id];
+                    if (obj.isText) {
+                        obj.text = newText;
+                        if (obj.textureID) glDeleteTextures(1, &obj.textureID);
+                        obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
+                    }
+                }
+            }
         } else if (command == "SetPosition") {
             std::stringstream dss(data);
             std::string id, val;
@@ -280,7 +329,7 @@ GLuint GLEWSFMLRenderer::loadTexture(const std::string& path) {
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.getSize().x, image.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.getPixelsPtr());
-    
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -288,6 +337,76 @@ GLuint GLEWSFMLRenderer::loadTexture(const std::string& path) {
 
     _textureCache[path] = textureID;
     std::cout << "[GLEWSFMLRenderer] Loaded texture: " << path << std::endl;
+    return textureID;
+}
+
+GLuint GLEWSFMLRenderer::createTextTexture(const std::string& text, const std::string& fontPath, unsigned int fontSize, Vector3f color) {
+    // Save current OpenGL context
+    #ifdef _WIN32
+    HDC oldDC = wglGetCurrentDC();
+    HGLRC oldContext = wglGetCurrentContext();
+    #endif
+
+    sf::Image textImage;
+    bool success = false;
+
+    // Scope for SFML rendering to ensure resources are cleaned up before context restore
+    {
+        if (_fontCache.find(fontPath) == _fontCache.end()) {
+            sf::Font font;
+            if (!font.openFromFile(fontPath)) {
+                std::cerr << "Failed to load font: " << fontPath << std::endl;
+                // Restore context before returning
+                #ifdef _WIN32
+                if (oldDC && oldContext) wglMakeCurrent(oldDC, oldContext);
+                #endif
+                return 0;
+            }
+            _fontCache[fontPath] = font;
+        }
+
+        sf::Text sfText(_fontCache[fontPath]);
+        sfText.setString(text);
+        sfText.setCharacterSize(fontSize);
+        sfText.setFillColor(sf::Color(color.x * 255, color.y * 255, color.z * 255));
+
+        sf::FloatRect bounds = sfText.getLocalBounds();
+        unsigned int width = (unsigned int)std::ceil(bounds.size.x + bounds.position.x);
+        unsigned int height = (unsigned int)std::ceil(bounds.size.y + bounds.position.y);
+
+        if (width == 0) width = 1;
+        if (height == 0) height = 1;
+
+        sf::RenderTexture renderTexture;
+        if (renderTexture.resize({width, height})) {
+            renderTexture.clear(sf::Color::Transparent);
+            renderTexture.draw(sfText);
+            renderTexture.display();
+            textImage = renderTexture.getTexture().copyToImage();
+            success = true;
+        }
+    }
+
+    // Restore main OpenGL context
+    #ifdef _WIN32
+    if (oldDC && oldContext) {
+        wglMakeCurrent(oldDC, oldContext);
+    }
+    #endif
+
+    if (!success) return 0;
+
+    // Create texture in the main context
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, textImage.getSize().x, textImage.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, textImage.getPixelsPtr());
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
     return textureID;
 }
 
@@ -422,20 +541,42 @@ void GLEWSFMLRenderer::render() {
         glScalef(obj.scale.x, obj.scale.y, obj.scale.z);
 
         if (obj.isSprite) {
-             GLuint tex = loadTexture(obj.texturePath);
+             GLuint tex = 0;
+             if (obj.isText) {
+                 tex = obj.textureID;
+             } else {
+                 tex = loadTexture(obj.texturePath);
+             }
+
              if (tex) {
+                 glDisable(GL_LIGHTING); // Disable lighting for sprites/text
                  glEnable(GL_TEXTURE_2D);
                  glBindTexture(GL_TEXTURE_2D, tex);
                  glColor3f(obj.color.x, obj.color.y, obj.color.z);
-                 
+
+                 float w = 0.5f;
+                 float h = 0.5f;
+
+                 if (obj.isText) {
+                     int texW = 0, texH = 0;
+                     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texW);
+                     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
+                     if (texH > 0) {
+                        float aspect = (float)texW / (float)texH;
+                        w = aspect * 0.5f;
+                     }
+                 }
+
                  glBegin(GL_QUADS);
-                 glTexCoord2f(0, 1); glVertex3f(-0.5f, -0.5f, 0.0f);
-                 glTexCoord2f(1, 1); glVertex3f( 0.5f, -0.5f, 0.0f);
-                 glTexCoord2f(1, 0); glVertex3f( 0.5f,  0.5f, 0.0f);
-                 glTexCoord2f(0, 0); glVertex3f(-0.5f,  0.5f, 0.0f);
+                 glNormal3f(0.0f, 0.0f, 1.0f);
+                 glTexCoord2f(0, 1); glVertex3f(-w, -h, 0.0f);
+                 glTexCoord2f(1, 1); glVertex3f( w, -h, 0.0f);
+                 glTexCoord2f(1, 0); glVertex3f( w,  h, 0.0f);
+                 glTexCoord2f(0, 0); glVertex3f(-w,  h, 0.0f);
                  glEnd();
-                 
+
                  glDisable(GL_TEXTURE_2D);
+                 glEnable(GL_LIGHTING); // Re-enable lighting
              }
         } else if (_meshCache.find(obj.meshPath) != _meshCache.end()) {
             const auto& mesh = _meshCache[obj.meshPath];
@@ -477,17 +618,23 @@ void GLEWSFMLRenderer::render() {
         if (!obj.isScreenSpace) continue;
 
         if (obj.isSprite) {
-             GLuint tex = loadTexture(obj.texturePath);
+             GLuint tex = 0;
+             if (obj.isText) {
+                 tex = obj.textureID;
+             } else {
+                 tex = loadTexture(obj.texturePath);
+             }
+
              if (tex) {
                  glEnable(GL_TEXTURE_2D);
                  glBindTexture(GL_TEXTURE_2D, tex);
                  glColor3f(obj.color.x, obj.color.y, obj.color.z);
-                 
+
                  int texW = 0, texH = 0;
                  glBindTexture(GL_TEXTURE_2D, tex);
                  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texW);
                  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
-                 
+
                  float w = (float)texW * obj.scale.x;
                  float h = (float)texH * obj.scale.y;
 
@@ -500,7 +647,7 @@ void GLEWSFMLRenderer::render() {
                  glTexCoord2f(1, 0); glVertex2f(x + w, y + h);
                  glTexCoord2f(0, 0); glVertex2f(x, y + h);
                  glEnd();
-                 
+
                  glDisable(GL_TEXTURE_2D);
              }
         }
@@ -530,8 +677,6 @@ void GLEWSFMLRenderer::render() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
-
-
 
 std::vector<uint32_t> GLEWSFMLRenderer::getPixels() const {
     return _pixelBuffer;

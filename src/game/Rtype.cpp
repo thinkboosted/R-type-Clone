@@ -45,7 +45,8 @@ void Rtype::init() {
 void Rtype::loop() {
     if (!_scriptsLoaded) {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      sendMessage("LoadScript", "assets/scripts/sprite-demo/Game.lua");
+      std::cout << "Loading space-shooter game script..." << std::endl;
+      sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
       _scriptsLoaded = true;
     }
 }

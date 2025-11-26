@@ -33,6 +33,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void initContext();
     void loadMesh(const std::string& path);
     GLuint loadTexture(const std::string& path);
+    GLuint createTextTexture(const std::string& text, const std::string& fontPath, unsigned int fontSize, Vector3f color);
 
     struct RenderObject {
         std::string id;
@@ -40,10 +41,15 @@ class GLEWSFMLRenderer : public I3DRenderer {
         std::string texturePath;
         bool isSprite = false;
         bool isScreenSpace = false;
+        bool isText = false;
+        std::string text;
+        std::string fontPath;
+        unsigned int fontSize = 24;
         Vector3f position;
         Vector3f rotation;
         Vector3f scale;
         Vector3f color;
+        GLuint textureID = 0; // Custom texture ID for texts
     };
 
     struct MeshData {
@@ -60,6 +66,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
     std::map<std::string, RenderObject> _renderObjects;
     std::map<std::string, MeshData> _meshCache;
     std::map<std::string, GLuint> _textureCache;
+    std::map<std::string, sf::Font> _fontCache;
     std::string _activeCameraId;
     Vector3f _cameraPos;
     Vector3f _cameraRot;

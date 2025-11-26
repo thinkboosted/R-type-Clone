@@ -211,22 +211,33 @@ namespace rtypeEngine {
                     }
                 }
 
-                sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+                // Notify other modules
                 sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
+                sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
             }
         });
 
-        ecs.set_function("addComponent", [this](const std::string& id, const std::string& name, sol::table data) {
-            auto it = std::find(_entities.begin(), _entities.end(), id);
-            if (it != _entities.end()) {
-                ComponentPool& pool = _pools[name];
-                if (pool.sparse.count(id)) {
-                    pool.dense[pool.sparse[id]] = data;
-                } else {
-                    pool.dense.push_back(data);
-                    pool.entities.push_back(id);
-                    pool.sparse[id] = pool.dense.size() - 1;
-                }
+        ecs.set_function("createText", [this](const std::string& id, const std::string& text, const std::string& fontPath, int fontSize, bool isScreenSpace) {
+             std::stringstream ss;
+             ss << "CreateText:" << id << ":" << fontPath << ":" << fontSize << ":" << (isScreenSpace ? "1" : "0") << ":" << text;
+             sendMessage("RenderEntityCommand", ss.str());
+        });
+
+        ecs.set_function("setText", [this](const std::string& id, const std::string& text) {
+             sendMessage("RenderEntityCommand", "SetText:" + id + ":" + text);
+        });
+
+        ecs.set_function("addComponent", [this](const std::string& entityId, const std::string& componentName, sol::table componentData) {
+            if (_pools.find(componentName) == _pools.end()) {
+                _pools[componentName] = ComponentPool();
+            }
+            ComponentPool& pool = _pools[componentName];
+            if (pool.sparse.count(entityId)) {
+                pool.dense[pool.sparse[entityId]] = componentData;
+            } else {
+                pool.dense.push_back(componentData);
+                pool.entities.push_back(entityId);
+                pool.sparse[entityId] = pool.dense.size() - 1;
             }
         });
 

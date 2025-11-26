@@ -45,6 +45,33 @@ function RenderSystem.update(dt)
         ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
     end
 
+    -- Handle Text Entities
+    local textEntities = ECS.getEntitiesWith({"Transform", "Text"})
+    for _, id in ipairs(textEntities) do
+        local transform = ECS.getComponent(id, "Transform")
+        local text = ECS.getComponent(id, "Text")
+        local color = ECS.getComponent(id, "Color")
+
+        if not RenderSystem.initializedEntities[id] then
+            ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
+            ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+            RenderSystem.initializedEntities[id] = true
+        end
+
+        if color then
+            ECS.sendMessage("RenderEntityCommand", "SetColor:" .. id .. "," .. color.r .. "," .. color.g .. "," .. color.b)
+        end
+
+        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+
+        if not RenderSystem.lastText then RenderSystem.lastText = {} end
+        if RenderSystem.lastText[id] ~= text.text then
+             ECS.setText(id, text.text)
+             RenderSystem.lastText[id] = text.text
+        end
+    end
+
     -- Update Camera Position (if it moves)
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
     for _, id in ipairs(cameras) do
