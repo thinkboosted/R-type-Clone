@@ -70,7 +70,7 @@ else()
 endif()
 
 if(GLEW_FOUND AND OpenGL_FOUND)
-    add_subdirectory(src/engine/modules/Renderer/GLEW)
+    add_subdirectory(src/engine/modules/Renderer/GLEWSFML)
 else()
     message(WARNING "Skipping GLEW Renderer module")
 endif()

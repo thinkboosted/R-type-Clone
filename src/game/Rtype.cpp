@@ -25,13 +25,13 @@ void Rtype::init() {
   try {
 #ifdef _WIN32
   this->addModule("LuaECSManager.dll", pubEndpoint, subEndpoint);
-  this->addModule("GLEWRenderer.dll", pubEndpoint, subEndpoint);
+  this->addModule("GLEWSFMLRenderer.dll", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.dll", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.dll", pubEndpoint, subEndpoint);
   this->addModule("ECSSavesManager.dll", pubEndpoint, subEndpoint);
 #else
   this->addModule("LuaECSManager.so", pubEndpoint, subEndpoint);
-  this->addModule("GLEWRenderer.so", pubEndpoint, subEndpoint);
+  this->addModule("GLEWSFMLRenderer.so", pubEndpoint, subEndpoint);
   this->addModule("SFMLWindowManager.so", pubEndpoint, subEndpoint);
   this->addModule("BulletPhysicEngine.so", pubEndpoint, subEndpoint);
   this->addModule("ECSSavesManager.so", pubEndpoint, subEndpoint);
@@ -45,7 +45,7 @@ void Rtype::init() {
 void Rtype::loop() {
     if (!_scriptsLoaded) {
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
+      sendMessage("LoadScript", "assets/scripts/sprite-demo/Game.lua");
       _scriptsLoaded = true;
     }
 }

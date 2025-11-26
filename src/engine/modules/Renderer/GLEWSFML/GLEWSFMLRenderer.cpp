@@ -1,4 +1,4 @@
-#include "GLEWRenderer.hpp"
+#include "GLEWSFMLRenderer.hpp"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -12,7 +12,7 @@
 
 namespace rtypeEngine {
 
-GLEWRenderer::GLEWRenderer(const char* pubEndpoint, const char* subEndpoint)
+GLEWSFMLRenderer::GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpoint)
     : I3DRenderer(pubEndpoint, subEndpoint),
       _resolution{800, 600},
       _framebuffer(0),
@@ -30,11 +30,11 @@ GLEWRenderer::GLEWRenderer(const char* pubEndpoint, const char* subEndpoint)
           _pixelBuffer.resize(_resolution.x * _resolution.y);
       }
 
-GLEWRenderer::~GLEWRenderer() {
+GLEWSFMLRenderer::~GLEWSFMLRenderer() {
     destroyFramebuffer();
 }
 
-void GLEWRenderer::init() {
+void GLEWSFMLRenderer::init() {
     subscribe("RenderEntityCommand", [this](const std::string& msg) {
         this->onRenderEntityCommand(msg);
     });
@@ -46,10 +46,10 @@ void GLEWRenderer::init() {
 
     glEnable(GL_DEPTH_TEST);
 
-    std::cout << "[GLEWRenderer] Initialized" << std::endl;
+    std::cout << "[GLEWSFMLRenderer] Initialized" << std::endl;
 }
 
-void GLEWRenderer::ensureGLEWInitialized() {
+void GLEWSFMLRenderer::ensureGLEWInitialized() {
     if (!_glewInitialized) {
         GLenum err = glewInit();
         if (GLEW_OK != err) {
@@ -60,11 +60,11 @@ void GLEWRenderer::ensureGLEWInitialized() {
     }
 }
 
-void GLEWRenderer::loop() {
+void GLEWSFMLRenderer::loop() {
     render();
 }
 
-void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
+void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
     std::stringstream ss(message);
     std::string segment;
     while (std::getline(ss, segment, ';')) {
@@ -93,6 +93,41 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
                      _renderObjects[id] = obj;
                  } else if (type == "Light" || type == "LIGHT") {
                      _activeLightId = id;
+                 } else if (type == "Sprite" || type == "SPRITE") {
+                     size_t split2 = id.find(':');
+                     if (split2 != std::string::npos) {
+                         std::string texturePath = id.substr(0, split2);
+                         std::string realId = id.substr(split2 + 1);
+                         
+                         RenderObject obj;
+                         obj.id = realId;
+                         obj.isSprite = true;
+                         obj.texturePath = texturePath;
+                         obj.position = {0,0,0};
+                         obj.rotation = {0,0,0};
+                         obj.scale = {1,1,1};
+                         obj.color = {1.0f, 1.0f, 1.0f};
+                         _renderObjects[realId] = obj;
+                         loadTexture(texturePath);
+                     }
+                 } else if (type == "HUDSprite" || type == "HUDSPRITE") {
+                     size_t split2 = id.find(':');
+                     if (split2 != std::string::npos) {
+                         std::string texturePath = id.substr(0, split2);
+                         std::string realId = id.substr(split2 + 1);
+                         
+                         RenderObject obj;
+                         obj.id = realId;
+                         obj.isSprite = true;
+                         obj.isScreenSpace = true;
+                         obj.texturePath = texturePath;
+                         obj.position = {0,0,0};
+                         obj.rotation = {0,0,0};
+                         obj.scale = {1,1,1};
+                         obj.color = {1.0f, 1.0f, 1.0f};
+                         _renderObjects[realId] = obj;
+                         loadTexture(texturePath);
+                     }
                  } else {
                      RenderObject obj;
                      obj.id = id;
@@ -181,7 +216,7 @@ void GLEWRenderer::onRenderEntityCommand(const std::string& message) {
     }
 }
 
-void GLEWRenderer::loadMesh(const std::string& path) {
+void GLEWSFMLRenderer::loadMesh(const std::string& path) {
     if (path.empty()) return;
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -227,10 +262,36 @@ void GLEWRenderer::loadMesh(const std::string& path) {
     }
 
     _meshCache[path] = meshData;
-    std::cout << "[GLEWRenderer] Loaded mesh: " << path << " with " << meshData.vertices.size() / 3 << " vertices and " << meshData.indices.size() / 3 << " faces." << std::endl;
+    std::cout << "[GLEWSFMLRenderer] Loaded mesh: " << path << " with " << meshData.vertices.size() / 3 << " vertices and " << meshData.indices.size() / 3 << " faces." << std::endl;
 }
 
-void GLEWRenderer::cleanup() {
+GLuint GLEWSFMLRenderer::loadTexture(const std::string& path) {
+    if (_textureCache.find(path) != _textureCache.end()) {
+        return _textureCache[path];
+    }
+
+    sf::Image image;
+    if (!image.loadFromFile(path)) {
+        std::cerr << "[GLEWSFMLRenderer] Failed to load texture: " << path << std::endl;
+        return 0;
+    }
+
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.getSize().x, image.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.getPixelsPtr());
+    
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    _textureCache[path] = textureID;
+    std::cout << "[GLEWSFMLRenderer] Loaded texture: " << path << std::endl;
+    return textureID;
+}
+
+void GLEWSFMLRenderer::cleanup() {
     destroyFramebuffer();
 #ifdef _WIN32
     if (_hglrc) {
@@ -249,7 +310,7 @@ void GLEWRenderer::cleanup() {
 #endif
 }
 
-void GLEWRenderer::createFramebuffer() {
+void GLEWSFMLRenderer::createFramebuffer() {
     glGenFramebuffers(1, &_framebuffer);
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
 
@@ -275,22 +336,22 @@ void GLEWRenderer::createFramebuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void GLEWRenderer::destroyFramebuffer() {
+void GLEWSFMLRenderer::destroyFramebuffer() {
     if (_framebuffer) glDeleteFramebuffers(1, &_framebuffer);
     if (_renderTexture) glDeleteTextures(1, &_renderTexture);
     if (_depthBuffer) glDeleteRenderbuffers(1, &_depthBuffer);
 }
 
-void GLEWRenderer::addMesh() {
+void GLEWSFMLRenderer::addMesh() {
 }
 
-void GLEWRenderer::clearBuffer() {
+void GLEWSFMLRenderer::clearBuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark gray background
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void GLEWRenderer::render() {
+void GLEWSFMLRenderer::render() {
     if (!_glewInitialized) return;
 
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
@@ -350,6 +411,8 @@ void GLEWRenderer::render() {
 
     for (const auto& pair : _renderObjects) {
         const auto& obj = pair.second;
+        if (obj.isScreenSpace) continue;
+
         glPushMatrix();
 
         glTranslatef(obj.position.x, obj.position.y, obj.position.z);
@@ -358,7 +421,23 @@ void GLEWRenderer::render() {
         glRotatef(obj.rotation.z * 180.0f / 3.14159f, 0.0f, 0.0f, 1.0f);
         glScalef(obj.scale.x, obj.scale.y, obj.scale.z);
 
-        if (_meshCache.find(obj.meshPath) != _meshCache.end()) {
+        if (obj.isSprite) {
+             GLuint tex = loadTexture(obj.texturePath);
+             if (tex) {
+                 glEnable(GL_TEXTURE_2D);
+                 glBindTexture(GL_TEXTURE_2D, tex);
+                 glColor3f(obj.color.x, obj.color.y, obj.color.z);
+                 
+                 glBegin(GL_QUADS);
+                 glTexCoord2f(0, 1); glVertex3f(-0.5f, -0.5f, 0.0f);
+                 glTexCoord2f(1, 1); glVertex3f( 0.5f, -0.5f, 0.0f);
+                 glTexCoord2f(1, 0); glVertex3f( 0.5f,  0.5f, 0.0f);
+                 glTexCoord2f(0, 0); glVertex3f(-0.5f,  0.5f, 0.0f);
+                 glEnd();
+                 
+                 glDisable(GL_TEXTURE_2D);
+             }
+        } else if (_meshCache.find(obj.meshPath) != _meshCache.end()) {
             const auto& mesh = _meshCache[obj.meshPath];
 
             glColor3f(obj.color.x, obj.color.y, obj.color.z);
@@ -382,6 +461,57 @@ void GLEWRenderer::render() {
         glPopMatrix();
     }
 
+    // HUD Rendering
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, _resolution.x, 0, _resolution.y, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+
+    for (const auto& pair : _renderObjects) {
+        const auto& obj = pair.second;
+        if (!obj.isScreenSpace) continue;
+
+        if (obj.isSprite) {
+             GLuint tex = loadTexture(obj.texturePath);
+             if (tex) {
+                 glEnable(GL_TEXTURE_2D);
+                 glBindTexture(GL_TEXTURE_2D, tex);
+                 glColor3f(obj.color.x, obj.color.y, obj.color.z);
+                 
+                 int texW = 0, texH = 0;
+                 glBindTexture(GL_TEXTURE_2D, tex);
+                 glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texW);
+                 glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
+                 
+                 float w = (float)texW * obj.scale.x;
+                 float h = (float)texH * obj.scale.y;
+
+                 float x = obj.position.x;
+                 float y = obj.position.y;
+
+                 glBegin(GL_QUADS);
+                 glTexCoord2f(0, 1); glVertex2f(x, y);
+                 glTexCoord2f(1, 1); glVertex2f(x + w, y);
+                 glTexCoord2f(1, 0); glVertex2f(x + w, y + h);
+                 glTexCoord2f(0, 0); glVertex2f(x, y + h);
+                 glEnd();
+                 
+                 glDisable(GL_TEXTURE_2D);
+             }
+        }
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+
     glDisable(GL_LIGHTING);
 
     glReadPixels(0, 0, _resolution.x, _resolution.y, GL_RGBA, GL_UNSIGNED_BYTE, _pixelBuffer.data());
@@ -403,15 +533,15 @@ void GLEWRenderer::render() {
 
 
 
-std::vector<uint32_t> GLEWRenderer::getPixels() const {
+std::vector<uint32_t> GLEWSFMLRenderer::getPixels() const {
     return _pixelBuffer;
 }
 
-Vector2u GLEWRenderer::getResolution() const {
+Vector2u GLEWSFMLRenderer::getResolution() const {
     return _resolution;
 }
 
-void GLEWRenderer::initContext() {
+void GLEWSFMLRenderer::initContext() {
 #ifdef _WIN32
     // Register a dummy window class
     WNDCLASSA wc = {0};
@@ -461,5 +591,5 @@ void GLEWRenderer::initContext() {
 
 // Factory function for dynamic loading
 extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
-    return new rtypeEngine::GLEWRenderer(pubEndpoint, subEndpoint);
+    return new rtypeEngine::GLEWSFMLRenderer(pubEndpoint, subEndpoint);
 }

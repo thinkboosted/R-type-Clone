@@ -49,12 +49,12 @@ if(TARGET SFMLWindowManager)
     )
 endif()
 
-if(TARGET GLEWRenderer)
+if(TARGET GLEWSFMLRenderer)
     add_custom_command(TARGET rtype_game POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:GLEWRenderer>
+            $<TARGET_FILE:GLEWSFMLRenderer>
             $<TARGET_FILE_DIR:rtype_game>
-        COMMENT "Copying GLEW Renderer to executable directory"
+        COMMENT "Copying GLEWSFML Renderer to executable directory"
     )
 endif()
 

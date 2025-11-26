@@ -16,6 +16,13 @@ function Mesh(modelPath)
     }
 end
 
+function Sprite(texturePath, isScreenSpace)
+    return {
+        texturePath = texturePath,
+        isScreenSpace = isScreenSpace or false
+    }
+end
+
 function Collider(type, size)
     return {
         type = type or "Box",
