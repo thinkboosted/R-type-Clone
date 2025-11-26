@@ -1,6 +1,6 @@
 add_library(ECSSavesManager SHARED
-    ECSSavesManager.cpp
-    ECSSavesManager.hpp
+    BasicECSSavesManager.cpp
+    BasicECSSavesManager.hpp
     ../IECSSavesManager.hpp
     ../../IModule.hpp
     ../../AModule.hpp

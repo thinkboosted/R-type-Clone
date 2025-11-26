@@ -76,7 +76,7 @@ else()
 endif()
 
 add_subdirectory(src/engine/modules/ECSManager/LuaECSManager)
-add_subdirectory(src/engine/modules/ECSSavesManager/ECSSavesManager)
+add_subdirectory(src/engine/modules/ECSSavesManager/BasicECSSavesManager)
 
 if(Bullet_FOUND)
     add_subdirectory(src/engine/modules/PhysicEngine/Bullet)
