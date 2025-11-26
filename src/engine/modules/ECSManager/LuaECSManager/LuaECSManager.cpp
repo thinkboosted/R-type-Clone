@@ -1,4 +1,10 @@
 #include "LuaECSManager.hpp"
+
+#ifdef _WIN32
+    #define LUA_ECS_MANAGER_EXPORT __declspec(dllexport)
+#else
+    #define LUA_ECS_MANAGER_EXPORT
+#endif
 #include <iostream>
 #include <sstream>
 #include <random>
@@ -489,6 +495,6 @@ namespace rtypeEngine {
     }
 }
 
-extern "C" __declspec(dllexport) rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+extern "C" LUA_ECS_MANAGER_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::LuaECSManager(pubEndpoint, subEndpoint);
 }

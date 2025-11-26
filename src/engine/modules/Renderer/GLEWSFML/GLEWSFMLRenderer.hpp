@@ -75,10 +75,8 @@ class GLEWSFMLRenderer : public I3DRenderer {
     float _lightIntensity;
     std::string _activeLightId;
     bool _glewInitialized = false;
-#ifdef _WIN32
     void* _hwnd = nullptr;
     void* _hdc = nullptr;
     void* _hglrc = nullptr;
-#endif
 };
 }  // namespace rtypeEngine

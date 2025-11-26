@@ -96,6 +96,24 @@ if(TARGET LuaECS)
     endif()
 endif()
 
+if(TARGET LuaECSManager)
+    add_custom_command(TARGET rtype_game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:LuaECSManager>
+            $<TARGET_FILE_DIR:rtype_game>
+        COMMENT "Copying LuaECSManager to executable directory"
+    )
+endif()
+
+if(TARGET ECSSavesManager)
+    add_custom_command(TARGET rtype_game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:ECSSavesManager>
+            $<TARGET_FILE_DIR:rtype_game>
+        COMMENT "Copying ECSSavesManager to executable directory"
+    )
+endif()
+
 if(TARGET BulletPhysicEngine)
     add_custom_command(TARGET rtype_game POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
