@@ -1,12 +1,16 @@
 -- Component Definitions
 
-function Transform(x, y, z)
+function Transform(x, y, z, rx, ry, rz, sx, sy, sz)
     return {
         x = x or 0,
         y = y or 0,
         z = z or 0,
-        rx = 0, ry = 0, rz = 0,
-        sx = 1, sy = 1, sz = 1
+        rx = rx or 0,
+        ry = ry or 0,
+        rz = rz or 0,
+        sx = sx or 1,
+        sy = sy or 1,
+        sz = sz or 1
     }
 end
 

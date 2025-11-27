@@ -26,6 +26,7 @@ namespace rtypeEngine {
 GLEWSFMLRenderer::GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpoint)
     : I3DRenderer(pubEndpoint, subEndpoint),
       _resolution{800, 600},
+      _hudResolution{800, 600},
       _framebuffer(0),
       _renderTexture(0),
       _depthBuffer(0),
@@ -44,6 +45,9 @@ GLEWSFMLRenderer::GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpo
 void GLEWSFMLRenderer::init() {
     subscribe("RenderEntityCommand", [this](const std::string& msg) {
         this->onRenderEntityCommand(msg);
+    });
+    subscribe("WindowResized", [this](const std::string& msg) {
+        this->handleWindowResized(msg);
     });
 
     initContext();
@@ -81,6 +85,25 @@ void GLEWSFMLRenderer::loop() {
 #else
     glXMakeCurrent(NULL, None, NULL); // Release context
 #endif
+}
+
+void GLEWSFMLRenderer::handleWindowResized(const std::string& message) {
+    std::stringstream ss(message);
+    std::string widthStr, heightStr;
+
+    if (std::getline(ss, widthStr, ',') && std::getline(ss, heightStr)) {
+        try {
+            unsigned int width = std::stoul(widthStr);
+            unsigned int height = std::stoul(heightStr);
+
+            if (width > 0 && height > 0) {
+                _newResolution = {width, height};
+                _pendingResize = true;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[GLEWSFMLRenderer] Error parsing resize message: " << e.what() << std::endl;
+        }
+    }
 }
 
 void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
@@ -306,19 +329,30 @@ void GLEWSFMLRenderer::loadMesh(const std::string& path) {
             ss >> v.x >> v.y >> v.z;
             tempVertices.push_back(v);
         } else if (prefix == "f") {
-            unsigned int vIndex[3];
-            // Simple OBJ parser for triangulated faces (v1 v2 v3)
-            // Note: OBJ indices are 1-based
-            for (int i = 0; i < 3; ++i) {
-                ss >> vIndex[i];
-                // Handle texture/normal indices if present (e.g., 1/1/1)
-                // For this simple parser, we assume just vertex indices or space separated
-                // If there are slashes, we need to ignore them.
-                // But for the cube.obj I created, it's just "f 1 2 3"
+            std::string vertexStr;
+            std::vector<unsigned int> faceIndices;
+            while (ss >> vertexStr) {
+                size_t slashPos = vertexStr.find('/');
+                std::string indexStr = (slashPos != std::string::npos) ? vertexStr.substr(0, slashPos) : vertexStr;
+                if (!indexStr.empty()) {
+                    try {
+                        faceIndices.push_back(std::stoi(indexStr) - 1);
+                    } catch (...) {
+                        // Ignore invalid indices
+                    }
+                }
+            }
 
-                // If the file has slashes, this simple parsing might fail or need adjustment.
-                // Let's assume the simple format I wrote.
-                meshData.indices.push_back(vIndex[i] - 1);
+            if (faceIndices.size() >= 3) {
+                meshData.indices.push_back(faceIndices[0]);
+                meshData.indices.push_back(faceIndices[1]);
+                meshData.indices.push_back(faceIndices[2]);
+
+                if (faceIndices.size() == 4) {
+                    meshData.indices.push_back(faceIndices[0]);
+                    meshData.indices.push_back(faceIndices[2]);
+                    meshData.indices.push_back(faceIndices[3]);
+                }
             }
         }
     }
@@ -523,10 +557,19 @@ void GLEWSFMLRenderer::clearBuffer() {
 void GLEWSFMLRenderer::render() {
     if (!_glewInitialized) return;
 
+    if (_pendingResize) {
+        _resolution = _newResolution;
+        _pixelBuffer.resize(_resolution.x * _resolution.y);
+        destroyFramebuffer();
+        createFramebuffer();
+        _pendingResize = false;
+        std::cout << "[GLEWSFMLRenderer] Resized to " << _resolution.x << "x" << _resolution.y << std::endl;
+    }
+
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
     glViewport(0, 0, _resolution.x, _resolution.y);
 
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glMatrixMode(GL_PROJECTION);
@@ -634,16 +677,49 @@ void GLEWSFMLRenderer::render() {
             glColor3f(obj.color.x, obj.color.y, obj.color.z);
 
             glBegin(GL_TRIANGLES);
-            for (size_t i = 0; i < mesh.indices.size(); ++i) {
-                unsigned int idx = mesh.indices[i];
-                if (idx * 3 + 2 < mesh.vertices.size()) {
-                    float nx = mesh.vertices[idx * 3];
-                    float ny = mesh.vertices[idx * 3 + 1];
-                    float nz = mesh.vertices[idx * 3 + 2];
-                    float len = sqrt(nx*nx + ny*ny + nz*nz);
-                    if (len > 0) glNormal3f(nx/len, ny/len, nz/len);
+            for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+                unsigned int idx0 = mesh.indices[i];
+                unsigned int idx1 = mesh.indices[i+1];
+                unsigned int idx2 = mesh.indices[i+2];
 
-                    glVertex3f(mesh.vertices[idx * 3], mesh.vertices[idx * 3 + 1], mesh.vertices[idx * 3 + 2]);
+                if (idx0 * 3 + 2 < mesh.vertices.size() &&
+                    idx1 * 3 + 2 < mesh.vertices.size() &&
+                    idx2 * 3 + 2 < mesh.vertices.size()) {
+
+                    float x0 = mesh.vertices[idx0 * 3];
+                    float y0 = mesh.vertices[idx0 * 3 + 1];
+                    float z0 = mesh.vertices[idx0 * 3 + 2];
+
+                    float x1 = mesh.vertices[idx1 * 3];
+                    float y1 = mesh.vertices[idx1 * 3 + 1];
+                    float z1 = mesh.vertices[idx1 * 3 + 2];
+
+                    float x2 = mesh.vertices[idx2 * 3];
+                    float y2 = mesh.vertices[idx2 * 3 + 1];
+                    float z2 = mesh.vertices[idx2 * 3 + 2];
+
+                    // Calculate face normal
+                    float ux = x1 - x0;
+                    float uy = y1 - y0;
+                    float uz = z1 - z0;
+
+                    float vx = x2 - x0;
+                    float vy = y2 - y0;
+                    float vz = z2 - z0;
+
+                    float nx = uy * vz - uz * vy;
+                    float ny = uz * vx - ux * vz;
+                    float nz = ux * vy - uy * vx;
+
+                    float len = sqrt(nx*nx + ny*ny + nz*nz);
+                    if (len > 0) {
+                        nx /= len; ny /= len; nz /= len;
+                        glNormal3f(nx, ny, nz);
+                    }
+
+                    glVertex3f(x0, y0, z0);
+                    glVertex3f(x1, y1, z1);
+                    glVertex3f(x2, y2, z2);
                 }
             }
             glEnd();
@@ -656,7 +732,7 @@ void GLEWSFMLRenderer::render() {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0, _resolution.x, 0, _resolution.y, -1, 1);
+    glOrtho(0, _hudResolution.x, 0, _hudResolution.y, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();

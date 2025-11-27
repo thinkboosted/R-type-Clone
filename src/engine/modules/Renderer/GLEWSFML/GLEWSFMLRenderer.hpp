@@ -19,6 +19,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void cleanup() override;
 
     void onRenderEntityCommand(const std::string& message);
+    void handleWindowResized(const std::string& message);
 
     void addMesh(/* mesh parameters */) override;
     void clearBuffer() override;
@@ -58,6 +59,9 @@ class GLEWSFMLRenderer : public I3DRenderer {
     };
 
     Vector2u _resolution;
+    Vector2u _hudResolution;
+    bool _pendingResize = false;
+    Vector2u _newResolution;
     GLuint _framebuffer;
     GLuint _renderTexture;
     GLuint _depthBuffer;
