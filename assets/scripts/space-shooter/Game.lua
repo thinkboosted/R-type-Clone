@@ -13,6 +13,7 @@ dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/BonusSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 dofile("assets/scripts/space-shooter/systems/FollowSystem.lua")
+dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
 
 -- ECS.loadLastSave("space-shooter-save")
 
@@ -30,6 +31,16 @@ ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false)) -- mass 1, fri
 ECS.addComponent(player, "Player", Player(20.0))
 ECS.addComponent(player, "Life", Life(3))
 ECS.addComponent(player, "Color", Color(0.0, 1.0, 0.0)) -- Green player
+ECS.addComponent(player, "ParticleGenerator", ParticleGenerator(
+    -2.5, 0.5, -1.0,   -- Offset (Behind the ship in local space, assuming +Y is forward)
+    -1.0, 0.0, 0.0,   -- Direction (Backwards in local space)
+    0.3,          -- Spread
+    5.0,          -- Speed
+    0.5,          -- Lifetime
+    50.0,         -- Rate
+    0.5,          -- Size (Bigger)
+    1.0, 0.6, 0.1 -- Color (Orange/Fire)
+))
 
 -- Create Score Entity
 local scoreEntity = ECS.createEntity()

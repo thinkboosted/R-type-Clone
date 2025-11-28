@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <map>
+#include <chrono>
 #include "../I3DRenderer.hpp"
 
 namespace rtypeEngine {
@@ -28,6 +29,9 @@ class GLEWSFMLRenderer : public I3DRenderer {
     Vector2u getResolution() const override;
 
   private:
+    void updateParticles(float dt);
+    void renderParticles();
+
     void createFramebuffer();
     void destroyFramebuffer();
     void ensureGLEWInitialized();
@@ -53,6 +57,30 @@ class GLEWSFMLRenderer : public I3DRenderer {
         GLuint textureID = 0; // Custom texture ID for texts
     };
 
+    struct Particle {
+        Vector3f position;
+        Vector3f velocity;
+        Vector3f color;
+        float life;
+        float maxLife;
+        float size;
+    };
+
+    struct ParticleGenerator {
+        std::string id;
+        Vector3f position;
+        Vector3f direction;
+        float spread;
+        float speed;
+        float lifeTime;
+        float rate;
+        float size;
+        Vector3f color;
+        
+        float accumulator = 0.0f;
+        std::vector<Particle> particles;
+    };
+
     struct MeshData {
         std::vector<float> vertices;
         std::vector<unsigned int> indices;
@@ -68,6 +96,9 @@ class GLEWSFMLRenderer : public I3DRenderer {
     std::vector<uint32_t> _pixelBuffer;
 
     std::map<std::string, RenderObject> _renderObjects;
+    std::map<std::string, ParticleGenerator> _particleGenerators;
+    std::chrono::steady_clock::time_point _lastFrameTime;
+
     std::map<std::string, MeshData> _meshCache;
     std::map<std::string, GLuint> _textureCache;
     std::map<std::string, sf::Font> _fontCache;

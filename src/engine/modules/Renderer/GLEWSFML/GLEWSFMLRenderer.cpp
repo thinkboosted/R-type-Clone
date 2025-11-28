@@ -20,6 +20,7 @@
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <random>
 
 namespace rtypeEngine {
 
@@ -38,7 +39,8 @@ GLEWSFMLRenderer::GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpo
       _cameraRot{0.0f, 0.0f, 0.0f},
       _lightPos{0.0f, 5.0f, 0.0f},
       _lightColor{1.0f, 1.0f, 1.0f},
-      _lightIntensity(1.0f) {
+      _lightIntensity(1.0f),
+      _lastFrameTime(std::chrono::steady_clock::now()) {
           _pixelBuffer.resize(_resolution.x * _resolution.y);
       }
 
@@ -303,6 +305,51 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             if (_renderObjects.find(data) != _renderObjects.end()) {
                 _renderObjects.erase(data);
             }
+            if (_particleGenerators.find(data) != _particleGenerators.end()) {
+                _particleGenerators.erase(data);
+            }
+        } else if (command == "CreateParticleGenerator") {
+            std::string id = data;
+            ParticleGenerator gen;
+            gen.id = id;
+            gen.position = {0,0,0};
+            gen.direction = {0,1,0};
+            gen.spread = 0.5f;
+            gen.speed = 1.0f;
+            gen.lifeTime = 1.0f;
+            gen.rate = 10.0f;
+            gen.size = 0.1f;
+            gen.color = {1,1,1};
+            _particleGenerators[id] = gen;
+        } else if (command == "UpdateParticleGenerator") {
+            // ID:x,y,z:dirX,dirY,dirZ:spread:speed:life:rate:size:r,g,b
+            size_t split = data.find(':');
+            if (split != std::string::npos) {
+                std::string id = data.substr(0, split);
+                std::string params = data.substr(split + 1);
+                
+                if (_particleGenerators.find(id) != _particleGenerators.end()) {
+                    auto& gen = _particleGenerators[id];
+                    std::stringstream pss(params);
+                    std::string val;
+                    std::vector<float> v;
+                    while(std::getline(pss, val, ',')) {
+                        try { v.push_back(std::stof(val)); } catch(...) { v.push_back(0.0f); }
+                    }
+
+                    // Expected 14 values
+                    if (v.size() >= 14) {
+                        gen.position = {v[0], v[1], v[2]};
+                        gen.direction = {v[3], v[4], v[5]};
+                        gen.spread = v[6];
+                        gen.speed = v[7];
+                        gen.lifeTime = v[8];
+                        gen.rate = v[9];
+                        gen.size = v[10];
+                        gen.color = {v[11], v[12], v[13]};
+                    }
+                }
+            }
         }
     }
 }
@@ -566,6 +613,12 @@ void GLEWSFMLRenderer::render() {
         std::cout << "[GLEWSFMLRenderer] Resized to " << _resolution.x << "x" << _resolution.y << std::endl;
     }
 
+    auto now = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float>(now - _lastFrameTime).count();
+    _lastFrameTime = now;
+
+    updateParticles(dt);
+
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
     glViewport(0, 0, _resolution.x, _resolution.y);
 
@@ -728,6 +781,8 @@ void GLEWSFMLRenderer::render() {
         glPopMatrix();
     }
 
+    renderParticles();
+
     // HUD Rendering
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -810,6 +865,99 @@ std::vector<uint32_t> GLEWSFMLRenderer::getPixels() const {
 
 Vector2u GLEWSFMLRenderer::getResolution() const {
     return _resolution;
+}
+
+void GLEWSFMLRenderer::updateParticles(float dt) {
+    static std::mt19937 rng(std::random_device{}());
+    static std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+    for (auto& pair : _particleGenerators) {
+        auto& gen = pair.second;
+        
+        gen.accumulator += dt * gen.rate;
+        while (gen.accumulator > 1.0f) {
+            gen.accumulator -= 1.0f;
+            
+            Particle p;
+            p.position = gen.position;
+            
+            Vector3f dir = gen.direction;
+            dir.x += dist(rng) * gen.spread;
+            dir.y += dist(rng) * gen.spread;
+            dir.z += dist(rng) * gen.spread;
+            
+            float len = sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z);
+            if (len > 0) {
+                dir.x /= len; dir.y /= len; dir.z /= len;
+            }
+            
+            p.velocity = {dir.x * gen.speed, dir.y * gen.speed, dir.z * gen.speed};
+            p.life = gen.lifeTime;
+            p.maxLife = gen.lifeTime;
+            p.size = gen.size;
+            p.color = gen.color;
+            
+            gen.particles.push_back(p);
+        }
+
+        for (auto it = gen.particles.begin(); it != gen.particles.end();) {
+            it->life -= dt;
+            if (it->life <= 0) {
+                it = gen.particles.erase(it);
+            } else {
+                it->position.x += it->velocity.x * dt;
+                it->position.y += it->velocity.y * dt;
+                it->position.z += it->velocity.z * dt;
+                ++it;
+            }
+        }
+    }
+}
+
+void GLEWSFMLRenderer::renderParticles() {
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
+    glDepthMask(GL_FALSE);
+
+    for (const auto& pair : _particleGenerators) {
+        const auto& gen = pair.second;
+        
+        for (const auto& p : gen.particles) {
+            float lifeRatio = p.life / p.maxLife;
+            float alpha = lifeRatio;
+            
+            glColor4f(p.color.x, p.color.y, p.color.z, alpha);
+            
+            glPushMatrix();
+            glTranslatef(p.position.x, p.position.y, p.position.z);
+            
+            float modelview[16];
+            glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+            
+            for(int i=0; i<3; i++) 
+                for(int j=0; j<3; j++) {
+                    if (i==j) modelview[i*4+j] = 1.0f;
+                    else modelview[i*4+j] = 0.0f;
+                }
+            
+            glLoadMatrixf(modelview);
+            
+            float s = p.size;
+            glBegin(GL_QUADS);
+            glTexCoord2f(0, 0); glVertex3f(-s, -s, 0);
+            glTexCoord2f(1, 0); glVertex3f( s, -s, 0);
+            glTexCoord2f(1, 1); glVertex3f( s,  s, 0);
+            glTexCoord2f(0, 1); glVertex3f(-s,  s, 0);
+            glEnd();
+
+            glPopMatrix();
+        }
+    }
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
 }
 
 void GLEWSFMLRenderer::initContext() {

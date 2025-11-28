@@ -129,3 +129,22 @@ function Follow(targetId, offsetX, offsetY, offsetZ)
         offsetZ = offsetZ or 0
     }
 end
+
+function ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
+    return {
+        offsetX = offsetX or 0,
+        offsetY = offsetY or 0,
+        offsetZ = offsetZ or 0,
+        dirX = dirX or 0,
+        dirY = dirY or 1,
+        dirZ = dirZ or 0,
+        spread = spread or 0.5,
+        speed = speed or 1.0,
+        lifeTime = lifeTime or 1.0,
+        rate = rate or 10.0,
+        size = size or 0.1,
+        r = r or 1.0,
+        g = g or 1.0,
+        b = b or 1.0
+    }
+end

@@ -95,7 +95,16 @@ function InputSystem.spawnBullet(x, y, z)
     ECS.addComponent(bullet, "Bullet", Bullet(10))
     ECS.addComponent(bullet, "Life", Life(1))
     ECS.addComponent(bullet, "Color", Color(1.0, 1.0, 0.0))
-
+    ECS.addComponent(bullet, "ParticleGenerator", ParticleGenerator(
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.3,
+        5.0,
+        0.5,
+        50.0,
+        0.1,
+        1.0, 0.6, 0.1
+    ))
     local t = ECS.getComponent(bullet, "Transform")
     t.sx = 0.2
     t.sy = 0.2
