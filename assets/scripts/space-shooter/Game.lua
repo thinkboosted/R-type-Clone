@@ -15,6 +15,7 @@ dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 dofile("assets/scripts/space-shooter/systems/FollowSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
 
+-- Disabled for development to test clean game state. Uncomment to enable save loading.
 -- ECS.loadLastSave("space-shooter-save")
 
 -- Create Camera

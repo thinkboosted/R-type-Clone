@@ -322,7 +322,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             gen.color = {1,1,1};
             _particleGenerators[id] = gen;
         } else if (command == "UpdateParticleGenerator") {
-            // ID:x,y,z:dirX,dirY,dirZ:spread:speed:life:rate:size:r,g,b
+            // ID:x,y,z,dirX,dirY,dirZ,spread,speed,life,rate,size,r,g,b
             size_t split = data.find(':');
             if (split != std::string::npos) {
                 std::string id = data.substr(0, split);
@@ -924,7 +924,7 @@ void GLEWSFMLRenderer::renderParticles() {
         const auto& gen = pair.second;
         
         for (const auto& p : gen.particles) {
-            float lifeRatio = p.life / p.maxLife;
+            float lifeRatio = (p.maxLife > 0.0f) ? p.life / p.maxLife : 0.0f;
             float alpha = lifeRatio;
             
             glColor4f(p.color.x, p.color.y, p.color.z, alpha);
@@ -935,11 +935,12 @@ void GLEWSFMLRenderer::renderParticles() {
             float modelview[16];
             glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
             
-            for(int i=0; i<3; i++) 
+            for(int i=0; i<3; i++) {
                 for(int j=0; j<3; j++) {
                     if (i==j) modelview[i*4+j] = 1.0f;
                     else modelview[i*4+j] = 0.0f;
                 }
+            }
             
             glLoadMatrixf(modelview);
             
