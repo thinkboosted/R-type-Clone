@@ -245,12 +245,22 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
 
             if (v.size() >= 3) {
+                bool handled = false;
                 if (_renderObjects.find(id) != _renderObjects.end()) {
                     _renderObjects[id].position = {v[0], v[1], v[2]};
-                } else if (id == _activeCameraId) {
-                    _cameraPos = {v[0], v[1], v[2]};
-                } else if (id == _activeLightId) {
-                    _lightPos = {v[0], v[1], v[2]};
+                    handled = true;
+                }
+                if (_particleGenerators.find(id) != _particleGenerators.end()) {
+                    _particleGenerators[id].position = {v[0], v[1], v[2]};
+                    handled = true;
+                }
+
+                if (!handled) {
+                    if (id == _activeCameraId) {
+                        _cameraPos = {v[0], v[1], v[2]};
+                    } else if (id == _activeLightId) {
+                        _lightPos = {v[0], v[1], v[2]};
+                    }
                 }
             }
         } else if (command == "SetRotation") {
@@ -261,10 +271,20 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
 
             if (v.size() >= 3) {
+                bool handled = false;
                 if (_renderObjects.find(id) != _renderObjects.end()) {
                     _renderObjects[id].rotation = {v[0], v[1], v[2]};
-                } else if (id == _activeCameraId) {
-                    _cameraRot = {v[0], v[1], v[2]};
+                    handled = true;
+                }
+                if (_particleGenerators.find(id) != _particleGenerators.end()) {
+                    _particleGenerators[id].rotation = {v[0], v[1], v[2]};
+                    handled = true;
+                }
+
+                if (!handled) {
+                    if (id == _activeCameraId) {
+                        _cameraRot = {v[0], v[1], v[2]};
+                    }
                 }
             }
         } else if (command == "SetScale") {
@@ -308,25 +328,45 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                 _particleGenerators.erase(data);
             }
         } else if (command == "CreateParticleGenerator") {
-            std::string id = data;
-            ParticleGenerator gen;
-            gen.id = id;
-            gen.position = {0,0,0};
-            gen.direction = {0,1,0};
-            gen.spread = 0.5f;
-            gen.speed = 1.0f;
-            gen.lifeTime = 1.0f;
-            gen.rate = 10.0f;
-            gen.size = 0.1f;
-            gen.color = {1,1,1};
-            _particleGenerators[id] = gen;
+            // Format: ID:offsetX,offsetY,offsetZ:dirX,dirY,dirZ:spread:speed:life:rate:size:r,g,b
+            size_t split = data.find(':');
+            if (split != std::string::npos) {
+                std::string id = data.substr(0, split);
+                std::string params = data.substr(split + 1);
+
+                ParticleGenerator gen;
+                gen.id = id;
+                gen.position = {0,0,0};
+                gen.rotation = {0,0,0};
+                gen.offset = {0,0,0};
+                gen.direction = {0,1,0};
+
+                std::stringstream pss(params);
+                std::string val;
+                std::vector<float> v;
+                while(std::getline(pss, val, ',')) {
+                    try { v.push_back(std::stof(val)); } catch(...) { v.push_back(0.0f); }
+                }
+
+                if (v.size() >= 14) {
+                    gen.offset = {v[0], v[1], v[2]};
+                    gen.direction = {v[3], v[4], v[5]};
+                    gen.spread = v[6];
+                    gen.speed = v[7];
+                    gen.lifeTime = v[8];
+                    gen.rate = v[9];
+                    gen.size = v[10];
+                    gen.color = {v[11], v[12], v[13]};
+                }
+                _particleGenerators[id] = gen;
+            }
         } else if (command == "UpdateParticleGenerator") {
             // ID:x,y,z:dirX,dirY,dirZ:spread:speed:life:rate:size:r,g,b
             size_t split = data.find(':');
             if (split != std::string::npos) {
                 std::string id = data.substr(0, split);
                 std::string params = data.substr(split + 1);
-                
+
                 if (_particleGenerators.find(id) != _particleGenerators.end()) {
                     auto& gen = _particleGenerators[id];
                     std::stringstream pss(params);
@@ -869,30 +909,80 @@ void GLEWSFMLRenderer::updateParticles(float dt) {
 
     for (auto& pair : _particleGenerators) {
         auto& gen = pair.second;
-        
+
         gen.accumulator += dt * gen.rate;
         while (gen.accumulator > 1.0f) {
             gen.accumulator -= 1.0f;
-            
+
             Particle p;
-            p.position = gen.position;
-            
+
+            // Calculate world position and direction based on entity transform
+            // Rotation order: Z, Y, X (matching Lua implementation)
+
+            float radX = gen.rotation.x * 3.14159f / 180.0f;
+            float radY = gen.rotation.y * 3.14159f / 180.0f;
+            float radZ = gen.rotation.z * 3.14159f / 180.0f;
+
+            float cx = cos(radX), sx = sin(radX);
+            float cy = cos(radY), sy = sin(radY);
+            float cz = cos(radZ), sz = sin(radZ);
+
+            // Rotate offset
+            float x = gen.offset.x;
+            float y = gen.offset.y;
+            float z = gen.offset.z;
+
+            // Z rotation
+            float x1 = x * cz - y * sz;
+            float y1 = x * sz + y * cz;
+            float z1 = z;
+
+            // Y rotation
+            float x2 = x1 * cy + z1 * sy;
+            float y2 = y1;
+            float z2 = -x1 * sy + z1 * cy;
+
+            // X rotation
+            float x3 = x2;
+            float y3 = y2 * cx - z2 * sx;
+            float z3 = y2 * sx + z2 * cx;
+
+            p.position = {gen.position.x + x3, gen.position.y + y3, gen.position.z + z3};
+
+            // Rotate direction
             Vector3f dir = gen.direction;
-            dir.x += dist(rng) * gen.spread;
-            dir.y += dist(rng) * gen.spread;
-            dir.z += dist(rng) * gen.spread;
-            
-            float len = sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z);
+
+            // Z rotation
+            float dx1 = dir.x * cz - dir.y * sz;
+            float dy1 = dir.x * sz + dir.y * cz;
+            float dz1 = dir.z;
+
+            // Y rotation
+            float dx2 = dx1 * cy + dz1 * sy;
+            float dy2 = dy1;
+            float dz2 = -dx1 * sy + dz1 * cy;
+
+            // X rotation
+            float dx3 = dx2;
+            float dy3 = dy2 * cx - dz2 * sx;
+            float dz3 = dy2 * sx + dz2 * cx;
+
+            // Apply spread
+            dx3 += dist(rng) * gen.spread;
+            dy3 += dist(rng) * gen.spread;
+            dz3 += dist(rng) * gen.spread;
+
+            float len = sqrt(dx3*dx3 + dy3*dy3 + dz3*dz3);
             if (len > 0) {
-                dir.x /= len; dir.y /= len; dir.z /= len;
+                dx3 /= len; dy3 /= len; dz3 /= len;
             }
-            
-            p.velocity = {dir.x * gen.speed, dir.y * gen.speed, dir.z * gen.speed};
+
+            p.velocity = {dx3 * gen.speed, dy3 * gen.speed, dz3 * gen.speed};
             p.life = gen.lifeTime;
             p.maxLife = gen.lifeTime;
             p.size = gen.size;
             p.color = gen.color;
-            
+
             gen.particles.push_back(p);
         }
 
@@ -913,32 +1003,32 @@ void GLEWSFMLRenderer::updateParticles(float dt) {
 void GLEWSFMLRenderer::renderParticles() {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE); 
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glDepthMask(GL_FALSE);
 
     for (const auto& pair : _particleGenerators) {
         const auto& gen = pair.second;
-        
+
         for (const auto& p : gen.particles) {
             float lifeRatio = p.life / p.maxLife;
             float alpha = lifeRatio;
-            
+
             glColor4f(p.color.x, p.color.y, p.color.z, alpha);
-            
+
             glPushMatrix();
             glTranslatef(p.position.x, p.position.y, p.position.z);
-            
+
             float modelview[16];
             glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-            
-            for(int i=0; i<3; i++) 
+
+            for(int i=0; i<3; i++)
                 for(int j=0; j<3; j++) {
                     if (i==j) modelview[i*4+j] = 1.0f;
                     else modelview[i*4+j] = 0.0f;
                 }
-            
+
             glLoadMatrixf(modelview);
-            
+
             float s = p.size;
             glBegin(GL_QUADS);
             glTexCoord2f(0, 0); glVertex3f(-s, -s, 0);

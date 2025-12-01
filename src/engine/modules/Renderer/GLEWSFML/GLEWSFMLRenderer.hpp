@@ -69,6 +69,8 @@ class GLEWSFMLRenderer : public I3DRenderer {
     struct ParticleGenerator {
         std::string id;
         Vector3f position;
+        Vector3f rotation;
+        Vector3f offset;
         Vector3f direction;
         float spread;
         float speed;
@@ -76,7 +78,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
         float rate;
         float size;
         Vector3f color;
-        
+
         float accumulator = 0.0f;
         std::vector<Particle> particles;
     };
