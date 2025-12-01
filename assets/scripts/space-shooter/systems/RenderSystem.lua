@@ -2,8 +2,6 @@
 local RenderSystem = {}
 local CameraInitialized = false
 RenderSystem.initializedEntities = {}
-RenderSystem.initializedParticles = {}
-
 function RenderSystem.init()
     print("[RenderSystem] Initialized")
 end
