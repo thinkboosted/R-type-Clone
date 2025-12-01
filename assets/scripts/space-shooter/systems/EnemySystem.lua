@@ -30,7 +30,7 @@ function EnemySystem.update(dt)
     local enemies = ECS.getEntitiesWith({"Enemy", "Transform"})
     for _, id in ipairs(enemies) do
         local t = ECS.getComponent(id, "Transform")
-        if t.x < -15 then
+        if t.x < -20 then
             -- Decrease score when enemy escapes
             local scoreEntities = ECS.getEntitiesWith({"Score"})
             if #scoreEntities > 0 then
@@ -47,7 +47,7 @@ end
 
 function EnemySystem.spawnEnemy()
     local y = math.random(-5, 5)
-    local x = 15 -- Spawn off-screen right
+    local x = 25 -- Spawn off-screen right
 
     local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0)
     local speed = EnemySystem.baseSpeed * difficultyMultiplier
