@@ -1,12 +1,16 @@
 -- Component Definitions
 
-function Transform(x, y, z)
+function Transform(x, y, z, rx, ry, rz, sx, sy, sz)
     return {
         x = x or 0,
         y = y or 0,
         z = z or 0,
-        rx = 0, ry = 0, rz = 0,
-        sx = 1, sy = 1, sz = 1
+        rx = rx or 0,
+        ry = ry or 0,
+        rz = rz or 0,
+        sx = sx or 1,
+        sy = sy or 1,
+        sz = sz or 1
     }
 end
 
@@ -123,5 +127,24 @@ function Follow(targetId, offsetX, offsetY, offsetZ)
         offsetX = offsetX or 0,
         offsetY = offsetY or 0,
         offsetZ = offsetZ or 0
+    }
+end
+
+function ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
+    return {
+        offsetX = offsetX or 0,
+        offsetY = offsetY or 0,
+        offsetZ = offsetZ or 0,
+        dirX = dirX or 0,
+        dirY = dirY or 1,
+        dirZ = dirZ or 0,
+        spread = spread or 0.5,
+        speed = speed or 1.0,
+        lifeTime = lifeTime or 1.0,
+        rate = rate or 10.0,
+        size = size or 0.1,
+        r = r or 1.0,
+        g = g or 1.0,
+        b = b or 1.0
     }
 end

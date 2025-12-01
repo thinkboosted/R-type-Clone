@@ -57,6 +57,17 @@ void SFMLWindowManager::loop() {
                     sendMessage("KeyReleased", it->second);
                 }
             }
+            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+                std::stringstream ss;
+                ss << resized->size.x << "," << resized->size.y;
+                sendMessage("WindowResized", ss.str());
+
+                _texture = sf::Texture(sf::Vector2u(resized->size.x, resized->size.y));
+                _sprite = sf::Sprite(_texture);
+
+                sf::FloatRect visibleArea(sf::Vector2f(0, 0), sf::Vector2f(resized->size.x, resized->size.y));
+                _window->setView(sf::View(visibleArea));
+            }
         }
     }
 
@@ -108,9 +119,14 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
     const uint32_t* pixelPtr = reinterpret_cast<const uint32_t*>(pixelData.data());
     size_t pixelCount = pixelData.size() / sizeof(uint32_t);
 
+    sf::Vector2u texSize = _texture.getSize();
+    if (pixelCount != texSize.x * texSize.y) {
+        return;
+    }
+
     std::vector<uint32_t> pixels(pixelPtr, pixelPtr + pixelCount);
 
-    drawPixels(pixels, Vector2u{800, 600});
+    drawPixels(pixels, Vector2u{texSize.x, texSize.y});
 }
 
 }  // namespace rtypeEngine

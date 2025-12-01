@@ -95,7 +95,16 @@ function InputSystem.spawnBullet(x, y, z)
     ECS.addComponent(bullet, "Bullet", Bullet(10))
     ECS.addComponent(bullet, "Life", Life(1))
     ECS.addComponent(bullet, "Color", Color(1.0, 1.0, 0.0))
-
+    ECS.addComponent(bullet, "ParticleGenerator", ParticleGenerator(
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.3,
+        5.0,
+        0.5,
+        50.0,
+        0.1,
+        1.0, 0.6, 0.1
+    ))
     local t = ECS.getComponent(bullet, "Transform")
     t.sx = 0.2
     t.sy = 0.2
@@ -103,6 +112,16 @@ function InputSystem.spawnBullet(x, y, z)
 
     local p = ECS.getComponent(bullet, "Physic")
     p.vx = 20.0
+end
+
+function InputSystem.clearBullets()
+    local bullets = ECS.getEntitiesWith({"Bullet", "Transform"})
+    for _, id in ipairs(bullets) do
+        local transform = ECS.getComponent(id, "Transform")
+        if transform.x > 20 then
+            ECS.destroyEntity(id)
+        end
+    end
 end
 
 function InputSystem.onKeyPressed(key)
@@ -131,9 +150,17 @@ function InputSystem.onKeyReleased(key)
     elseif key == "SPACE" then
         InputSystem.keys.shoot = false
     elseif key == "ESCAPE" then
-        ECS.saveState("space-shooter-save")
+        local players = ECS.getEntitiesWith({"Player", "Life"})
+        local player = players and players[1]
+        if player then
+            local lifeComp = ECS.getComponent(player, "Life")
+            if lifeComp and lifeComp.amount > 0 then
+                ECS.saveState("space-shooter-save")
+            end
+        end
         ECS.sendMessage("ExitApplication", "")
     end
+    InputSystem.clearBullets()
 end
 
 function InputSystem.onMouseMoved(x, y)

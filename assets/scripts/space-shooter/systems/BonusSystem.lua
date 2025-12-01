@@ -25,7 +25,7 @@ end
 
 function BonusSystem.spawnBonus()
     local y = math.random(-5, 5)
-    local x = 15 -- Spawn off-screen right
+    local x = 20 -- Spawn off-screen right
 
     local bonus = ECS.createEntity()
     ECS.addComponent(bonus, "Transform", Transform(x, y, 0))
