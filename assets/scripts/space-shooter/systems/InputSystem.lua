@@ -154,7 +154,7 @@ function InputSystem.onKeyReleased(key)
         local player = players and players[1]
         if player then
             local lifeComp = ECS.getComponent(player, "Life")
-            if not lifeComp or lifeComp.amount > 0 then
+            if lifeComp and lifeComp.amount > 0 then
                 ECS.saveState("space-shooter-save")
             end
         end
