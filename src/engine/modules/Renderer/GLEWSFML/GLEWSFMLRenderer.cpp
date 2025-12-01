@@ -218,7 +218,6 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
 
                      obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
                      _renderObjects[id] = obj;
-                     std::cout << "[GLEWSFMLRenderer] Created text: " << id << " '" << textContent << "'" << std::endl;
                  } catch (const std::exception& e) {
                      std::cerr << "[GLEWSFMLRenderer] Error creating text: " << e.what() << std::endl;
                  }
@@ -411,7 +410,6 @@ void GLEWSFMLRenderer::loadMesh(const std::string& path) {
     }
 
     _meshCache[path] = meshData;
-    std::cout << "[GLEWSFMLRenderer] Loaded mesh: " << path << " with " << meshData.vertices.size() / 3 << " vertices and " << meshData.indices.size() / 3 << " faces." << std::endl;
 }
 
 GLuint GLEWSFMLRenderer::loadTexture(const std::string& path) {
@@ -436,7 +434,6 @@ GLuint GLEWSFMLRenderer::loadTexture(const std::string& path) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     _textureCache[path] = textureID;
-    std::cout << "[GLEWSFMLRenderer] Loaded texture: " << path << std::endl;
     return textureID;
 }
 
@@ -597,7 +594,7 @@ void GLEWSFMLRenderer::addMesh() {
 
 void GLEWSFMLRenderer::clearBuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Dark gray background
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
@@ -610,7 +607,6 @@ void GLEWSFMLRenderer::render() {
         destroyFramebuffer();
         createFramebuffer();
         _pendingResize = false;
-        std::cout << "[GLEWSFMLRenderer] Resized to " << _resolution.x << "x" << _resolution.y << std::endl;
     }
 
     auto now = std::chrono::steady_clock::now();

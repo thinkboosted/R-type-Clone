@@ -15,7 +15,7 @@ dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 dofile("assets/scripts/space-shooter/systems/FollowSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
 
--- ECS.loadLastSave("space-shooter-save")
+ECS.loadLastSave("space-shooter-save")
 
 -- Create Camera
 local camera = ECS.createEntity()
