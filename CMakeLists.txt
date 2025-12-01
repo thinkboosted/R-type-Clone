@@ -88,5 +88,7 @@ else()
     message(WARNING "Skipping Bullet Physics Engine module")
 endif()
 
+add_subdirectory(src/engine/modules/NetworkManager)
+
 # Add subdirectory for game executable
 add_subdirectory(src/game)
