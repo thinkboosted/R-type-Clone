@@ -1,0 +1,76 @@
+name: Create or update repository labels
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  create-labels:
+    name: Create / Update Labels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Create or update labels
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Define the labels to create or update. Names, colors and descriptions are configurable.
+            const labels = [
+              // Impact (all same color - red)
+              { name: 'impact:high', color: 'd73a4a', description: 'High impact: affects many components or is urgent' },
+              { name: 'impact:medium', color: 'd73a4a', description: 'Medium impact: important but not urgent' },
+              { name: 'impact:low', color: 'd73a4a', description: 'Low impact: small or cosmetic change' },
+
+              // Priority (all same color - green)
+              { name: 'priority:important', color: '0e8a16', description: 'Important priority' },
+              { name: 'priority:story', color: '0e8a16', description: 'Story / work item' },
+              { name: 'priority:no-priority', color: '0e8a16', description: 'No particular priority' },
+              { name: 'priority:bonus', color: '0e8a16', description: 'Optional or bonus work' },
+
+              // Basic/common (all same color - purple)
+              { name: 'common:bug', color: '6f42c1', description: 'Bug: something is not working' },
+              { name: 'common:enhancement', color: '6f42c1', description: 'Enhancement: new feature or improvement' },
+              { name: 'common:documentation', color: '6f42c1', description: 'Documentation change' },
+
+              //info
+              // { name: info:help-wanted', color: '008672', description: 'Help wanted: contributions welcome' },
+              // { name: info:invalide', color: 'd876e3', description: 'invalide' },
+
+              // Types / parts of app (all same color - blue)
+              { name: 'type:game-engine', color: '0366d6', description: 'Game engine related work' },
+              { name: 'type:new-module', color: '0366d6', description: 'New module or plugin' },
+              { name: 'type:server-dev', color: '0366d6', description: 'Server-side development' },
+              { name: 'type:client-dev', color: '0366d6', description: 'Client-side development' },
+              { name: 'type:ui-asset-visual', color: '0366d6', description: 'UI, assets, or visual changes' }
+            ];
+
+            for (const lbl of labels) {
+              try {
+                // Try to fetch existing label
+                await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name: lbl.name });
+                // If it exists, update color/description
+                await github.rest.issues.updateLabel({ owner: context.repo.owner, repo: context.repo.repo, name: lbl.name, color: lbl.color, description: lbl.description });
+                console.log(`Updated label: ${lbl.name}`);
+              } catch (e) {
+                if (e.status === 404) {
+                  // Create label if it does not exist
+                  await github.rest.issues.createLabel({ owner: context.repo.owner, repo: context.repo.repo, name: lbl.name, color: lbl.color, description: lbl.description });
+                  console.log(`Created label: ${lbl.name}`);
+                } else {
+                  core.setFailed(`Error handling label ${lbl.name}: ${e.message}`);
+                }
+              }
+            }
+
+          # Use node 18 runtime for github-script
+          result-encoding: string
+
+      - name: Summary
+        run: echo "Labels creation/updates attempted. Check the repository labels page for results."
+
+# Notes:
+# - Run this workflow manually via the Actions -> Create or update repository labels -> Run workflow button.
+# - The workflow uses the provided GITHUB_TOKEN and requires the workflow to have 'issues: write' permission (set above).
+# - If you prefer automatic labeling on every PR, I can add a separate workflow that applies labels based on PR title prefixes or changed paths.
