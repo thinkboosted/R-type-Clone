@@ -31,6 +31,10 @@ namespace rtypeEngine {
             this->loadScript(msg);
         });
 
+        subscribe("UnloadScript", [this](const std::string& msg) {
+            this->unloadScript(msg);
+        });
+
         subscribe("ECSStateLoadedEvent", [this](const std::string& msg) {
             this->deserializeState(msg);
         });
@@ -354,6 +358,28 @@ namespace rtypeEngine {
             std::cout << "[LuaECSManager] Loaded script: " << path << std::endl;
         } catch (const sol::error& e) {
             std::cerr << "[LuaECSManager] Error loading script: " << e.what() << std::endl;
+        }
+    }
+
+    void LuaECSManager::unloadScript(const std::string& /*path*/) {
+        try {
+            for (const auto& id : _entities) {
+                sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+                sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
+            }
+
+            _systems.clear();
+            _entities.clear();
+            _pools.clear();
+
+            _lua = sol::state();
+            _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math);
+
+            setupLuaBindings();
+
+            std::cout << "[LuaECSManager] Unloaded scripts and cleared ECS state" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[LuaECSManager] Error unloading scripts: " << e.what() << std::endl;
         }
     }
 

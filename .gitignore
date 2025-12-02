@@ -1,6 +1,14 @@
 .vscode/
 vcpkg_installed/
 build/
-docs/*.txt
+docs/*/*.txt
 libs/
 CMakeFiles/
+*.dll
+*.exe
+*.log
+*.so
+*.dylib
+*.pdb
+*.user
+*.opendb

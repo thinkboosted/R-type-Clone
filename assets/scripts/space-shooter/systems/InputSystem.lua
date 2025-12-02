@@ -149,6 +149,9 @@ function InputSystem.onKeyReleased(key)
         InputSystem.keys.right = false
     elseif key == "SPACE" then
         InputSystem.keys.shoot = false
+    elseif key == "R" then
+        ECS.sendMessage("UnloadScript", "assets/scripts/space-shooter/Game.lua");
+        ECS.sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
     elseif key == "ESCAPE" then
         local players = ECS.getEntitiesWith({"Player", "Life"})
         local player = players and players[1]

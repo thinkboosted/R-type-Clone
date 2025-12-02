@@ -20,6 +20,7 @@ namespace rtypeEngine {
         void cleanup() override;
 
         void loadScript(const std::string& path);
+        void unloadScript(const std::string& path);
 
         std::string serializeState();
         void deserializeState(const std::string& state);
