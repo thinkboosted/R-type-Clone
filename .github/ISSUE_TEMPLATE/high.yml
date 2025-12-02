@@ -1,0 +1,77 @@
+name: "High"
+description: "High-priority change (epic, milestone or breaking change). Use for work that affects many components or requires coordination."
+title: "[HIGH] "
+# Labels should match the repository's label names. These are applied when the issue is created.
+labels: ["impact:high", "priority:important"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## High-priority overview
+        Use this template for large, cross-cutting changes (epics) or anything that must be prioritized.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the high-level goal and motivation for this change.
+      placeholder: "As a team, we need to ..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: What is the impact of this change?
+      options:
+        - "impact:high"
+        - "impact:medium"
+        - "impact:low"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Choose the priority for this work (this maps to `priority:` labels)
+      options:
+        - "priority:important"
+        - "priority:story"
+        - "priority:no-priority"
+        - "priority:bonus"
+
+  - type: dropdown
+    id: part
+    attributes:
+      label: Project part
+      description: Which part of the project is affected?
+      options:
+        - "type:game-engine"
+        - "type:new-module"
+        - "type:server-dev"
+        - "type:client-dev"
+        - "type:ui-asset-visual"
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Create related lower-priority issues
+        If this High-level work should be split into smaller items, you can create related issues quickly:
+        - Create a Medium-priority related issue: https://github.com/Azertoxe/Template-test/issues/new?template=medium.yml
+        - Create a Low-priority related issue: https://github.com/Azertoxe/Template-test/issues/new?template=low.yml
+
+  - type: input
+    id: timeline
+    attributes:
+      label: Timeline (optional)
+      description: Target sprint or expected delivery window
+      placeholder: "Sprint 4 - Nov 30 - Dec 07"
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related items
+      description: Related issues, PRs, milestones, or guild notes (one per line).
+      placeholder: "#123 - design doc link"

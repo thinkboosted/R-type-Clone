@@ -1,0 +1,67 @@
+name: "Medium"
+description: "Medium-priority change: important improvements, non-blocking features or bug fixes that require review."
+title: "[MEDIUM] "
+# Use repository labels that the label workflow creates/updates
+labels: ["impact:medium", "priority:story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Medium-priority request
+        Use this for regular feature work and important bug fixes.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is the change and why is it needed?
+      placeholder: "Describe the change in a few sentences"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Select the component or area affected by this change.
+      options:
+        - "type:game-engine"
+        - "type:new-module"
+        - "type:server-dev"
+        - "type:client-dev"
+        - "type:ui-asset-visual"
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: What is the impact of this change?
+      options:
+        - "impact:high"
+        - "impact:medium"
+        - "impact:low"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Choose the priority for this work
+      options:
+        - "priority:important"
+        - "priority:story"
+        - "priority:no-priority"
+        - "priority:bonus"
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Create related lower-priority issue
+        If this Medium item should be split into smaller tasks, create a Low-priority issue:
+        - Create a Low-priority related issue: https://github.com/Azertoxe/Template-test/issues/new?template=low.yml
+
+  - type: input
+    id: related
+    attributes:
+      label: Related issue/PR
+      description: Optional reference to related work
+      placeholder: "#123"
