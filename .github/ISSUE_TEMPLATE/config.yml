@@ -1,0 +1,10 @@
+---
+# Controls the issue templates presented in the GitHub new-issue UI.
+blank_issues_enabled: false
+contact_links: []
+
+# If you want to add contact links (for support, security, etc.) you can add entries like:
+# contact_links:
+#   - name: "Support"
+#     url: "https://example.com/support"
+#     about: "If you need help using the project"
