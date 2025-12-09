@@ -1,6 +1,6 @@
 # 🌐 NetworkManager Architecture
 
-![Status](https://img.shields.io/badge/Status-Prototype-yellow?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Multi--Client%20Ready-brightgreen?style=for-the-badge)
 ![Protocol](https://img.shields.io/badge/Protocol-UDP-blue?style=for-the-badge)
 ![Lang](https://img.shields.io/badge/Language-C++17-red?style=for-the-badge)
 ![Lib](https://img.shields.io/badge/Library-Asio%20%7C%20MsgPack-green?style=for-the-badge)
@@ -18,7 +18,7 @@ The **NetworkManager** module is the backbone of the R-Type project communicatio
 3. [Data Flow](#3-data-flow)
 4. [Technical Specifications](#4-technical-specifications)
 5. [API Reference](#5-api-reference)
-6. [Roadmap & Limitations](#6-roadmap--limitations)
+6. [Roadmap & Current Features](#6-roadmap--current-features)
 
 ---
 
@@ -111,6 +111,7 @@ sequenceDiagram
 ## 4. Technical Specifications
 
 ### Packet Structure (Wire Format)
+
 Thanks to UDP, a received packet is always complete. We use **MsgPack** to encode data.
 
 | Component | Type | Description |
@@ -138,7 +139,10 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 | :--- | :--- | :--- |
 | `RequestNetworkBind` | `port` | Open UDP socket on specified port (server mode) |
 | `RequestNetworkConnect` | `ip port` | Connect to remote endpoint (client mode) |
-| `RequestNetworkSend` | `topic payload` | Send message with topic to remote |
+| `RequestNetworkSend` | `topic payload` | Send unreliable message to remote |
+| `RequestNetworkSendTo` | `clientId topic payload` | Send to specific client by ID |
+| `RequestNetworkBroadcast` | `topic payload` | Broadcast to all connected clients |
+| `RequestNetworkSendReliable` | `topic payload` | Send with ACK/retransmission |
 | `RequestNetworkDisconnect` | - | Close socket |
 
 ### ZeroMQ Topics (Events)
@@ -148,6 +152,8 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 | `NetworkStatus` | `Ready\|Bound:port\|Connected:ip:port` | Connection state changes |
 | `NetworkError` | `ErrorType:details` | Error notifications |
 | `NetworkMessage` | `payload` | Incoming network data (topic from wire) |
+| `ClientConnected` | `clientId` | New client connected (server-side) |
+| `ClientDisconnected` | `clientId reason` | Client disconnected (timeout/manual) |
 
 ### C++ Interface (INetworkManager)
 
@@ -155,14 +161,30 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 struct NetworkEnvelope {
     std::string topic;
     std::string payload;
+    MSGPACK_DEFINE(topic, payload);
+};
+
+struct ClientInfo {
+    uint32_t id;
+    std::string endpoint;  // "ip:port"
+    bool connected;
 };
 
 class INetworkManager {
+    // Connection management
     virtual void bind(uint16_t port) = 0;
     virtual void connect(const std::string& host, uint16_t port) = 0;
     virtual void disconnect() = 0;
-    virtual void sendNetworkMessage(const std::string& topic, const std::string& payload) = 0;
 
+    // Messaging
+    virtual void sendNetworkMessage(const std::string& topic, const std::string& payload) = 0;
+    virtual void sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) = 0;
+    virtual void broadcast(const std::string& topic, const std::string& payload) = 0;
+
+    // Multi-client
+    virtual std::vector<ClientInfo> getConnectedClients() = 0;
+
+    // Message queue
     virtual std::optional<NetworkEnvelope> getFirstMessage() = 0;  // Pop oldest
     virtual std::optional<NetworkEnvelope> getLastMessage() = 0;   // Pop newest
     virtual std::vector<NetworkEnvelope> getAllMessages() = 0;     // Drain queue
@@ -171,38 +193,54 @@ class INetworkManager {
 
 ---
 
-## 6. Roadmap & Limitations
+## 6. Roadmap & Current Features
 
-The current implementation is a **v1.0 (Prototype)**. It is functional for 1v1 but requires evolution for the final version.
+The current implementation is **v2.0 (Multi-Client Ready)** with full multi-client support, heartbeat, and reliability layer.
 
-### 🚧 Current Limitations
+### ✅ Implemented Features
 
-*   **Single-Target (Last Speaker Rule):** The server only replies to the *last* client that spoke to it. There is no client list.
-*   **Zero Reliability:** If a packet is lost, it is gone. No retransmission.
+*   **Multi-Client Management:** Server tracks each client with unique IDs via `std::map<uint32_t, ClientSession>`.
+*   **Heartbeat System:** Automatic ping every second to monitor connection health.
+*   **Client Timeout:** Disconnects clients inactive for 5+ seconds (configurable).
+*   **Reliable Messaging:** ACK-based retransmission for critical game events.
 
-### 🗺️ Development Plan (Next Steps)
+### 🗺️ Development Plan (Future Improvements)
 
-#### A. Multi-Client Management (High Priority)
+- [ ] **Reconnection:** Auto-reconnect with exponential backoff.
+- [ ] **Message Compression:** Compress large payloads (zlib/LZ4).
+- [ ] **Rate Limiting:** Per-client rate limiting to prevent abuse.
+- [ ] **Encryption:** Optional DTLS for secure communication.
 
-- [ ] Create a `ClientSession` structure (ID, Endpoint, LastActivity).
-- [ ] Maintain a `std::map<ClientID, ClientSession>` on the server side.
-- [ ] Modify the API to target a player: `RequestNetworkSendTo "ClientID Payload"`.
-- [ ] Add Broadcast: `RequestNetworkBroadcast "Payload"`.
+### Multi-Client API
 
-#### B. Reliability Layer
+```cpp
+// Send to specific client by ID
+void sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload);
 
-For critical messages (*Game Start*, *Player Death*U), we cannot afford loss.
-- [ ] Add a **Sequence ID** in the packet header.
-- [ ] Implement an **ACK** (Acknowledgment) system.
-- [ ] Create a buffer of "Messages waiting for ACK" to retransmit after `x` ms.
+// Broadcast to all connected clients
+void broadcast(const std::string& topic, const std::string& payload);
 
-#### C. Connection Maintenance
+// Get list of connected clients
+std::vector<ClientInfo> getConnectedClients();
+```
 
-- [ ] **Heartbeat:** Send a ping every second.
-- [ ] **Timeout:** Disconnect a client silent for 5 seconds.
+### New ZeroMQ Commands
+
+| Command | Payload | Description |
+| :--- | :--- | :--- |
+| `RequestNetworkSendTo` | `clientId topic payload` | Send to specific client |
+| `RequestNetworkBroadcast` | `topic payload` | Broadcast to all clients |
+| `RequestNetworkSendReliable` | `topic payload` | Send with ACK/retransmission |
+
+### Heartbeat & Timeout
+
+- **Heartbeat interval:** 1 second (configurable)
+- **Client timeout:** 5 seconds of inactivity (configurable)
+- **Heartbeat topic:** `__HEARTBEAT__`
+- **Heartbeat response topic:** `__HEARTBEAT_ACK__`
 
 > [!TIP]
-> For the reliability layer, no need to reinvent TCP. Look at the protocol used by *Quake 3* or the *Enet* library for inspiration.
+> Clients should respond to heartbeats or send regular messages to avoid disconnection.
 
 ---
 
@@ -213,6 +251,16 @@ For critical messages (*Game Start*, *Player Death*U), we cannot afford loss.
 ```bash
 cd build && ./NetworkManagerTests
 ```
+
+**Current tests (7 passing):**
+
+- `Instantiation` - Basic creation/destruction
+- `BindDoesNotCrash` - Server bind on port
+- `ConnectDoesNotCrash` - Client connect to server
+- `GetConnectedClientsEmptyInitially` - Multi-client tracking
+- `MessageQueueOperations` - Queue API
+- `SendToClientDoesNotCrashWithInvalidId` - Robust error handling
+- `BroadcastDoesNotCrashWithNoClients` - Broadcast without clients
 
 ### Integration Test Pattern
 
