@@ -74,7 +74,7 @@ if(TARGET LuaECS)
             $<TARGET_FILE_DIR:rtype_game>
         COMMENT "Copying LuaECS to executable directory"
     )
-    
+
     if(WIN32)
         # Find and copy liblua.dll
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -120,6 +120,15 @@ if(TARGET BulletPhysicEngine)
             $<TARGET_FILE:BulletPhysicEngine>
             $<TARGET_FILE_DIR:rtype_game>
         COMMENT "Copying BulletPhysicEngine to executable directory"
+    )
+endif()
+
+if(TARGET NetworkManager)
+    add_custom_command(TARGET rtype_game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:NetworkManager>
+            $<TARGET_FILE_DIR:rtype_game>
+        COMMENT "Copying NetworkManager to executable directory"
     )
 endif()
 
