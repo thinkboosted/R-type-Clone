@@ -125,6 +125,7 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 
 ---
 
+
 ## 5. Roadmap & Limitations
 
 The current implementation is a **v1.0 (Prototype)**. It is functional for 1v1 but requires evolution for the final version.
@@ -142,7 +143,7 @@ The current implementation is a **v1.0 (Prototype)**. It is functional for 1v1 b
 - [ ] Add Broadcast: `RequestNetworkBroadcast "Payload"`.
 
 #### B. Reliability Layer
-For critical messages (*Game Start*, *Player Death*), we cannot afford loss.
+For critical messages (*Game Start*, *Player Death*U), we cannot afford loss.
 - [ ] Add a **Sequence ID** in the packet header.
 - [ ] Implement an **ACK** (Acknowledgment) system.
 - [ ] Create a buffer of "Messages waiting for ACK" to retransmit after `x` ms.
