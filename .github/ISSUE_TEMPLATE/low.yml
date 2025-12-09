@@ -1,0 +1,60 @@
+name: "Low"
+description: "Low-priority change: small improvements, housekeeping, or minor bugfixes."
+title: "[LOW] "
+# Labels should match the repository labels applied by the labels workflow
+labels: ["impact:low", "priority:no-priority"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Low-priority
+        Use for small fixes, docs updates, or low-risk changes.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Briefly describe the change.
+      placeholder: "Fix typo in README or small refactor"
+    validations:
+      required: true
+
+  - type: input
+    id: related
+    attributes:
+      label: Related (optional)
+      description: Link to related issue/PR if applicable
+      placeholder: "#123"
+
+  - type: dropdown
+    id: part
+    attributes:
+      label: Project part (optional)
+      description: Select the component or area affected by this change.
+      options:
+        - "type:game-engine"
+        - "type:new-module"
+        - "type:server-dev"
+        - "type:client-dev"
+        - "type:ui-asset-visual"
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact (optional)
+      description: What is the impact of this change?
+      options:
+        - "impact:high"
+        - "impact:medium"
+        - "impact:low"
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (optional)
+      description: Choose the priority for this work
+      options:
+        - "priority:important"
+        - "priority:story"
+        - "priority:no-priority"
+        - "priority:bonus"
