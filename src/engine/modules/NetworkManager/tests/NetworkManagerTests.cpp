@@ -40,3 +40,51 @@ TEST_F(NetworkManagerTest, ConnectDoesNotCrash) {
     EXPECT_NO_THROW(nm.connect("127.0.0.1", 4242));
     nm.cleanup();
 }
+
+// ============ Multi-Client Tests ============
+
+TEST_F(NetworkManagerTest, GetConnectedClientsEmptyInitially) {
+    rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5561", "tcp://127.0.0.1:5562");
+    nm.init();
+    
+    auto clients = nm.getConnectedClients();
+    EXPECT_TRUE(clients.empty());
+    
+    nm.cleanup();
+}
+
+TEST_F(NetworkManagerTest, MessageQueueOperations) {
+    rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5569", "tcp://127.0.0.1:5570");
+    nm.init();
+    
+    // Initially queue should be empty
+    auto msg = nm.getLastMessage();
+    EXPECT_FALSE(msg.has_value());
+    
+    auto allMsgs = nm.getAllMessages();
+    EXPECT_TRUE(allMsgs.empty());
+    
+    nm.cleanup();
+}
+
+TEST_F(NetworkManagerTest, SendToClientDoesNotCrashWithInvalidId) {
+    rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5565", "tcp://127.0.0.1:5566");
+    nm.init();
+    nm.bind(4250);
+    
+    // Sending to non-existent client should not crash (just fail silently or return false)
+    EXPECT_NO_THROW(nm.sendToClient(999, "TestTopic", "TestPayload"));
+    
+    nm.cleanup();
+}
+
+TEST_F(NetworkManagerTest, BroadcastDoesNotCrashWithNoClients) {
+    rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5567", "tcp://127.0.0.1:5568");
+    nm.init();
+    nm.bind(4251);
+    
+    // Broadcast with no clients should not crash
+    EXPECT_NO_THROW(nm.broadcast("TestTopic", "TestPayload"));
+    
+    nm.cleanup();
+}

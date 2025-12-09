@@ -5,7 +5,9 @@
 
 #include <asio.hpp>
 #include <atomic>
+#include <chrono>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -30,6 +32,11 @@ class NetworkManager : public AModule, public INetworkManager {
     void disconnect() override;
     void sendNetworkMessage(const std::string& topic, const std::string& payload) override;
 
+    // Multi-client support
+    void sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) override;
+    void broadcast(const std::string& topic, const std::string& payload) override;
+    std::vector<ClientInfo> getConnectedClients() override;
+
     std::optional<NetworkEnvelope> getFirstMessage() override;
     std::optional<NetworkEnvelope> getLastMessage() override;
     std::vector<NetworkEnvelope> getAllMessages() override;
@@ -38,6 +45,14 @@ class NetworkManager : public AModule, public INetworkManager {
     using udp = asio::ip::udp;
     using WorkGuard = asio::executor_work_guard<asio::io_context::executor_type>;
 
+    // Client session for multi-client tracking
+    struct ClientSession {
+        uint32_t id;
+        udp::endpoint endpoint;
+        std::chrono::steady_clock::time_point lastActivity;
+        bool connected = true;
+    };
+
     void startIoContext();
     void stopIoContext();
     void registerSubscriptions();
@@ -45,14 +60,23 @@ class NetworkManager : public AModule, public INetworkManager {
     void handleBindRequest(const std::string& payload);
     void handleConnectRequest(const std::string& payload);
     void handleSendRequest(const std::string& payload);
+    void handleSendToRequest(const std::string& payload);
+    void handleBroadcastRequest(const std::string& payload);
     void startReceive();
     void handleReceive(const std::error_code& ec, std::size_t bytes_transferred);
-    void processIncomingBuffer(const std::vector<char>& buffer);
+    void processIncomingBuffer(const std::vector<char>& buffer, const udp::endpoint& senderEndpoint);
     void enqueueMessage(const NetworkEnvelope& envelope);
     void queueBusMessage(const std::string& topic, const std::string& payload);
     void publishStatus(const std::string& status);
     void publishError(const std::string& error);
     void disconnectInternal();
+
+    // Multi-client helpers
+    uint32_t getOrCreateClientId(const udp::endpoint& endpoint);
+    void updateClientActivity(uint32_t clientId);
+    void checkClientTimeouts();
+    void sendHeartbeats();
+    void sendToEndpoint(const udp::endpoint& endpoint, const std::string& topic, const std::string& payload);
 
     asio::io_context _ioContext;
     std::unique_ptr<WorkGuard> _workGuard;
@@ -66,6 +90,19 @@ class NetworkManager : public AModule, public INetworkManager {
 
     std::mutex _busMutex;
     std::deque<std::pair<std::string, std::string>> _busMessages;
+
+    // Multi-client tracking
+    std::mutex _clientsMutex;
+    std::map<uint32_t, ClientSession> _clients;
+    std::map<std::string, uint32_t> _endpointToClientId;
+    uint32_t _nextClientId = 1;
+    bool _isServer = false;
+
+    // Heartbeat/Timeout settings
+    std::chrono::steady_clock::time_point _lastHeartbeatTime;
+    std::chrono::steady_clock::time_point _lastTimeoutCheckTime;
+    static constexpr auto HEARTBEAT_INTERVAL = std::chrono::seconds(1);
+    static constexpr auto CLIENT_TIMEOUT = std::chrono::seconds(5);
 
     std::atomic<bool> _ioThreadRunning;
 };

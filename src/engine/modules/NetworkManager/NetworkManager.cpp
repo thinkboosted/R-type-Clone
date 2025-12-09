@@ -34,6 +34,10 @@ std::string toLower(std::string value) {
     return value;
 }
 
+std::string endpointToString(const asio::ip::udp::endpoint& ep) {
+    return ep.address().to_string() + ":" + std::to_string(ep.port());
+}
+
 struct SerializableEnvelope {
     std::string topic;
     std::string payload;
@@ -42,8 +46,8 @@ struct SerializableEnvelope {
     explicit SerializableEnvelope(const rtypeEngine::NetworkEnvelope& envelope)
         : topic(envelope.topic), payload(envelope.payload) {}
 
-    rtypeEngine::NetworkEnvelope toEnvelope() const {
-        return {topic, payload};
+    rtypeEngine::NetworkEnvelope toEnvelope(uint32_t clientId = 0) const {
+        return {topic, payload, clientId};
     }
 
     MSGPACK_DEFINE(topic, payload);
@@ -57,7 +61,12 @@ NetworkManager::NetworkManager(const char* pubEndpoint, const char* subEndpoint)
     : AModule(pubEndpoint, subEndpoint),
       _workGuard(nullptr),
       _socket(nullptr),
-      _ioThreadRunning(false) {}
+      _ioThreadRunning(false),
+      _isServer(false) {
+    auto now = std::chrono::steady_clock::now();
+    _lastHeartbeatTime = now;
+    _lastTimeoutCheckTime = now;
+}
 
 NetworkManager::~NetworkManager() {
     cleanup();
@@ -80,6 +89,23 @@ void NetworkManager::loop() {
         sendMessage(entry.first, entry.second);
     }
 
+    // Heartbeat and timeout checks (only for server)
+    if (_isServer && _socket && _socket->is_open()) {
+        auto now = std::chrono::steady_clock::now();
+
+        // Send heartbeats
+        if (now - _lastHeartbeatTime >= HEARTBEAT_INTERVAL) {
+            sendHeartbeats();
+            _lastHeartbeatTime = now;
+        }
+
+        // Check for client timeouts
+        if (now - _lastTimeoutCheckTime >= std::chrono::seconds(1)) {
+            checkClientTimeouts();
+            _lastTimeoutCheckTime = now;
+        }
+    }
+
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
@@ -94,6 +120,11 @@ void NetworkManager::cleanup() {
     {
         std::lock_guard<std::mutex> lock(_busMutex);
         _busMessages.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
+        _clients.clear();
+        _endpointToClientId.clear();
     }
 }
 
@@ -142,8 +173,7 @@ void NetworkManager::registerSubscriptions() {
         handleConnectRequest(payload);
     });
 
-    subscribe("RequestNetworkDisconnect", [this](const std::string&)
- {
+    subscribe("RequestNetworkDisconnect", [this](const std::string&) {
         disconnect();
     });
 
@@ -153,6 +183,15 @@ void NetworkManager::registerSubscriptions() {
 
     subscribe("RequestNetworkMessage", sendHandler);
     subscribe("RequestNetworkSend", sendHandler);
+
+    // Multi-client commands
+    subscribe("RequestNetworkSendTo", [this](const std::string& payload) {
+        handleSendToRequest(payload);
+    });
+
+    subscribe("RequestNetworkBroadcast", [this](const std::string& payload) {
+        handleBroadcastRequest(payload);
+    });
 }
 
 void NetworkManager::handleCommandString(const std::string& commandLine) {
@@ -176,6 +215,10 @@ void NetworkManager::handleCommandString(const std::string& commandLine) {
         disconnect();
     } else if (lowered == "send" || lowered == "message") {
         handleSendRequest(remainder);
+    } else if (lowered == "sendto") {
+        handleSendToRequest(remainder);
+    } else if (lowered == "broadcast") {
+        handleBroadcastRequest(remainder);
     }
 }
 
@@ -241,11 +284,52 @@ void NetworkManager::handleSendRequest(const std::string& payload) {
     sendNetworkMessage(topic, message);
 }
 
+void NetworkManager::handleSendToRequest(const std::string& payload) {
+    // Format: "clientId topic message"
+    std::istringstream iss(payload);
+    std::string clientIdStr, topic, message;
+    iss >> clientIdStr >> topic;
+    std::getline(iss, message);
+    message = trimString(message);
+
+    if (clientIdStr.empty() || topic.empty()) {
+        publishError("SendToMissingArguments");
+        return;
+    }
+
+    try {
+        uint32_t clientId = static_cast<uint32_t>(std::stoul(clientIdStr));
+        sendToClient(clientId, topic, message);
+    } catch (const std::exception&) {
+        publishError("SendToInvalidClientId");
+    }
+}
+
+void NetworkManager::handleBroadcastRequest(const std::string& payload) {
+    // Format: "topic message"
+    std::string trimmed = trimString(payload);
+    if (trimmed.empty()) {
+        publishError("BroadcastEmptyPayload");
+        return;
+    }
+
+    std::string topic = "NetworkMessage";
+    std::string message = trimmed;
+    const auto spacePos = trimmed.find(' ');
+    if (spacePos != std::string::npos) {
+        topic = trimString(trimmed.substr(0, spacePos));
+        message = trimString(trimmed.substr(spacePos + 1));
+    }
+
+    broadcast(topic, message);
+}
+
 void NetworkManager::bind(uint16_t port) {
     asio::post(_ioContext, [this, port]() {
         disconnectInternal();
         try {
             _socket = std::make_shared<udp::socket>(_ioContext, udp::endpoint(udp::v4(), port));
+            _isServer = true;
             publishStatus("Bound:" + std::to_string(port));
             startReceive();
         } catch (const std::exception& e) {
@@ -257,6 +341,7 @@ void NetworkManager::bind(uint16_t port) {
 void NetworkManager::connect(const std::string& host, uint16_t port) {
     asio::post(_ioContext, [this, host, port]() {
         disconnectInternal();
+        _isServer = false;
         auto resolver = std::make_shared<udp::resolver>(_ioContext);
 
         resolver->async_resolve(udp::v4(), host, std::to_string(port), [this, resolver](const std::error_code& ec, udp::resolver::results_type results) {
@@ -266,12 +351,10 @@ void NetworkManager::connect(const std::string& host, uint16_t port) {
             }
 
             try {
-                // Take the first endpoint
                 udp::endpoint endpoint = *results.begin();
 
                 _socket = std::make_shared<udp::socket>(_ioContext);
                 _socket->open(udp::v4());
-                // For client, connecting sets the default remote endpoint
                 _socket->connect(endpoint);
                 _remoteEndpoint = endpoint;
 
@@ -296,6 +379,11 @@ void NetworkManager::disconnectInternal() {
         _socket->close(ec);
     }
     _socket.reset();
+    _isServer = false;
+
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    _clients.clear();
+    _endpointToClientId.clear();
 }
 
 void NetworkManager::startReceive() {
@@ -320,25 +408,130 @@ void NetworkManager::handleReceive(const std::error_code& ec, std::size_t bytes_
 
     if (bytes_transferred > 0) {
         std::vector<char> data(_recvBuffer.begin(), _recvBuffer.begin() + bytes_transferred);
-        processIncomingBuffer(data);
+        udp::endpoint senderEndpoint = _remoteEndpoint;
+        processIncomingBuffer(data, senderEndpoint);
     }
 
     startReceive();
 }
 
-void NetworkManager::processIncomingBuffer(const std::vector<char>& buffer) {
+void NetworkManager::processIncomingBuffer(const std::vector<char>& buffer, const udp::endpoint& senderEndpoint) {
     try {
         msgpack::object_handle handle = msgpack::unpack(buffer.data(), buffer.size());
         const msgpack::object& obj = handle.get();
         SerializableEnvelope wireEnvelope;
         obj.convert(wireEnvelope);
-        NetworkEnvelope envelope = wireEnvelope.toEnvelope();
+
+        // Track client if we're server
+        uint32_t clientId = 0;
+        if (_isServer) {
+            clientId = getOrCreateClientId(senderEndpoint);
+            updateClientActivity(clientId);
+        }
+
+        NetworkEnvelope envelope = wireEnvelope.toEnvelope(clientId);
+
+        if (envelope.topic == "_heartbeat_response") {
+            return;
+        }
+
+        if (envelope.topic == "_heartbeat") {
+            sendToEndpoint(senderEndpoint, "_heartbeat_response", "pong");
+            return;
+        }
 
         enqueueMessage(envelope);
-        queueBusMessage(envelope.topic, envelope.payload);
+
+        if (_isServer && clientId > 0) {
+            queueBusMessage(envelope.topic, std::to_string(clientId) + " " + envelope.payload);
+        } else {
+            queueBusMessage(envelope.topic, envelope.payload);
+        }
     } catch (const std::exception& e) {
         publishError(std::string("InvalidPacket:") + e.what());
     }
+}
+
+uint32_t NetworkManager::getOrCreateClientId(const udp::endpoint& endpoint) {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    std::string key = endpointToString(endpoint);
+
+    auto it = _endpointToClientId.find(key);
+    if (it != _endpointToClientId.end()) {
+        return it->second;
+    }
+
+    // New client
+    uint32_t clientId = _nextClientId++;
+    _endpointToClientId[key] = clientId;
+
+    ClientSession session;
+    session.id = clientId;
+    session.endpoint = endpoint;
+    session.lastActivity = std::chrono::steady_clock::now();
+    session.connected = true;
+    _clients[clientId] = session;
+
+    // Notify about new client
+    queueBusMessage("ClientConnected", std::to_string(clientId) + " " + key);
+
+    return clientId;
+}
+
+void NetworkManager::updateClientActivity(uint32_t clientId) {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto it = _clients.find(clientId);
+    if (it != _clients.end()) {
+        it->second.lastActivity = std::chrono::steady_clock::now();
+        if (!it->second.connected) {
+            it->second.connected = true;
+            queueBusMessage("ClientReconnected", std::to_string(clientId));
+        }
+    }
+}
+
+void NetworkManager::checkClientTimeouts() {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto now = std::chrono::steady_clock::now();
+
+    for (auto& [clientId, session] : _clients) {
+        if (session.connected && (now - session.lastActivity) >= CLIENT_TIMEOUT) {
+            session.connected = false;
+            queueBusMessage("ClientDisconnected", std::to_string(clientId) + " timeout");
+        }
+    }
+}
+
+void NetworkManager::sendHeartbeats() {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+
+    for (const auto& [clientId, session] : _clients) {
+        if (session.connected) {
+            sendToEndpoint(session.endpoint, "_heartbeat", "ping");
+        }
+    }
+}
+
+void NetworkManager::sendToEndpoint(const udp::endpoint& endpoint, const std::string& topic, const std::string& payload) {
+    NetworkEnvelope envelope{topic, payload, 0};
+    msgpack::sbuffer buffer;
+    SerializableEnvelope wireEnvelope(envelope);
+    msgpack::pack(buffer, wireEnvelope);
+
+    auto packet = std::make_shared<std::vector<char>>(buffer.size());
+    std::memcpy(packet->data(), buffer.data(), buffer.size());
+
+    asio::post(_ioContext, [this, packet, endpoint]() {
+        if (!_socket || !_socket->is_open()) {
+            return;
+        }
+
+        _socket->async_send_to(asio::buffer(*packet), endpoint, [this, packet](const std::error_code& ec, std::size_t) {
+            if (ec && ec != asio::error::operation_aborted) {
+                publishError(std::string("SendFailed:") + ec.message());
+            }
+        });
+    });
 }
 
 void NetworkManager::enqueueMessage(const NetworkEnvelope& envelope) {
@@ -363,26 +556,60 @@ void NetworkManager::publishError(const std::string& error) {
 }
 
 void NetworkManager::sendNetworkMessage(const std::string& topic, const std::string& payload) {
-    NetworkEnvelope envelope{topic.empty() ? std::string("NetworkMessage") : topic, payload};
-    msgpack::sbuffer buffer;
-    SerializableEnvelope wireEnvelope(envelope);
-    msgpack::pack(buffer, wireEnvelope);
+    if (_isServer) {
+        // Server: broadcast to all clients by default
+        broadcast(topic, payload);
+    } else {
+        // Client: send to server
+        sendToEndpoint(_remoteEndpoint, topic, payload);
+    }
+}
 
-    auto packet = std::make_shared<std::vector<char>>(buffer.size());
-    std::memcpy(packet->data(), buffer.data(), buffer.size());
+void NetworkManager::sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto it = _clients.find(clientId);
+    if (it == _clients.end()) {
+        publishError("SendToClient:UnknownClient:" + std::to_string(clientId));
+        return;
+    }
 
-    asio::post(_ioContext, [this, packet]() {
-        if (!_socket || !_socket->is_open()) {
-            publishError("SendFailed:SocketUnavailable");
-            return;
+    if (!it->second.connected) {
+        publishError("SendToClient:ClientDisconnected:" + std::to_string(clientId));
+        return;
+    }
+
+    sendToEndpoint(it->second.endpoint, topic, payload);
+}
+
+void NetworkManager::broadcast(const std::string& topic, const std::string& payload) {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+
+    if (_clients.empty()) {
+        return;
+    }
+
+    for (const auto& [clientId, session] : _clients) {
+        if (session.connected) {
+            sendToEndpoint(session.endpoint, topic, payload);
         }
+    }
+}
 
-        _socket->async_send_to(asio::buffer(*packet), _remoteEndpoint, [this, packet](const std::error_code& ec, std::size_t) {
-            if (ec) {
-                publishError(std::string("SendFailed:") + ec.message());
-            }
-        });
-    });
+std::vector<ClientInfo> NetworkManager::getConnectedClients() {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    std::vector<ClientInfo> result;
+
+    for (const auto& [clientId, session] : _clients) {
+        ClientInfo info;
+        info.id = session.id;
+        info.address = session.endpoint.address().to_string();
+        info.port = session.endpoint.port();
+        info.lastActivity = session.lastActivity;
+        info.connected = session.connected;
+        result.push_back(info);
+    }
+
+    return result;
 }
 
 std::optional<NetworkEnvelope> NetworkManager::getFirstMessage() {
