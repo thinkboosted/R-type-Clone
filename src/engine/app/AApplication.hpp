@@ -33,6 +33,14 @@ class AApplication : public IApplication {
     std::unique_ptr<zmq::socket_t> _publisher;
     std::unique_ptr<zmq::socket_t> _subscriber;
     std::thread _proxyThread;
-    bool _brokerInitialized;
+    bool _isBrokerActive; // Renamed from _brokerInitialized for clarity
+
+protected: // Changed from private to protected
+    std::string _pubBrokerEndpoint; // Store the actual ZMQ endpoints
+    std::string _subBrokerEndpoint;
+    bool _isServerMode; // To indicate if this AApplication instance is running as a server
+
+    // New method to configure and initialize the ZMQ broker/connections
+    void setupBroker(const std::string& baseEndpoint, bool isServer);
 };
 }  // namespace rtypeEngine
