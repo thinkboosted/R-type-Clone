@@ -40,20 +40,26 @@ void Rtype::init() {
   std::string moduleSubEndpoint = this->_subBrokerEndpoint;
 
   try {
+    bool isServer = (!_args.empty() && _args[0] == "server");
+
 #ifdef _WIN32
-  this->addModule("LuaECSManager.dll", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("GLEWSFMLRenderer.dll", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("SFMLWindowManager.dll", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("BulletPhysicEngine.dll", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("ECSSavesManager.dll", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("NetworkManager.dll", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("LuaECSManager.dll", modulePubEndpoint, moduleSubEndpoint);
+    if (!isServer) {
+        this->addModule("GLEWSFMLRenderer.dll", modulePubEndpoint, moduleSubEndpoint);
+        this->addModule("SFMLWindowManager.dll", modulePubEndpoint, moduleSubEndpoint);
+    }
+    this->addModule("BulletPhysicEngine.dll", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("ECSSavesManager.dll", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("NetworkManager.dll", modulePubEndpoint, moduleSubEndpoint);
 #else
-  this->addModule("LuaECSManager.so", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("GLEWSFMLRenderer.so", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("SFMLWindowManager.so", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("BulletPhysicEngine.so", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("ECSSavesManager.so", modulePubEndpoint, moduleSubEndpoint);
-  this->addModule("NetworkManager.so", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("LuaECSManager.so", modulePubEndpoint, moduleSubEndpoint);
+    if (!isServer) {
+        this->addModule("GLEWSFMLRenderer.so", modulePubEndpoint, moduleSubEndpoint);
+        this->addModule("SFMLWindowManager.so", modulePubEndpoint, moduleSubEndpoint);
+    }
+    this->addModule("BulletPhysicEngine.so", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("ECSSavesManager.so", modulePubEndpoint, moduleSubEndpoint);
+    this->addModule("NetworkManager.so", modulePubEndpoint, moduleSubEndpoint);
 #endif
   } catch (const std::exception& e) {
     std::cerr << "Failed to load a module: " << e.what() << std::endl;
