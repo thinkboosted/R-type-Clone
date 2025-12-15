@@ -91,7 +91,7 @@ void Rtype::init() {
   });
 
   // Subscribe to incoming network messages
-  subscribe("NetworkMessage", [this](const std::string& payload) {
+  subscribe("NetworkMessage", [this](const std::string &payload) {
     std::string actualMessageType;
     std::string actualContent;
     uint32_t parsedClientId = 0;
@@ -101,98 +101,112 @@ void Rtype::init() {
     ss >> firstWord;
 
     if (!firstWord.empty() && std::isdigit(firstWord[0])) {
-        try {
-            parsedClientId = std::stoul(firstWord);
-            if (ss >> actualMessageType) {
-                std::getline(ss, actualContent);
-                actualContent = actualContent.substr(actualContent.find_first_not_of(' ', 0));
-            } else {
-                actualMessageType = "";
-                actualContent = "";
-            }
-        } catch (...) {
-            actualMessageType = payload;
-            parsedClientId = 0;
-            actualContent = "";
+      try {
+        parsedClientId = std::stoul(firstWord);
+        if (ss >> actualMessageType) {
+          std::getline(ss, actualContent);
+          actualContent =
+              actualContent.substr(actualContent.find_first_not_of(' ', 0));
+        } else {
+          actualMessageType = "";
+          actualContent = "";
         }
+      } catch (...) {
+        actualMessageType = payload;
+        parsedClientId = 0;
+        actualContent = "";
+      }
     } else {
-        actualMessageType = firstWord;
-        std::getline(ss, actualContent);
-        actualContent = actualContent.substr(actualContent.find_first_not_of(' ', 0));
+      actualMessageType = firstWord;
+      std::getline(ss, actualContent);
+      actualContent =
+          actualContent.substr(actualContent.find_first_not_of(' ', 0));
     }
 
     if (actualMessageType.empty() && !payload.empty()) {
-        actualMessageType = payload;
+      actualMessageType = payload;
     }
-    if (!actualContent.empty() && actualContent.find_first_not_of(' ') == std::string::npos) {
-        actualContent = "";
+    if (!actualContent.empty() &&
+        actualContent.find_first_not_of(' ') == std::string::npos) {
+      actualContent = "";
     }
 
     if (actualMessageType == "CLIENT_HELLO") {
-        if (_args[0] == "server") {
-            std::cout << "[Server] Received CLIENT_HELLO from Client " << parsedClientId << std::endl;
-            sendMessage("RequestNetworkSendTo", std::to_string(parsedClientId) + " YOUR_ID " + std::to_string(parsedClientId));
-        }
+      if (_args[0] == "server") {
+        std::cout << "[Server] Received CLIENT_HELLO from Client "
+                  << parsedClientId << std::endl;
+        sendMessage("RequestNetworkSendTo", std::to_string(parsedClientId) +
+                                                " YOUR_ID " +
+                                                std::to_string(parsedClientId));
+      }
     } else if (actualMessageType == "YOUR_ID") {
-        if (_args[0] == "client") {
-            try {
-                _myClientId = std::stoul(actualContent);
-                std::cout << "[Client] My assigned ID is " << _myClientId << std::endl;
-            } catch (const std::exception& e) {
-                std::cerr << "[Client] Error parsing YOUR_ID content: " << e.what() << std::endl;
-            }
-        }
-    } else if (actualMessageType == "PING") {
-        if (_args[0] == "server") {
-            std::cout << "[Server] Received PING from Client " << parsedClientId << std::endl;
-            sendMessage("RequestNetworkBroadcast", "PONG " + std::to_string(parsedClientId));
-        }
-    } else if (actualMessageType == "PONG") {
-        uint32_t pongClientId = 0;
+      if (_args[0] == "client") {
         try {
-            pongClientId = std::stoul(actualContent);
-            std::cout << "[Client] Received PONG from Client " << pongClientId << std::endl;
-        } catch (...) {
-            std::cout << "[Client] Received PONG (no valid client ID)" << std::endl;
+          _myClientId = std::stoul(actualContent);
+          std::cout << "[Client] My assigned ID is " << _myClientId
+                    << std::endl;
+        } catch (const std::exception &e) {
+          std::cerr << "[Client] Error parsing YOUR_ID content: " << e.what()
+                    << std::endl;
         }
+      }
+    } else if (actualMessageType == "PING") {
+      if (_args[0] == "server") {
+        std::cout << "[Server] Received PING from Client " << parsedClientId
+                  << std::endl;
+        sendMessage("RequestNetworkBroadcast",
+                    "PONG " + std::to_string(parsedClientId));
+      }
+    } else if (actualMessageType == "PONG") {
+      uint32_t pongClientId = 0;
+      try {
+        pongClientId = std::stoul(actualContent);
+        std::cout << "[Client] Received PONG from Client " << pongClientId
+                  << std::endl;
+      } catch (...) {
+        std::cout << "[Client] Received PONG (no valid client ID)" << std::endl;
+      }
     }
   });
 }
 
 void Rtype::loop() {
-    if (!_networkInitDone && !_args.empty()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  if (!_networkInitDone && !_args.empty()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-        if (_args[0] == "server" && _args.size() >= 2) {
-            std::cout << "[Game] Requesting Bind on port " << _args[1] << std::endl;
-            sendMessage("RequestNetworkBind", _args[1]);
-        } else if (_args[0] == "client" && _args.size() >= 3) {
-            std::string connectPayload = _args[1] + " " + _args[2];
-            std::cout << "[Game] Requesting Connect to " << connectPayload << std::endl;
-            sendMessage("RequestNetworkConnect", connectPayload);
-        }
-        _networkInitDone = true;
+    if (_args[0] == "server" && _args.size() >= 2) {
+      std::cout << "[Game] Requesting Bind on port " << _args[1] << std::endl;
+      sendMessage("RequestNetworkBind", _args[1]);
+    } else if (_args[0] == "client" && _args.size() >= 3) {
+      std::string connectPayload = _args[1] + " " + _args[2];
+      std::cout << "[Game] Requesting Connect to " << connectPayload
+                << std::endl;
+      sendMessage("RequestNetworkConnect", connectPayload);
     }
+    _networkInitDone = true;
+  }
 
-    // Ping logic for client
-    if (_args[0] == "client") {
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
-            if (!_spacePressed) {
-                if (_myClientId != 0) {
-                    std::cout << "[Client " << _myClientId << "] Sending PING" << std::endl;
-                    sendMessage("RequestNetworkSend", "PING " + std::to_string(_myClientId));
-                } else {
-                    std::cout << "[Client] Sending PING (ID unknown yet)" << std::endl;
-                    sendMessage("RequestNetworkSend", "PING");
-                }
-                _spacePressed = true;
-            }
+  // Ping logic for client
+  if (_args[0] == "client") {
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
+      if (!_spacePressed) {
+        if (_myClientId != 0) {
+          std::cout << "[Client " << _myClientId << "] Sending PING"
+                    << std::endl;
+          sendMessage("RequestNetworkSend",
+                      "PING " + std::to_string(_myClientId));
         } else {
-            _spacePressed = false;
+          std::cout << "[Client] Sending PING (ID unknown yet)" << std::endl;
+          sendMessage("RequestNetworkSend", "PING");
         }
+        _spacePressed = true;
+      }
+    } else {
+      _spacePressed = false;
     }
+  }
 
-    if (!_scriptsLoaded && _args.empty()) {
+  if (!_scriptsLoaded && _args.empty()) {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "Loading space-shooter game script..." << std::endl;
     sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");

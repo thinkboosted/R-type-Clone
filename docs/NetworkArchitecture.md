@@ -151,7 +151,7 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 | `NetworkStatus` | `Ready\|Bound:port\|Connected:ip:port` | Connection state changes |
 | `NetworkError` | `ErrorType:details` | Error notifications |
 | `NetworkMessage` | `payload` | Incoming network data (topic from wire) |
-| `ClientConnected` | `clientId` | New client connected (server-side) |
+| `ClientConnected` | `clientId endpoint` | New client connected (server-side) |
 | `ClientDisconnected` | `clientId reason` | Client disconnected (timeout/manual) |
 
 ### C++ Interface (INetworkManager)
@@ -253,7 +253,7 @@ std::vector<ClientInfo> getConnectedClients();
 cd build && ./NetworkManagerTests
 ```
 
-**Current tests (7 passing):**
+**Current tests (11 passing):**
 
 - `Instantiation` - Basic creation/destruction
 - `BindDoesNotCrash` - Server bind on port

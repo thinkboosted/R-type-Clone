@@ -72,7 +72,8 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
                 }
             });
         } catch (const zmq::error_t& e) {
-            std::cerr << "Failed to setup server message broker: " << e.what() << std::endl;
+            std::cerr << "Failed to setup server message broker: " << e.what() 
+                      << " (Bind endpoints: " << _pubBrokerEndpoint << ", " << _subBrokerEndpoint << ")" << std::endl;
             throw;
         }
     } else {

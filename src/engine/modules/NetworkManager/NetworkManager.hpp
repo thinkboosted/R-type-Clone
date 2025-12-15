@@ -86,7 +86,6 @@ private:
   std::unique_ptr<WorkGuard> _workGuard;
   std::thread _ioThread;
   std::shared_ptr<udp::socket> _socket;
-  udp::endpoint _remoteEndpoint;
   std::array<char, 65536> _recvBuffer{};
 
   std::mutex _queueMutex;
@@ -100,7 +99,11 @@ private:
   std::map<uint32_t, ClientSession> _clients;
   std::map<std::string, uint32_t> _endpointToClientId;
   uint32_t _nextClientId = 1;
-  bool _isServer = false;
+  std::atomic<bool> _isServer{false};
+
+  // Remote endpoint protection
+  std::mutex _remoteEndpointMutex;
+  udp::endpoint _remoteEndpoint; // Protected by _remoteEndpointMutex when accessed outside io_context
 
   // Heartbeat/Timeout settings
   std::chrono::steady_clock::time_point _lastHeartbeatTime;
