@@ -42,8 +42,6 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    // "127.0.0.1:0" is a placeholder; Rtype constructor handles the actual
-    // internal bus configuration
     rtypeGame::Rtype app("127.0.0.1:0", appArgs);
 
     std::cout << "Starting Rtype application (" << mode << " mode)..."
