@@ -16,5 +16,7 @@ class Rtype : public rtypeEngine::AApplication {
     bool _scriptsLoaded = false;
     std::vector<std::string> _args;
     bool _networkInitDone = false;
+    bool _spacePressed = false;
+    uint32_t _myClientId = 0; // To store the client ID assigned by the server
 };
 }  // namespace rtype
