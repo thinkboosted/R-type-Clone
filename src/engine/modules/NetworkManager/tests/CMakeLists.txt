@@ -3,7 +3,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_executable(NetworkManagerTests
     NetworkManagerTests.cpp
-    ../NetworkManager.cpp # We compile the source directly to access internals if needed, or link against lib
+    ../NetworkManager.cpp # Compiling source directly; tests use only the public interface (black-box testing)
     ../NetworkManager.hpp
     ../../AModule.cpp
 )
