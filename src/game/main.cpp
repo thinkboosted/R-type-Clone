@@ -1,7 +1,7 @@
 #include "Rtype.hpp"
-#include <algorithm> // Added for std::transform
+#include <algorithm>
 #include <iostream>
-#include <string> // Added for std::string operations
+#include <string>
 #include <vector>
 
 int main(int argc, char **argv) {
@@ -24,26 +24,13 @@ int main(int argc, char **argv) {
                 << std::endl;
       return 1;
     }
-    appArgs.push_back(mode); // First argument is the mode
+    appArgs.push_back(mode);
 
-    // Add remaining command line arguments after the mode
     for (int i = 1; i < argc; ++i) {
       appArgs.push_back(argv[i]);
     }
 
-    std::string zmqEndpoint = "127.0.0.1:5557"; // Default for local bus if no
-                                                // specific port is derived
-    if (mode == "server" && appArgs.size() >= 2) {
-      // For server, use the provided port for the ZMQ bus as well (e.g., 4242)
-      zmqEndpoint = "127.0.0.1:" + appArgs[1];
-    } else if (mode == "client" && appArgs.size() >= 3) {
-      // For client, the first arg in appArgs is "client", so endpoint is at
-      // appArgs[1] This endpoint will be used by NetworkManager to connect to
-      // the game server. We do NOT use this for the local ZMQ bus, as it will
-      // use ephemeral ports (127.0.0.1:0). The zmqEndpoint for the local bus is
-      // handled internally by Rtype's constructor now. We only care about the
-      // target game server's address for NetworkManager.
-    } else if (mode == "server" && appArgs.size() < 2) {
+    if (mode == "server" && appArgs.size() < 2) {
       std::cerr
           << "Error: Server mode requires a port. Usage: r-type_server <port>"
           << std::endl;
@@ -55,26 +42,8 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    // The zmqEndpoint in Rtype's constructor is for the internal message bus
-    // endpoints. For clients, Rtype constructor will internally generate
-    // ephemeral ports for its local bus. For server, it uses the provided port
-    // as base. For client, the `endpoint` argument passed to Rtype's
-    // constructor for its ZMQ bus should be "127.0.0.1:0" to signal ephemeral
-    // ports. This is handled inside Rtype's constructor now. The `zmqEndpoint`
-    // variable here is only used by this main.cpp directly if it were to
-    // configure AApplication's broker. Rtype constructor now correctly
-    // determines its own internal ZMQ bus endpoints.
-
-    // Rtype constructor now directly takes the originally passed endpoint and
-    // args. The logic to decide the internal ZMQ bus endpoints based on
-    // client/server role is now handled inside Rtype's constructor.
-
-    rtypeGame::Rtype app(
-        "127.0.0.1:0",
-        appArgs); // Pass "127.0.0.1:0" as a placeholder for the local ZMQ bus
-                  // base endpoint for clients Rtype constructor will interpret
-                  // this as a request for ephemeral ports For server, Rtype
-                  // constructor will use appArgs[1] as the base port.
+    // "127.0.0.1:0" is a placeholder; Rtype constructor handles the actual internal bus configuration
+    rtypeGame::Rtype app("127.0.0.1:0", appArgs);
 
     std::cout << "Starting Rtype application (" << mode << " mode)..."
               << std::endl;
