@@ -74,6 +74,15 @@ function Weapon(cooldown)
     }
 end
 
+function Button(action, width, height)
+    return {
+        action = action or "",
+        width = width or 100,
+        height = height or 50,
+        hovered = false
+    }
+end
+
 function Enemy(speed)
     return {
         speed = speed or 5.0
@@ -134,6 +143,12 @@ function Follow(targetId, offsetX, offsetY, offsetZ)
         offsetX = offsetX or 0,
         offsetY = offsetY or 0,
         offsetZ = offsetZ or 0
+    }
+end
+
+function NetworkId(id)
+    return {
+        id = id or 0
     }
 end
 

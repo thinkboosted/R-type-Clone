@@ -12,6 +12,7 @@ function RenderSystem.update(dt)
     for _, id in ipairs(cameras) do
         local cam = ECS.getComponent(id, "Camera")
         if cam.isActive and not CameraInitialized then
+            print("RenderSystem: Activating Camera " .. id)
             ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
             CameraInitialized = true
 
@@ -52,6 +53,7 @@ function RenderSystem.update(dt)
         local color = ECS.getComponent(id, "Color")
 
         if not RenderSystem.initializedEntities[id] then
+            print("RenderSystem: Creating Text '" .. text.text .. "' for Entity " .. id)
             ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
             RenderSystem.initializedEntities[id] = true

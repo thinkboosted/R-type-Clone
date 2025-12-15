@@ -1,12 +1,11 @@
 local NetworkSystem = {}
 
-NetworkSystem.clientEntities = {} -- Map clientID -> entityID (Server)
-NetworkSystem.serverEntities = {} -- Map serverID -> localID (Client)
+NetworkSystem.clientEntities = {} 
+NetworkSystem.serverEntities = {}
 NetworkSystem.myServerId = nil
 
--- Configuration
 NetworkSystem.broadcastTimer = 0
-NetworkSystem.broadcastInterval = 0.05 -- 20 updates per second (50ms)
+NetworkSystem.broadcastInterval = 0.05
 
 function NetworkSystem.init()
     if ECS.isServer() then
@@ -14,9 +13,19 @@ function NetworkSystem.init()
 
         ECS.subscribe("ClientConnected", function(msg)
             local clientId = string.match(msg, "^(%d+)")
-            if clientId then
-                print("Client Connected: " .. clientId)
+            print("Client Connected: " .. clientId .. " (Auto-Spawning)")
+            if not NetworkSystem.clientEntities[clientId] then
                 NetworkSystem.spawnPlayerForClient(clientId)
+            end
+        end)
+
+        ECS.subscribe("REQUEST_SPAWN", function(msg)
+            local clientId = string.match(msg, "^(%d+)")
+            if clientId then
+                print("Spawn Request from: " .. clientId)
+                if not NetworkSystem.clientEntities[clientId] then
+                    NetworkSystem.spawnPlayerForClient(clientId)
+                end
             end
         end)
 
@@ -53,10 +62,12 @@ function NetworkSystem.init()
             if id then
                 print(">> Assigned Player ID: " .. id)
                 NetworkSystem.myServerId = id
+                NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, -90, "1")
             end
         end)
-
+        
         ECS.subscribe("ENTITY_POS", function(msg)
+            -- print("DEBUG CLIENT: Received ENTITY_POS " .. msg)
             local id, x, y, z, rx, ry, rz, type = string.match(msg, "([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+)")
             if id then
                 NetworkSystem.updateLocalEntity(id, x, y, z, rx, ry, rz, type)
@@ -74,14 +85,16 @@ function NetworkSystem.init()
 end
 
 function NetworkSystem.spawnPlayerForClient(clientId)
+    print("DEBUG: Spawning Player for Client " .. clientId)
     local player = ECS.createEntity()
     ECS.addComponent(player, "Transform", Transform(-8, 0, 0, 0, 0, -90))
     ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
-    ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false))
+    ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false)) 
     ECS.addComponent(player, "Player", Player(20.0))
-    ECS.addComponent(player, "Weapon", Weapon(0.2)) -- ADD WEAPON COMPONENT
+    ECS.addComponent(player, "Weapon", Weapon(0.2))
     ECS.addComponent(player, "Life", Life(3))
     ECS.addComponent(player, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
+    ECS.addComponent(player, "NetworkId", { id = clientId }) 
 
     NetworkSystem.clientEntities[clientId] = player
     ECS.sendToClient(tonumber(clientId), "PLAYER_ASSIGN", player)
@@ -89,74 +102,47 @@ end
 
 function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, typeStr)
     local localId = NetworkSystem.serverEntities[serverId]
-
-    local nx = tonumber(x) or 0
-    local ny = tonumber(y) or 0
-    local nz = tonumber(z) or 0
-    local nrx = tonumber(rx) or 0
-    local nry = tonumber(ry) or 0
-    local nrz = tonumber(rz) or 0
+    local nx, ny, nz = tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0
+    local nrx, nry, nrz = tonumber(rx) or 0, tonumber(ry) or 0, tonumber(rz) or 0
     local nType = tonumber(typeStr) or 1
 
     if not localId then
-        -- CREATE LOCAL VISUAL ENTITY
         localId = ECS.createEntity()
         ECS.addComponent(localId, "Transform", Transform(nx, ny, nz, nrx, nry, nrz))
-
+        
         if nType == 1 then
-             -- PLAYER
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/aircraft.obj"))
-             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 0.0)) -- Green
+             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 0.0))
         elseif nType == 2 then
-             -- BULLET
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
-             ECS.addComponent(localId, "Color", Color(1.0, 1.0, 0.0)) -- Yellow
+             ECS.addComponent(localId, "Color", Color(1.0, 1.0, 0.0))
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         elseif nType == 3 then
-             -- ENEMY
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/aircraft.obj"))
-             ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0)) -- Red
+             ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0))
              local t = ECS.getComponent(localId, "Transform")
              t.ry = 90
         end
-
         NetworkSystem.serverEntities[serverId] = localId
     else
-        -- UPDATE TARGET POSITION (Interpolation)
         local t = ECS.getComponent(localId, "Transform")
         if t then
-            t.targetX = nx
-            t.targetY = ny
-            t.targetZ = nz
-            t.targetRX = nrx
-            t.targetRY = nry
-            t.targetRZ = nrz
-
-            -- Initialize if first update
-            if t.x == 0 and t.y == 0 and t.targetX ~= 0 then
-                 t.x = nx
-                 t.y = ny
-                 t.z = nz
-            end
+            t.targetX, t.targetY, t.targetZ = nx, ny, nz
+            if t.x == 0 and t.y == 0 and t.targetX ~= 0 then t.x, t.y, t.z = nx, ny, nz end
         end
     end
 
-    if serverId == NetworkSystem.myServerId then
-        if localId then
-             local c = ECS.getComponent(localId, "Color")
-             if c then c.r = 0.0; c.g = 0.5; c.b = 1.0 end
-        end
+    if serverId == NetworkSystem.myServerId and localId then
+         local c = ECS.getComponent(localId, "Color")
+         if c then c.r = 0.0; c.g = 0.5; c.b = 1.0 end
     end
 end
 
-
 function NetworkSystem.update(dt)
     if not ECS.isServer() then
-        -- CLIENT INTERPOLATION
         local entities = ECS.getEntitiesWith({"Transform"})
         local lerpSpeed = 10.0
-
         for _, id in ipairs(entities) do
             local t = ECS.getComponent(id, "Transform")
             if t.targetX then
@@ -168,37 +154,32 @@ function NetworkSystem.update(dt)
         return
     end
 
-    if ECS.isServer() then
-        -- Rate Limiting
-        NetworkSystem.broadcastTimer = NetworkSystem.broadcastTimer + dt
-        if NetworkSystem.broadcastTimer < NetworkSystem.broadcastInterval then
-            return
-        end
-        NetworkSystem.broadcastTimer = 0
+    NetworkSystem.broadcastTimer = NetworkSystem.broadcastTimer + dt
+    if NetworkSystem.broadcastTimer < NetworkSystem.broadcastInterval then return end
+    NetworkSystem.broadcastTimer = 0
 
-        -- 1. Broadcast Players (Type 1)
-        local players = ECS.getEntitiesWith({"Player", "Transform"})
-        for _, id in ipairs(players) do
-            local t = ECS.getComponent(id, "Transform")
-            local msg = string.format("%s %f %f %f %f %f %f 1", id, t.x, t.y, t.z, t.rx, t.ry, t.rz)
-            ECS.broadcastNetworkMessage("ENTITY_POS", msg)
-        end
+    local players = ECS.getEntitiesWith({"Player", "Transform"})
+    if #players > 0 then
+         -- print("DEBUG SERVER: Broadcasting " .. #players .. " Players") 
+    else
+         -- print("DEBUG SERVER: No Players found to broadcast")
+    end
 
-        -- 2. Broadcast Bullets (Type 2)
-        local bullets = ECS.getEntitiesWith({"Bullet", "Transform"})
-        for _, id in ipairs(bullets) do
-            local t = ECS.getComponent(id, "Transform")
-            local msg = string.format("%s %f %f %f %f %f %f 2", id, t.x, t.y, t.z, t.rx, t.ry, t.rz)
-            ECS.broadcastNetworkMessage("ENTITY_POS", msg)
-        end
+    for _, id in ipairs(players) do
+        local t = ECS.getComponent(id, "Transform")
+        ECS.broadcastNetworkMessage("ENTITY_POS", string.format("%s %f %f %f %f %f %f 1", id, t.x, t.y, t.z, t.rx, t.ry, t.rz))
+    end
+    
+    local bullets = ECS.getEntitiesWith({"Bullet", "Transform"})
+    for _, id in ipairs(bullets) do
+        local t = ECS.getComponent(id, "Transform")
+        ECS.broadcastNetworkMessage("ENTITY_POS", string.format("%s %f %f %f %f %f %f 2", id, t.x, t.y, t.z, t.rx, t.ry, t.rz))
+    end
 
-        -- 3. Broadcast Enemies (Type 3)
-        local enemies = ECS.getEntitiesWith({"Enemy", "Transform"})
-        for _, id in ipairs(enemies) do
-             local t = ECS.getComponent(id, "Transform")
-             local msg = string.format("%s %f %f %f %f %f %f 3", id, t.x, t.y, t.z, t.rx, t.ry, t.rz)
-             ECS.broadcastNetworkMessage("ENTITY_POS", msg)
-        end
+    local enemies = ECS.getEntitiesWith({"Enemy", "Transform"})
+    for _, id in ipairs(enemies) do
+         local t = ECS.getComponent(id, "Transform")
+         ECS.broadcastNetworkMessage("ENTITY_POS", string.format("%s %f %f %f %f %f %f 3", id, t.x, t.y, t.z, t.rx, t.ry, t.rz))
     end
 end
 

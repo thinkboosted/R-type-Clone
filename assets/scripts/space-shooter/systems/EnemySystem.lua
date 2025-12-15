@@ -11,13 +11,11 @@ function EnemySystem.init()
 end
 
 function EnemySystem.update(dt)
-    EnemySystem.gameTime = EnemySystem.gameTime + dt
-
-    -- Increase difficulty over time
-    local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0) -- Every 30 seconds increases difficulty
-    EnemySystem.spawnInterval = EnemySystem.baseSpawnInterval / difficultyMultiplier
-    if EnemySystem.spawnInterval < 0.5 then
-        EnemySystem.spawnInterval = 0.5 -- Minimum spawn interval
+    -- Wait for players to join before simulating enemies
+    local players = ECS.getEntitiesWith({"Player"})
+    -- print("DEBUG: EnemySystem found " .. #players .. " players") -- Uncomment for spam debug
+    if #players == 0 then
+        return
     end
 
     EnemySystem.spawnTimer = EnemySystem.spawnTimer + dt
