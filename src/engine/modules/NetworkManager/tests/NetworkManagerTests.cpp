@@ -1,25 +1,18 @@
 #include <gtest/gtest.h>
 #include "../NetworkManager.hpp"
-
-// Mock or real instantiation? 
-// Since NetworkManager uses asio and system resources, a real instantiation test 
-// is actually an integration test. But for unit testing the logic, we usually mock things.
-// However, without a large refactoring to inject dependencies (socket, io_context), 
-// we will test the public interface "black box" style.
+#include <thread>
+#include <chrono>
 
 class NetworkManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Setup code if needed
     }
 
     void TearDown() override {
-        // Cleanup code if needed
     }
 };
 
 TEST_F(NetworkManagerTest, Instantiation) {
-    // Just check if we can create and destroy it without crash
     EXPECT_NO_THROW({
         rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5555", "tcp://127.0.0.1:5556");
     });
@@ -28,8 +21,6 @@ TEST_F(NetworkManagerTest, Instantiation) {
 TEST_F(NetworkManagerTest, BindDoesNotCrash) {
     rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5557", "tcp://127.0.0.1:5558");
     nm.init();
-    // We can't easily verify "Bind" success without mocking or checking internal state/logs
-    // But we can verify it doesn't throw exceptions
     EXPECT_NO_THROW(nm.bind(4242));
     nm.cleanup();
 }
@@ -41,16 +32,85 @@ TEST_F(NetworkManagerTest, ConnectDoesNotCrash) {
     nm.cleanup();
 }
 
-// ============ Multi-Client Tests ============
+TEST_F(NetworkManagerTest, EndToEndCommunication) {
+    // This test simulates a server and a client exchanging messages
+    rtypeEngine::NetworkManager server("tcp://127.0.0.1:5571", "tcp://127.0.0.1:5572");
+    rtypeEngine::NetworkManager client("tcp://127.0.0.1:5573", "tcp://127.0.0.1:5574");
 
-TEST_F(NetworkManagerTest, GetConnectedClientsEmptyInitially) {
-    rtypeEngine::NetworkManager nm("tcp://127.0.0.1:5561", "tcp://127.0.0.1:5562");
-    nm.init();
+    server.init();
+    client.init();
+
+    // Server binds to port 4243
+    server.bind(4243);
     
-    auto clients = nm.getConnectedClients();
-    EXPECT_TRUE(clients.empty());
-    
-    nm.cleanup();
+    // Client connects to server
+    client.connect("127.0.0.1", 4243);
+
+    // Allow time for binding/connection (async)
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Client sends message to server
+    client.sendNetworkMessage("TestTopic", "HelloServer");
+
+    // Allow time for transmission
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Check if server received it
+    auto serverMessages = server.getAllMessages();
+    bool received = false;
+    uint32_t clientId = 0;
+    for (const auto& msg : serverMessages) {
+        if (msg.topic == "TestTopic" && msg.payload == "HelloServer") {
+            received = true;
+            clientId = msg.clientId;
+            break;
+        }
+    }
+    EXPECT_TRUE(received);
+    EXPECT_GT(clientId, 0); // Client ID should be assigned
+
+    // Verify client list on server
+    auto connectedClients = server.getConnectedClients();
+    EXPECT_EQ(connectedClients.size(), 1);
+    if (!connectedClients.empty()) {
+        EXPECT_EQ(connectedClients[0].id, clientId);
+        EXPECT_TRUE(connectedClients[0].connected);
+    }
+
+    // Server sends back to specific client
+    server.sendToClient(clientId, "ReplyTopic", "HelloClient");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Check client mailbox
+    auto clientMessages = client.getAllMessages();
+    received = false;
+    for (const auto& msg : clientMessages) {
+        if (msg.topic == "ReplyTopic" && msg.payload == "HelloClient") {
+            received = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(received);
+
+    // Server broadcasts
+    server.broadcast("BroadcastTopic", "GlobalMessage");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Check client mailbox again
+    clientMessages = client.getAllMessages();
+    received = false;
+    for (const auto& msg : clientMessages) {
+        if (msg.topic == "BroadcastTopic" && msg.payload == "GlobalMessage") {
+            received = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(received);
+
+    server.cleanup();
+    client.cleanup();
 }
 
 TEST_F(NetworkManagerTest, MessageQueueOperations) {
@@ -72,7 +132,7 @@ TEST_F(NetworkManagerTest, SendToClientDoesNotCrashWithInvalidId) {
     nm.init();
     nm.bind(4250);
     
-    // Sending to non-existent client should not crash (just fail silently or return false)
+    // Sending to non-existent client should not crash
     EXPECT_NO_THROW(nm.sendToClient(999, "TestTopic", "TestPayload"));
     
     nm.cleanup();
