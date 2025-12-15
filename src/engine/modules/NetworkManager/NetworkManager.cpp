@@ -350,14 +350,15 @@ void NetworkManager::connect(const std::string &host, uint16_t port) {
             udp::endpoint endpoint = *results.begin();
 
             _socket = std::make_shared<udp::socket>(_ioContext);
-                            _socket->open(udp::v4());
-                            _socket->connect(endpoint);
-                            {
-                                std::lock_guard<std::mutex> lock(_remoteEndpointMutex);
-                                _remoteEndpoint = endpoint;
-                            }
-            
-                            publishStatus("Connected:" + endpoint.address().to_string() + ":" + std::to_string(endpoint.port()));
+            _socket->open(udp::v4());
+            _socket->connect(endpoint);
+            {
+              std::lock_guard<std::mutex> lock(_remoteEndpointMutex);
+              _remoteEndpoint = endpoint;
+            }
+
+            publishStatus("Connected:" + endpoint.address().to_string() + ":" +
+                          std::to_string(endpoint.port()));
             startReceive();
           } catch (const std::exception &e) {
             publishError(std::string("ConnectFailed:") + e.what());
@@ -520,19 +521,19 @@ void NetworkManager::checkClientTimeouts() {
 }
 
 void NetworkManager::sendHeartbeats() {
-    std::vector<udp::endpoint> endpoints;
-    {
-        std::lock_guard<std::mutex> lock(_clientsMutex);
-        for (const auto& [clientId, session] : _clients) {
-            if (session.connected) {
-                endpoints.push_back(session.endpoint);
-            }
-        }
+  std::vector<udp::endpoint> endpoints;
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    for (const auto &[clientId, session] : _clients) {
+      if (session.connected) {
+        endpoints.push_back(session.endpoint);
+      }
     }
+  }
 
-    for (const auto& endpoint : endpoints) {
-        sendToEndpoint(endpoint, "_heartbeat", "ping");
-    }
+  for (const auto &endpoint : endpoints) {
+    sendToEndpoint(endpoint, "_heartbeat", "ping");
+  }
 }
 
 void NetworkManager::sendToEndpoint(const udp::endpoint &endpoint,
@@ -587,62 +588,65 @@ void NetworkManager::publishError(const std::string &error) {
 
 void NetworkManager::sendNetworkMessage(const std::string &topic,
                                         const std::string &payload) {
-      if (_isServer) {
-          // Server: broadcast to all clients by default
-          broadcast(topic, payload);
-      } else {
-          // Client: send to server
-          udp::endpoint target;
-          {
-              std::lock_guard<std::mutex> lock(_remoteEndpointMutex);
-              target = _remoteEndpoint;
-          }
-          sendToEndpoint(target, topic, payload);
-      }}
-
-void NetworkManager::sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) {
-    std::string errorMsg;
-    std::optional<udp::endpoint> endpointOpt;
-
+  if (_isServer) {
+    // Server: broadcast to all clients by default
+    broadcast(topic, payload);
+  } else {
+    // Client: send to server
+    udp::endpoint target;
     {
-        std::lock_guard<std::mutex> lock(_clientsMutex);
-        auto it = _clients.find(clientId);
-        if (it == _clients.end()) {
-            errorMsg = "SendToClient:UnknownClient:" + std::to_string(clientId);
-        } else if (!it->second.connected) {
-            errorMsg = "SendToClient:ClientDisconnected:" + std::to_string(clientId);
-        } else {
-            endpointOpt = it->second.endpoint;
-        }
+      std::lock_guard<std::mutex> lock(_remoteEndpointMutex);
+      target = _remoteEndpoint;
     }
-
-    if (!errorMsg.empty()) {
-        publishError(errorMsg);
-        return;
-    }
-
-    if (endpointOpt.has_value()) {
-        sendToEndpoint(endpointOpt.value(), topic, payload);
-    }
+    sendToEndpoint(target, topic, payload);
+  }
 }
 
-void NetworkManager::broadcast(const std::string& topic, const std::string& payload) {
-    std::vector<udp::endpoint> endpoints;
-    {
-        std::lock_guard<std::mutex> lock(_clientsMutex);
-        if (_clients.empty()) {
-            return;
-        }
-        for (const auto& [clientId, session] : _clients) {
-            if (session.connected) {
-                endpoints.push_back(session.endpoint);
-            }
-        }
-    }
+void NetworkManager::sendToClient(uint32_t clientId, const std::string &topic,
+                                  const std::string &payload) {
+  std::string errorMsg;
+  std::optional<udp::endpoint> endpointOpt;
 
-    for (const auto& endpoint : endpoints) {
-        sendToEndpoint(endpoint, topic, payload);
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto it = _clients.find(clientId);
+    if (it == _clients.end()) {
+      errorMsg = "SendToClient:UnknownClient:" + std::to_string(clientId);
+    } else if (!it->second.connected) {
+      errorMsg = "SendToClient:ClientDisconnected:" + std::to_string(clientId);
+    } else {
+      endpointOpt = it->second.endpoint;
     }
+  }
+
+  if (!errorMsg.empty()) {
+    publishError(errorMsg);
+    return;
+  }
+
+  if (endpointOpt.has_value()) {
+    sendToEndpoint(endpointOpt.value(), topic, payload);
+  }
+}
+
+void NetworkManager::broadcast(const std::string &topic,
+                               const std::string &payload) {
+  std::vector<udp::endpoint> endpoints;
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    if (_clients.empty()) {
+      return;
+    }
+    for (const auto &[clientId, session] : _clients) {
+      if (session.connected) {
+        endpoints.push_back(session.endpoint);
+      }
+    }
+  }
+
+  for (const auto &endpoint : endpoints) {
+    sendToEndpoint(endpoint, topic, payload);
+  }
 }
 
 std::vector<ClientInfo> NetworkManager::getConnectedClients() {

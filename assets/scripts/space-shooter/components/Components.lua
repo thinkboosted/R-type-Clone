@@ -67,6 +67,13 @@ function Player(speed)
     }
 end
 
+function Weapon(cooldown)
+    return {
+        cooldown = cooldown or 0.2,
+        timeSinceLastShot = 0.0
+    }
+end
+
 function Enemy(speed)
     return {
         speed = speed or 5.0

@@ -103,7 +103,8 @@ private:
 
   // Remote endpoint protection
   std::mutex _remoteEndpointMutex;
-  udp::endpoint _remoteEndpoint; // Protected by _remoteEndpointMutex when accessed outside io_context
+  udp::endpoint _remoteEndpoint; // Protected by _remoteEndpointMutex when
+                                 // accessed outside io_context
 
   // Heartbeat/Timeout settings
   std::chrono::steady_clock::time_point _lastHeartbeatTime;

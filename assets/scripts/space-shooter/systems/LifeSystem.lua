@@ -25,6 +25,10 @@ function LifeSystem.update(dt)
             end
 
             ECS.destroyEntity(id)
+            
+            if ECS.isServer() then
+                ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
+            end
 
         end
     end
