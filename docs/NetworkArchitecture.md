@@ -142,7 +142,6 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 | `RequestNetworkSend` | `topic payload` | Send unreliable message to remote |
 | `RequestNetworkSendTo` | `clientId topic payload` | Send to specific client by ID |
 | `RequestNetworkBroadcast` | `topic payload` | Broadcast to all connected clients |
-| `RequestNetworkSendReliable` | `topic payload` | Send with ACK/retransmission |
 | `RequestNetworkDisconnect` | - | Close socket |
 
 ### ZeroMQ Topics (Events)
@@ -159,14 +158,17 @@ Thanks to UDP, a received packet is always complete. We use **MsgPack** to encod
 
 ```cpp
 struct NetworkEnvelope {
+    uint32_t clientId;      // ID of the client (sender/receiver)
     std::string topic;
     std::string payload;
-    MSGPACK_DEFINE(topic, payload);
+    // Serialization is handled by a separate SerializableEnvelope struct in the implementation.
 };
 
 struct ClientInfo {
     uint32_t id;
-    std::string endpoint;  // "ip:port"
+    std::string address;   // IP address
+    uint16_t port;         // Port number
+    std::chrono::steady_clock::time_point lastActivity; // Timestamp of last activity
     bool connected;
 };
 
@@ -202,10 +204,10 @@ The current implementation is **v2.0 (Multi-Client Ready)** with full multi-clie
 *   **Multi-Client Management:** Server tracks each client with unique IDs via `std::map<uint32_t, ClientSession>`.
 *   **Heartbeat System:** Automatic ping every second to monitor connection health.
 *   **Client Timeout:** Disconnects clients inactive for 5+ seconds (configurable).
-*   **Reliable Messaging:** ACK-based retransmission for critical game events.
 
 ### 🗺️ Development Plan (Future Improvements)
 
+- [ ] **Reliable Messaging:** ACK-based retransmission for critical game events.
 - [ ] **Reconnection:** Auto-reconnect with exponential backoff.
 - [ ] **Message Compression:** Compress large payloads (zlib/LZ4).
 - [ ] **Rate Limiting:** Per-client rate limiting to prevent abuse.
@@ -230,14 +232,13 @@ std::vector<ClientInfo> getConnectedClients();
 | :--- | :--- | :--- |
 | `RequestNetworkSendTo` | `clientId topic payload` | Send to specific client |
 | `RequestNetworkBroadcast` | `topic payload` | Broadcast to all clients |
-| `RequestNetworkSendReliable` | `topic payload` | Send with ACK/retransmission |
 
 ### Heartbeat & Timeout
 
 - **Heartbeat interval:** 1 second (configurable)
 - **Client timeout:** 5 seconds of inactivity (configurable)
-- **Heartbeat topic:** `__HEARTBEAT__`
-- **Heartbeat response topic:** `__HEARTBEAT_ACK__`
+- **Heartbeat topic:** `_heartbeat`
+- **Heartbeat response topic:** `_heartbeat_response`
 
 > [!TIP]
 > Clients should respond to heartbeats or send regular messages to avoid disconnection.
