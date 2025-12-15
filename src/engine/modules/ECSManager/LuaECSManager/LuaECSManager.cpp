@@ -115,7 +115,12 @@ void LuaECSManager::init() {
         size_t split2 = data.find(':');
         if (split2 != std::string::npos) {
           std::string id = data.substr(0, split2);
-          float distance = std::stof(data.substr(split2 + 1));
+            float distance = 0.0f;
+            try {
+              distance = std::stof(data.substr(split2 + 1));
+            } catch (const std::exception &) {
+              distance = 0.0f;
+            }
           for (auto &system : _systems) {
             if (system["onRaycastHit"].valid()) {
               try {

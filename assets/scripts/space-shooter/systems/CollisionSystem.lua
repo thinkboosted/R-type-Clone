@@ -7,6 +7,9 @@ function CollisionSystem.init()
 end
 
 function CollisionSystem.update(dt)
+    if not ECS.isServer() and not ECS.isLocal then return end
+    if not ECS.isGameRunning then return end
+
     local entities = ECS.getEntitiesWith({"Transform", "Collider"})
 
     for _, id in ipairs(entities) do
@@ -83,8 +86,12 @@ function CollisionSystem.onCollision(id1, id2)
 end
 
 function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
+    print("DEBUG: Collision Player " .. playerId .. " vs Enemy " .. enemyId)
     local life = ECS.getComponent(playerId, "Life")
     if life then
+        if life.invulnerableTime and life.invulnerableTime > 0 then
+            return
+        end
         life.amount = 0
     end
 end

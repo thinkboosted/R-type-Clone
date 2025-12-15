@@ -21,8 +21,28 @@
 #include <fstream>
 #include <cmath>
 #include <random>
+#include <cstdlib>
+#include <cerrno>
 
 namespace rtypeEngine {
+
+namespace {
+float safeParseFloat(const std::string& str, float fallback = 0.0f) noexcept {
+    errno = 0;
+    char* end = nullptr;
+    const float value = std::strtof(str.c_str(), &end);
+    if (end == str.c_str() || errno == ERANGE) return fallback;
+    return value;
+}
+
+int safeParseInt(const std::string& str, int fallback = 0) noexcept {
+    errno = 0;
+    char* end = nullptr;
+    const long value = std::strtol(str.c_str(), &end, 10);
+    if (end == str.c_str() || errno == ERANGE) return fallback;
+    return static_cast<int>(value);
+}
+} // namespace
 
 GLEWSFMLRenderer::GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpoint)
     : I3DRenderer(pubEndpoint, subEndpoint),
@@ -120,6 +140,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
         std::string command = segment.substr(0, colonPos);
         std::string data = segment.substr(colonPos + 1);
 
+        try {
         if (command == "CreateEntity") {
              size_t split = data.find(':');
              if (split != std::string::npos) {
@@ -209,7 +230,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                      obj.isSprite = true;
                      obj.text = textContent;
                      obj.fontPath = fontPath;
-                     obj.fontSize = std::stoi(fontSizeStr);
+                     obj.fontSize = safeParseInt(fontSizeStr, 24);
                      obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                      obj.position = {0,0,0};
                      obj.rotation = {0,0,0};
@@ -242,7 +263,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             std::string id, val;
             std::getline(dss, id, ',');
             std::vector<float> v;
-            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+            while(std::getline(dss, val, ',')) v.push_back(safeParseFloat(val));
 
             if (v.size() >= 3) {
                 bool handled = false;
@@ -268,7 +289,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             std::string id, val;
             std::getline(dss, id, ',');
             std::vector<float> v;
-            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+            while(std::getline(dss, val, ',')) v.push_back(safeParseFloat(val));
 
             if (v.size() >= 3) {
                 bool handled = false;
@@ -292,7 +313,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             std::string id, val;
             std::getline(dss, id, ',');
             std::vector<float> v;
-            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+            while(std::getline(dss, val, ',')) v.push_back(safeParseFloat(val));
 
             if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
                 _renderObjects[id].scale = {v[0], v[1], v[2]};
@@ -302,7 +323,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             std::string id, val;
             std::getline(dss, id, ',');
             std::vector<float> v;
-            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+            while(std::getline(dss, val, ',')) v.push_back(safeParseFloat(val));
 
             if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end()) {
                 _renderObjects[id].color = {v[0], v[1], v[2]};
@@ -312,7 +333,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
             std::string id, val;
             std::getline(dss, id, ',');
             std::vector<float> v;
-            while(std::getline(dss, val, ',')) v.push_back(std::stof(val));
+            while(std::getline(dss, val, ',')) v.push_back(safeParseFloat(val));
 
             if (v.size() >= 4) {
                 _lightColor = {v[0], v[1], v[2]};
@@ -344,9 +365,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                 std::stringstream pss(params);
                 std::string val;
                 std::vector<float> v;
-                while(std::getline(pss, val, ',')) {
-                    try { v.push_back(std::stof(val)); } catch(...) { v.push_back(0.0f); }
-                }
+                while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
 
                 if (v.size() >= 14) {
                     gen.offset = {v[0], v[1], v[2]};
@@ -372,9 +391,7 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                     std::stringstream pss(params);
                     std::string val;
                     std::vector<float> v;
-                    while(std::getline(pss, val, ',')) {
-                        try { v.push_back(std::stof(val)); } catch(...) { v.push_back(0.0f); }
-                    }
+                    while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
 
                     // Expected 14 values
                     if (v.size() >= 14) {
@@ -389,6 +406,9 @@ void GLEWSFMLRenderer::onRenderEntityCommand(const std::string& message) {
                     }
                 }
             }
+        }
+        } catch (const std::exception& e) {
+            std::cerr << "[GLEWSFMLRenderer] RenderEntity parse error: " << e.what() << " in msg='" << message << "'" << std::endl;
         }
     }
 }

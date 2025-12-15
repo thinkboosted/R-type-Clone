@@ -88,6 +88,12 @@ private:
   std::shared_ptr<udp::socket> _socket;
   std::array<char, 65536> _recvBuffer{};
 
+  // Debug counters/telemetry
+  std::atomic<uint64_t> _enqueuedTotal{0};
+  std::atomic<uint64_t> _overflowTotal{0};
+  size_t _maxQueueSizeObserved = 0;
+  std::chrono::steady_clock::time_point _lastOverflowLog;
+
   std::mutex _queueMutex;
   std::deque<NetworkEnvelope> _messageQueue;
 

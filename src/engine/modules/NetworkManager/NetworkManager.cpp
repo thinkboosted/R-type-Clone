@@ -63,6 +63,7 @@ NetworkManager::NetworkManager(const char *pubEndpoint, const char *subEndpoint)
   auto now = std::chrono::steady_clock::now();
   _lastHeartbeatTime = now;
   _lastTimeoutCheckTime = now;
+  _lastOverflowLog = now;
 }
 
 NetworkManager::~NetworkManager() { cleanup(); }
@@ -564,11 +565,31 @@ void NetworkManager::sendToEndpoint(const udp::endpoint &endpoint,
 
 void NetworkManager::enqueueMessage(const NetworkEnvelope &envelope) {
   std::lock_guard<std::mutex> lock(_queueMutex);
+  _enqueuedTotal.fetch_add(1, std::memory_order_relaxed);
   _messageQueue.push_back(envelope);
-  if (_messageQueue.size() > 1024) {
+
+  const auto qSize = _messageQueue.size();
+  if (qSize > _maxQueueSizeObserved) {
+    _maxQueueSizeObserved = qSize;
+  }
+
+  constexpr size_t QUEUE_LIMIT = 4096;
+
+  if (_messageQueue.size() > QUEUE_LIMIT) {
     _messageQueue.pop_front();
-    publishError("MessageQueueOverflow: Oldest message dropped due to queue "
-                 "size limit (1024).");
+    const auto overflowCount = _overflowTotal.fetch_add(1, std::memory_order_relaxed) + 1;
+    auto now = std::chrono::steady_clock::now();
+    if (now - _lastOverflowLog >= std::chrono::seconds(1)) {
+      _lastOverflowLog = now;
+      std::ostringstream oss;
+      oss << "MessageQueueOverflow: dropped oldest. limit=" << QUEUE_LIMIT
+          << " queueSize=" << _messageQueue.size()
+          << " maxObserved=" << _maxQueueSizeObserved
+          << " enqueuedTotal=" << _enqueuedTotal.load(std::memory_order_relaxed)
+          << " overflowTotal=" << overflowCount
+          << " lastTopic=" << envelope.topic;
+      publishError(oss.str());
+    }
   }
 }
 

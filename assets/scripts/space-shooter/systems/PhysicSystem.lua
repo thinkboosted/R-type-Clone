@@ -8,6 +8,9 @@ function PhysicSystem.init()
 end
 
 function PhysicSystem.update(dt)
+    if not ECS.isServer() and not ECS.isLocal then return end
+    if not ECS.isGameRunning then return end
+
     local entities = ECS.getEntitiesWith({"Transform", "Physic"})
 
     for _, id in ipairs(entities) do

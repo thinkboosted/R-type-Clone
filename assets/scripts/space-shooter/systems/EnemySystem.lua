@@ -8,9 +8,13 @@ EnemySystem.baseSpeed = 5.0
 
 function EnemySystem.init()
     print("[EnemySystem] Initialized")
+    EnemySystem.resetDifficulty() -- Clear state on init
 end
 
 function EnemySystem.update(dt)
+    if not ECS.isServer() and not ECS.isLocal then return end
+    if not ECS.isGameRunning then return end
+
     -- Wait for players to join before simulating enemies
     local players = ECS.getEntitiesWith({"Player"})
     -- print("DEBUG: EnemySystem found " .. #players .. " players") -- Uncomment for spam debug
@@ -45,13 +49,16 @@ end
 
 function EnemySystem.spawnEnemy()
     local y = math.random(-5, 5)
-    local x = 25 -- Spawn off-screen right
+    local x = 25 
 
     local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0)
     local speed = EnemySystem.baseSpeed * difficultyMultiplier
     if speed > 15.0 then
-        speed = 15.0 -- Cap max speed
+        speed = 15.0
     end
+    
+    -- Debug Difficulty
+    -- print("Spawning Enemy. Time: " .. EnemySystem.gameTime .. " Speed: " .. speed)
 
     local enemy = ECS.createEntity()
     ECS.addComponent(enemy, "Transform", Transform(x, y, 0))
@@ -65,5 +72,20 @@ function EnemySystem.spawnEnemy()
     local p = ECS.getComponent(enemy, "Physic")
     p.vx = -speed
 end
+
+-- Hook for NetworkSystem to reset
+function EnemySystem.resetDifficulty()
+    print("[EnemySystem] Resetting Difficulty")
+    EnemySystem.gameTime = 0
+    EnemySystem.spawnTimer = 0
+end
+
+-- Subscribe to global event if possible, or poll?
+-- LuaECSManager doesn't allow calling System function from another System easily without event.
+-- Let's stick to simple var reset if reloading script, but script stays loaded on server.
+-- We can add a subscription to "RESET_DIFFICULTY"
+ECS.subscribe("RESET_DIFFICULTY", function(msg)
+    EnemySystem.resetDifficulty()
+end)
 
 ECS.registerSystem(EnemySystem)

@@ -5,43 +5,61 @@ function LifeSystem.init()
 end
 
 function LifeSystem.update(dt)
+    if not ECS.isServer() and not ECS.isLocal then return end
+    if not ECS.isGameRunning then return end
+
     local entities = ECS.getEntitiesWith({"Life"})
 
     for _, id in ipairs(entities) do
         local life = ECS.getComponent(id, "Life")
-        if life.amount <= 0 then
-            -- Check if it's the player
-            local player = ECS.getComponent(id, "Player")
-            if player then
-                -- Get final score
-                local scoreEntities = ECS.getEntitiesWith({"Score"})
-                local finalScore = 0
-                if #scoreEntities > 0 then
-                    local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
-                    finalScore = scoreComp.value
+
+        if life.invulnerableTime and life.invulnerableTime > 0 then
+            life.invulnerableTime = math.max(0, life.invulnerableTime - dt)
+            -- Skip death while invulnerable
+        else
+            if life.amount <= 0 then
+                local player = ECS.getComponent(id, "Player")
+                local enemy = ECS.getComponent(id, "Enemy")
+
+                if enemy and ECS.isServer() and not life.deathEventSent then
+                    local t = ECS.getComponent(id, "Transform")
+                    local phys = ECS.getComponent(id, "Physic")
+                    local vx, vy, vz = 0, 0, 0
+                    if phys then
+                        vx, vy, vz = phys.vx or 0, phys.vy or 0, phys.vz or 0
+                    end
+                    if t then
+                        local msg = string.format("%s %f %f %f %f %f %f", id, t.x, t.y, t.z, vx, vy, vz)
+                        ECS.broadcastNetworkMessage("ENEMY_DEAD", msg)
+                        life.deathEventSent = true
+                    end
                 end
-                print("GAME OVER: Player died! Final Score: " .. finalScore)
-                
-                -- Send Game Over to Client
-                -- We need the ClientID. In NetworkSystem spawn, we attached "NetworkId" component?
-                -- Let's assume we can get it or just broadcast if simple
-                -- For now, broadcast GAME_OVER {Score} might kill everyone's game if logic is generic?
-                -- We should target.
-                -- Let's try to find the client ID from NetworkSystem map if accessible, or add NetworkId component.
-                -- Added "NetworkId" component in NetworkSystem.spawnPlayerForClient.
-                
-                local netId = ECS.getComponent(id, "NetworkId")
-                if netId then
-                    ECS.sendToClient(tonumber(netId.id), "GAME_OVER", tostring(finalScore))
+
+                if player then
+                    print("DEBUG: Player Dead. Life Amount: " .. life.amount)
+                    local scoreEntities = ECS.getEntitiesWith({"Score"})
+                    local finalScore = 0
+                    if #scoreEntities > 0 then
+                        local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
+                        finalScore = scoreComp.value
+                    end
+                    print("GAME OVER: Player died! Final Score: " .. finalScore)
+
+                    local netId = ECS.getComponent(id, "NetworkId")
+                    if netId then
+                        ECS.sendToClient(tonumber(netId.id), "GAME_OVER", tostring(finalScore))
+                        ECS.sendMessage("SERVER_PLAYER_DEAD", tostring(netId.id))
+                    end
+                end
+
+                ECS.destroyEntity(id)
+
+                if ECS.isServer() then
+                    ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
+                elseif ECS.isLocal and player then
+                    ECS.sendMessage("GAME_OVER", tostring(finalScore))
                 end
             end
-
-            ECS.destroyEntity(id)
-            
-            if ECS.isServer() then
-                ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
-            end
-
         end
     end
 end
