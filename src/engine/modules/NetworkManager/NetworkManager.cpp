@@ -144,9 +144,6 @@ void NetworkManager::startIoContext() {
 }
 
 void NetworkManager::stopIoContext() {
-    if (!_workGuard && !_ioThreadRunning && !_ioThread.joinable()) {
-        return;
-    }
     if (_workGuard) {
         _workGuard.reset();
     }
@@ -453,40 +450,54 @@ void NetworkManager::processIncomingBuffer(const std::vector<char>& buffer, cons
 }
 
 uint32_t NetworkManager::getOrCreateClientId(const udp::endpoint& endpoint) {
-    std::lock_guard<std::mutex> lock(_clientsMutex);
     std::string key = endpointToString(endpoint);
+    uint32_t clientId = 0;
+    bool isNewClient = false;
 
-    auto it = _endpointToClientId.find(key);
-    if (it != _endpointToClientId.end()) {
-        return it->second;
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
+        auto it = _endpointToClientId.find(key);
+        if (it != _endpointToClientId.end()) {
+            return it->second;
+        }
+
+        // New client
+        clientId = _nextClientId++;
+        _endpointToClientId[key] = clientId;
+
+        ClientSession session;
+        session.id = clientId;
+        session.endpoint = endpoint;
+        session.lastActivity = std::chrono::steady_clock::now();
+        session.connected = true;
+        _clients[clientId] = session;
+        isNewClient = true;
     }
 
-    // New client
-    uint32_t clientId = _nextClientId++;
-    _endpointToClientId[key] = clientId;
-
-    ClientSession session;
-    session.id = clientId;
-    session.endpoint = endpoint;
-    session.lastActivity = std::chrono::steady_clock::now();
-    session.connected = true;
-    _clients[clientId] = session;
-
     // Notify about new client
-    queueBusMessage("ClientConnected", std::to_string(clientId) + " " + key);
+    if (isNewClient) {
+        queueBusMessage("ClientConnected", std::to_string(clientId) + " " + key);
+    }
 
     return clientId;
 }
 
 void NetworkManager::updateClientActivity(uint32_t clientId) {
-    std::lock_guard<std::mutex> lock(_clientsMutex);
-    auto it = _clients.find(clientId);
-    if (it != _clients.end()) {
-        it->second.lastActivity = std::chrono::steady_clock::now();
-        if (!it->second.connected) {
-            it->second.connected = true;
-            queueBusMessage("ClientReconnected", std::to_string(clientId));
+    bool wasReconnected = false;
+    {
+        std::lock_guard<std::mutex> lock(_clientsMutex);
+        auto it = _clients.find(clientId);
+        if (it != _clients.end()) {
+            it->second.lastActivity = std::chrono::steady_clock::now();
+            if (!it->second.connected) {
+                it->second.connected = true;
+                wasReconnected = true;
+            }
         }
+    }
+
+    if (wasReconnected) {
+        queueBusMessage("ClientReconnected", std::to_string(clientId));
     }
 }
 
@@ -539,6 +550,7 @@ void NetworkManager::enqueueMessage(const NetworkEnvelope& envelope) {
     _messageQueue.push_back(envelope);
     if (_messageQueue.size() > 1024) {
         _messageQueue.pop_front();
+        publishError("MessageQueueOverflow: Oldest message dropped due to queue size limit (1024).");
     }
 }
 
