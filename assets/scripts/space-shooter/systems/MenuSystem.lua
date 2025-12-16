@@ -14,6 +14,14 @@ function MenuSystem.init()
     print("[MenuSystem] Initialized")
     ECS.subscribe("MousePressed", MenuSystem.onMousePressed)
 
+    -- Create GameState entity required by NetworkSystem
+    local gs = ECS.createEntity()
+    ECS.addComponent(gs, "GameState", GameState("MENU", 0))
+    if ECS.capabilities.hasAuthority then
+        ECS.addComponent(gs, "ServerAuthority", ServerAuthority())
+    end
+    print("[MenuSystem] GameState entity created: " .. gs)
+
     MenuSystem.renderMenu() -- One-shot render
 end
 
@@ -79,9 +87,21 @@ function MenuSystem.onMousePressed(msg)
 
     local choice = (x < 400) and "SOLO" or "MULTI"
 
+    -- Update GameState
+    local gsEntities = ECS.getEntitiesWith({"GameState"})
+    if #gsEntities > 0 then
+        local gs = ECS.getComponent(gsEntities[1], "GameState")
+        gs.state = "PLAYING"
+    end
+
     if choice == "SOLO" then
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO") -- Call the new C++ function
+        
+        -- Add Authority to GameState now that we are Solo/Server
+        if #gsEntities > 0 then
+             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
+        end
         
         ECS.isGameRunning = true
         Spawns.createPlayer(-8, 0, 0, nil)
@@ -93,6 +113,11 @@ function MenuSystem.onMousePressed(msg)
     elseif choice == "MULTI" then
         MenuSystem.hideMenu()
         ECS.setGameMode("MULTI_CLIENT") -- Call the new C++ function, assuming menu choice leads to client
+        
+        -- Signal server to start the game (payload must not be empty for topic parsing)
+        print("[MenuSystem] Sending REQUEST_GAME_START to server...")
+        ECS.sendNetworkMessage("REQUEST_GAME_START", "1")
+
         -- The actual network connection and whether it's a "server" or "client" for real
         -- will be determined by the network module and ECS.isServer()
         -- The network module will update ECS.capabilities again via the NetworkStatus message.

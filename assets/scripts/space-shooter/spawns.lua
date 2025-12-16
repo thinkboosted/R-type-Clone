@@ -56,8 +56,49 @@ function Spawns.createPlayer(x, y, z, clientId)
     if isLocal or hasRendering() then
         ECS.addComponent(e, "ClientPredicted", ClientPredicted())
         ECS.addComponent(e, "InputBuffer", InputBuffer(60))
+        
+        -- Reactor Particles (Blue Trail)
+        -- ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
+        ECS.addComponent(e, "ParticleGenerator", ParticleGenerator(
+            -1.0, 0, 0,   -- Offset (Behind)
+            -1, 0, 0,     -- Direction (Backwards)
+            0.2,          -- Spread
+            2.0,          -- Speed
+            0.5,          -- LifeTime
+            50.0,         -- Rate
+            0.1,          -- Size
+            0.0, 0.5, 1.0 -- Color (Blue)
+        ))
     end
 
+    return e
+end
+
+-- ============================================================================
+-- EXPLOSION
+-- ============================================================================
+function Spawns.createExplosion(x, y, z)
+    if not hasRendering() then return end
+
+    local e = ECS.createEntity()
+    
+    ECS.addComponent(e, "Transform", Transform(x, y, z))
+    ECS.addComponent(e, "ParticleGenerator", ParticleGenerator(
+        0, 0, 0,      -- Offset
+        0, 1, 0,      -- Direction (Omni-ish due to spread)
+        360.0,        -- Spread (Full sphere)
+        5.0,          -- Speed
+        0.5,          -- LifeTime
+        200.0,        -- Rate (Burst)
+        0.2,          -- Size
+        1.0, 0.5, 0.0 -- Color (Orange)
+    ))
+    
+    -- Self-destruct after 0.5s using LifeSystem logic
+    local life = Life(0)
+    life.invulnerableTime = 0.5
+    ECS.addComponent(e, "Life", life)
+    
     return e
 end
 

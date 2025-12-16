@@ -10,6 +10,7 @@
 -- - All clients see the same state
 -- ============================================================================
 
+local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
 local LifeSystem = {}
 
 function LifeSystem.init()
@@ -21,10 +22,16 @@ function LifeSystem.update(dt)
     if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end
 
-    local entities = ECS.getEntitiesWith({"Life"})
+    local entities = ECS.getEntitiesWith({"Life", "Transform"})
 
     for _, id in ipairs(entities) do
         local life = ECS.getComponent(id, "Life")
+        local t = ECS.getComponent(id, "Transform")
+
+        -- Boundary Check (Optimization): Destroy entities that go too far off-screen
+        if t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30 then
+            life.amount = 0
+        end
 
         if life.invulnerableTime and life.invulnerableTime > 0 then
             life.invulnerableTime = math.max(0, life.invulnerableTime - dt)
@@ -36,7 +43,6 @@ function LifeSystem.update(dt)
 
                 -- In multiplayer server mode, broadcast enemy death to clients
                 if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
-                    local t = ECS.getComponent(id, "Transform")
                     local phys = ECS.getComponent(id, "Physic")
                     local vx, vy, vz = 0, 0, 0
                     if phys then
@@ -47,6 +53,11 @@ function LifeSystem.update(dt)
                         ECS.broadcastNetworkMessage("ENEMY_DEAD", msg)
                         life.deathEventSent = true
                     end
+                end
+                
+                -- In Solo Mode (Authority + Rendering), spawn explosion locally
+                if enemy and ECS.capabilities.hasRendering then
+                    Spawns.createExplosion(t.x, t.y, t.z)
                 end
 
                 local finalScore = nil

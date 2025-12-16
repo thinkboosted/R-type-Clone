@@ -8,14 +8,16 @@ function InputSystem.init()
 end
 
 function InputSystem.update(dt)
-    if not ECS.capabilities.hasLocalInput then return end
+    -- REMOVED GUARD: Update must run on Server (to process network inputs) AND Client (for prediction)
+    -- if not ECS.capabilities.hasLocalInput then return end
 
-    local entities = ECS.getEntitiesWith({"InputState", "Physic", "Player"})
+    local entities = ECS.getEntitiesWith({"InputState", "Physic", "Player", "Transform"})
 
     for _, id in ipairs(entities) do
         local input = ECS.getComponent(id, "InputState")
         local physic = ECS.getComponent(id, "Physic")
         local player = ECS.getComponent(id, "Player")
+        local transform = ECS.getComponent(id, "Transform")
         local speed = player.speed or 10.0
         
         -- Reset Vitesse
@@ -27,12 +29,23 @@ function InputSystem.update(dt)
         if input.right then physic.vx = speed end
         if input.up then physic.vy = speed end
         if input.down then physic.vy = -speed end
+
+        -- CLIENT PREDICTION: If we don't have authority (Client), apply movement immediately
+        if not ECS.capabilities.hasAuthority then
+             transform.x = transform.x + physic.vx * dt
+             transform.y = transform.y + physic.vy * dt
+        end
     end
 end
 
 function InputSystem.onKeyPressed(key)
     if not ECS.capabilities.hasLocalInput then return end
     
+    -- Network Sync: Send Input to Server
+    if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
+        ECS.sendNetworkMessage("INPUT", key .. " 1")
+    end
+
     local entities = ECS.getEntitiesWith({"InputState"})
     for _, id in ipairs(entities) do
         local input = ECS.getComponent(id, "InputState")
@@ -47,6 +60,11 @@ end
 function InputSystem.onKeyReleased(key)
     if not ECS.capabilities.hasLocalInput then return end
     
+    -- Network Sync: Send Input to Server
+    if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
+        ECS.sendNetworkMessage("INPUT", key .. " 0")
+    end
+
     local entities = ECS.getEntitiesWith({"InputState"})
     for _, id in ipairs(entities) do
         local input = ECS.getComponent(id, "InputState")

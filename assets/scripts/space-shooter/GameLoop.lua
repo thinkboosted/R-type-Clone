@@ -45,11 +45,12 @@ end
 -- ────────────────────────────────────────────────────────────────────────────
 print("[GameLoop] Loading Core Gameplay Systems...")
 
-dofile("assets/scripts/space-shooter/systems/PhysicSystem.lua")
 dofile("assets/scripts/space-shooter/systems/CollisionSystem.lua")
+dofile("assets/scripts/space-shooter/systems/PhysicSystem.lua")
 dofile("assets/scripts/space-shooter/systems/LifeSystem.lua")
 dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/PlayerSystem.lua")
+dofile("assets/scripts/space-shooter/systems/GameStateManager.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Input & Control Systems (Run everywhere, adapt based on mode)
