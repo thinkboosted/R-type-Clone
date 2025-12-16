@@ -151,7 +151,6 @@ void BulletPhysicEngine::sendUpdates() {
             std::string msg = ss.str();
             sendMessage("EntityUpdated", msg);
 
-            std::cout << "[Bullet] Sent EntityUpdated: " << msg << std::endl;
         } else {
             std::cout << "[Bullet] DEBUG: Missing MotionState for body " << pair.first << std::endl;
         }
@@ -493,7 +492,6 @@ void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vec
     }
     it->second->activate(true);
     it->second->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
-    std::cout << "[Bullet] Velocity set for " << id << " (" << vel[0] << ", " << vel[1] << ", " << vel[2] << ")" << std::endl;
 }
 
 void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {
