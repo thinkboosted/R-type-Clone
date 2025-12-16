@@ -14,33 +14,33 @@ int main(int argc, char **argv) {
     }
 
     std::string mode;
-    if (programName == "r-type_server") {
-      mode = "server";
-    } else if (programName == "r-type_client") {
+    // if (programName == "r-type_server") {
+      // mode = "server";
+    // } else if (programName == "r-type_client") {
       mode = "client";
-    } else {
-      std::cerr << "Error: Unknown program name '" << programName
-                << "'. Expected 'r-type_server' or 'r-type_client'."
-                << std::endl;
-      return 1;
-    }
+    // } else {
+    //   std::cerr << "Error: Unknown program name '" << programName
+    //             << "'. Expected 'r-type_server' or 'r-type_client'."
+    //             << std::endl;
+    //   return 1;
+    // }
     appArgs.push_back(mode);
 
     for (int i = 1; i < argc; ++i) {
       appArgs.push_back(argv[i]);
     }
 
-    if (mode == "server" && appArgs.size() < 2) {
-      std::cerr
-          << "Error: Server mode requires a port. Usage: r-type_server <port>"
-          << std::endl;
-      return 1;
-    } else if (mode == "client" && appArgs.size() < 3) {
-      std::cerr << "Error: Client mode requires IP and port. Usage: "
-                   "r-type_client <server_ip> <server_port>"
-                << std::endl;
-      return 1;
-    }
+    // if (mode == "server" && appArgs.size() < 2) {
+    //   std::cerr
+    //       << "Error: Server mode requires a port. Usage: r-type_server <port>"
+    //       << std::endl;
+    //   return 1;
+    // } else if (mode == "client" && appArgs.size() < 3) {
+    //   std::cerr << "Error: Client mode requires IP and port. Usage: "
+    //                "r-type_client <server_ip> <server_port>"
+    //             << std::endl;
+    //   return 1;
+    // }
 
     rtypeGame::Rtype app("127.0.0.1:0", appArgs);
 

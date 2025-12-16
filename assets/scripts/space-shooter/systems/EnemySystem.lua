@@ -4,7 +4,7 @@ EnemySystem.spawnTimer = 0
 EnemySystem.spawnInterval = 2.0 -- Spawn every 2 seconds
 EnemySystem.gameTime = 0
 EnemySystem.baseSpawnInterval = 2.0
-EnemySystem.baseSpeed = 5.0
+EnemySystem.baseSpeed = 10.0
 
 function EnemySystem.init()
     print("[EnemySystem] Initialized")
@@ -61,6 +61,7 @@ function EnemySystem.spawnEnemy()
     ECS.addComponent(enemy, "Collider", Collider("Box", {1, 1, 1}))
     ECS.addComponent(enemy, "Physic", Physic(1.0, 0.0, true, false))
     ECS.addComponent(enemy, "Enemy", Enemy(speed))
+    ECS.addComponent(enemy, "Tag", Tag({"Enemy"}))
     ECS.addComponent(enemy, "Life", Life(1))
     ECS.addComponent(enemy, "Color", Color(1.0, 0.0, 0.0))
 

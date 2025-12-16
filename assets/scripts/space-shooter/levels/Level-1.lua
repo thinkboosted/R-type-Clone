@@ -1,5 +1,13 @@
 -- Game Definition
 
+CurrentLevel = 1
+
+local file = io.open("current_level.txt", "w")
+if file then
+    file:write("1")
+    file:close()
+end
+
 -- Load Components
 dofile("assets/scripts/space-shooter/components/Components.lua")
 
@@ -15,7 +23,7 @@ dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 dofile("assets/scripts/space-shooter/systems/FollowSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
 
-ECS.loadLastSave("space-shooter-save")
+ECS.loadLastSave("space-shooter-save-level-1")
 
 -- Create Camera
 local camera = ECS.createEntity()
@@ -24,11 +32,12 @@ ECS.addComponent(camera, "Camera", Camera(90))
 
 -- Create Player
 local player = ECS.createEntity()
-ECS.addComponent(player, "Transform", Transform(-8, 0, 0, 0, 0, -90))
+ECS.addComponent(player, "Transform", Transform(-8, 0, 0, 0, 0, 0))
 ECS.addComponent(player, "Mesh", Mesh("assets/models/aircraft.obj"))
 ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
 ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false)) -- mass 1, friction 0, fixedRot, noGravity
 ECS.addComponent(player, "Player", Player(20.0))
+ECS.addComponent(player, "Tag", Tag({"Player"}))
 ECS.addComponent(player, "Life", Life(3))
 ECS.addComponent(player, "Color", Color(0.0, 1.0, 0.0)) -- Green player
 ECS.addComponent(player, "ParticleGenerator", ParticleGenerator(
@@ -56,4 +65,4 @@ ECS.addComponent(playerTag, "Text", Text("Player1", "assets/fonts/arial.ttf", 24
 ECS.addComponent(playerTag, "Color", Color(1.0, 1.0, 0.0))
 ECS.addComponent(playerTag, "Follow", Follow(player, 0, 2.5, 0))
 
-print("Space Shooter Game Loaded")
+print("Level 1 loaded!")
