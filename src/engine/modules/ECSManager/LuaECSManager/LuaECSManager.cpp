@@ -23,7 +23,7 @@ namespace rtypeEngine {
     }
 
     void LuaECSManager::init() {
-        _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math);
+        _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math, sol::lib::io, sol::lib::os);
 
         setupLuaBindings();
 
@@ -350,6 +350,19 @@ namespace rtypeEngine {
         ecs.set_function("getSaves", [this](const std::string& saveName) {
             sendMessage("GetSaves", saveName);
         });
+
+        ecs.set_function("removeSystems", [this]() {
+            _systems.clear();
+        });
+
+        ecs.set_function("removeEntities", [this]() {
+            for (const auto& id : _entities) {
+                sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+                sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
+            }
+            _entities.clear();
+            _pools.clear();
+        });
     }
 
     void LuaECSManager::loadScript(const std::string& path) {
@@ -361,7 +374,7 @@ namespace rtypeEngine {
         }
     }
 
-    void LuaECSManager::unloadScript(const std::string& /*path*/) {
+    void LuaECSManager::unloadScript(const std::string& path) {
         try {
             for (const auto& id : _entities) {
                 sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
@@ -385,10 +398,10 @@ namespace rtypeEngine {
 
     void LuaECSManager::loop() {
         auto frameDuration = std::chrono::milliseconds(16);
-        for (auto& system : _systems) {
-            if (system["update"].valid()) {
+        for (size_t i = 0; i < _systems.size(); ++i) {
+            if (_systems[i]["update"].valid()) {
                 try {
-                    system["update"](0.016f);
+                    _systems[i]["update"](0.016f);
                 } catch (const sol::error& e) {
                     std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
                 }

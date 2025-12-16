@@ -93,6 +93,7 @@ function InputSystem.spawnBullet(x, y, z)
     ECS.addComponent(bullet, "Collider", Collider("Sphere", {0.2}))
     ECS.addComponent(bullet, "Physic", Physic(1.0, 0.0, true, false))
     ECS.addComponent(bullet, "Bullet", Bullet(10))
+    ECS.addComponent(bullet, "Tag", Tag({"Bullet"}))
     ECS.addComponent(bullet, "Life", Life(1))
     ECS.addComponent(bullet, "Color", Color(1.0, 1.0, 0.0))
     ECS.addComponent(bullet, "ParticleGenerator", ParticleGenerator(
@@ -150,15 +151,17 @@ function InputSystem.onKeyReleased(key)
     elseif key == "SPACE" then
         InputSystem.keys.shoot = false
     elseif key == "R" then
-        ECS.sendMessage("UnloadScript", "assets/scripts/space-shooter/Game.lua");
-        ECS.sendMessage("LoadScript", "assets/scripts/space-shooter/Game.lua");
+        ECS.sendMessage("UnloadScript", "assets/scripts/space-shooter/Main.lua");
+        ECS.sendMessage("LoadScript", "assets/scripts/space-shooter/Main.lua");
     elseif key == "ESCAPE" then
         local players = ECS.getEntitiesWith({"Player", "Life"})
         local player = players and players[1]
         if player then
             local lifeComp = ECS.getComponent(player, "Life")
             if lifeComp and lifeComp.amount > 0 then
-                ECS.saveState("space-shooter-save")
+                local saveName = "space-shooter-save-level-" .. (CurrentLevel or 1)
+                ECS.saveState(saveName)
+                print("Saved state to " .. saveName)
             end
         end
         ECS.sendMessage("ExitApplication", "")
