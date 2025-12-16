@@ -629,9 +629,6 @@ void GLEWSFMLRenderer::destroyFramebuffer() {
     if (_depthBuffer) { glDeleteRenderbuffers(1, &_depthBuffer); _depthBuffer = 0; }
 }
 
-void GLEWSFMLRenderer::addMesh() {
-}
-
 void GLEWSFMLRenderer::clearBuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);

@@ -22,7 +22,6 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void onRenderEntityCommand(const std::string& message);
     void handleWindowResized(const std::string& message);
 
-    void addMesh(/* mesh parameters */) override;
     void clearBuffer() override;
     void render() override;
     std::vector<uint32_t> getPixels() const override;
