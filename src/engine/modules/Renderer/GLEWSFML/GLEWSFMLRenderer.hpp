@@ -85,6 +85,8 @@ class GLEWSFMLRenderer : public I3DRenderer {
     struct MeshData {
         std::vector<float> vertices;
         std::vector<unsigned int> indices;
+        std::vector<float> uvs;
+        std::vector<unsigned int> _textureIndices;
     };
 
     Vector2u _resolution;
