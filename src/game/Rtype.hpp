@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "../engine/app/AApplication.hpp"
@@ -6,17 +5,24 @@
 #include <vector>
 
 namespace rtypeGame {
-class Rtype : public rtypeEngine::AApplication {
-public:
-  Rtype(const std::string &endpoint, const std::vector<std::string> &args);
-  void init() override;
-  void loop() override;
 
-private:
-  bool _scriptsLoaded = false;
-  std::vector<std::string> _args;
-  bool _networkInitDone = false;
-  bool _spacePressed = false;
-  uint32_t _myClientId = 0; // To store the client ID assigned by the server
+class RTypeGame : public rtypeEngine::AApplication {
+public:
+    RTypeGame();
+    virtual ~RTypeGame() = default;
+
+    void loadModule(const std::string &moduleName);
+
+    void init() override;
+
+protected:
+    virtual void onInit() = 0;
+    virtual void onLoop() = 0;
+
+    void loop() override;
+
+    bool _scriptsLoaded = false;
+    bool _networkInitDone = false;
 };
+
 } // namespace rtypeGame

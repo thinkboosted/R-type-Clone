@@ -32,6 +32,12 @@ private:
   std::unordered_map<std::string, ComponentPool> _pools;
   std::map<std::string, std::vector<sol::function>> _luaListeners;
   bool _isServer = false;
+  sol::table _capabilities;
+
+  std::chrono::high_resolution_clock::time_point _lastFrameTime;
+  double _accumulator = 0.0;
+  const double FIXED_DT = 1.0 / 60.0;  // 60 Hz (16.666ms)
+  const double MAX_FRAME_TIME = 0.25;
 
   void setupLuaBindings();
   std::string generateUuid();

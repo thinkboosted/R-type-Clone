@@ -37,8 +37,8 @@ void BulletPhysicEngine::init() {
     _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
-
-    _dynamicsWorld->setGravity(btVector3(0, -30, 0));
+    // Need to be changed in lua
+    _dynamicsWorld->setGravity(btVector3(0, 0, 0));
 
     subscribe("PhysicCommand", [this](const std::string& msg) {
         this->onPhysicCommand(msg);
@@ -65,6 +65,11 @@ void BulletPhysicEngine::cleanup() {
 }
 
 void BulletPhysicEngine::loop() {
+    static int heartbeat = 0;
+    if (++heartbeat % 60 == 0) {
+        std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodies.size() << std::endl;
+    }
+
     stepSimulation();
     checkCollisions();
     sendUpdates();
@@ -129,7 +134,6 @@ void BulletPhysicEngine::checkCollisions() {
 }
 
 void BulletPhysicEngine::sendUpdates() {
-    std::stringstream ss;
     for (auto& pair : _bodies) {
         btTransform trans;
         if (pair.second && pair.second->getMotionState()) {
@@ -139,14 +143,18 @@ void BulletPhysicEngine::sendUpdates() {
             btScalar yaw, pitch, roll;
             trans.getBasis().getEulerYPR(yaw, pitch, roll);
 
+            std::stringstream ss;
             ss << "EntityUpdated:" << pair.first << ":"
                << pos.x() << "," << pos.y() << "," << pos.z() << ":"
                << pitch << "," << yaw << "," << roll << ";";
+
+            std::string msg = ss.str();
+            sendMessage("EntityUpdated", msg);
+
+            std::cout << "[Bullet] Sent EntityUpdated: " << msg << std::endl;
+        } else {
+            std::cout << "[Bullet] DEBUG: Missing MotionState for body " << pair.first << std::endl;
         }
-    }
-    std::string msg = ss.str();
-    if (!msg.empty()) {
-        sendMessage("EntityUpdated", msg);
     }
 }
 
@@ -165,25 +173,31 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
 
             if (command == "CreateBody") {
                 size_t split1 = data.find(':');
-                if (split1 != std::string::npos) {
-                    std::string id = data.substr(0, split1);
-                    std::string rest = data.substr(split1 + 1);
-                    size_t split2 = rest.find(':');
-                    if (split2 != std::string::npos) {
-                        std::string type = rest.substr(0, split2);
-                        std::string paramsStr = rest.substr(split2 + 1);
+                if (split1 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: CreateBody (missing id/type)" << std::endl;
+                    continue;
+                }
 
-                        std::vector<float> params;
-                        std::stringstream pss(paramsStr);
-                        std::string p;
-                        while (std::getline(pss, p, ',')) {
-                            if (!p.empty()) {
-                                params.push_back(safeStof(p));
-                            }
-                        }
-                        createBody(id, type, params);
+                std::string id = data.substr(0, split1);
+                std::string rest = data.substr(split1 + 1);
+                size_t split2 = rest.find(':');
+                if (split2 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: CreateBody (missing type/params) for id '" << id << "'" << std::endl;
+                    continue;
+                }
+
+                std::string type = rest.substr(0, split2);
+                std::string paramsStr = rest.substr(split2 + 1);
+
+                std::vector<float> params;
+                std::stringstream pss(paramsStr);
+                std::string p;
+                while (std::getline(pss, p, ',')) {
+                    if (!p.empty()) {
+                        params.push_back(safeStof(p));
                     }
                 }
+                createBody(id, type, params);
             } else if (command == "ApplyForce") {
                 size_t split = data.find(':');
                 if (split != std::string::npos) {
@@ -255,21 +269,27 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                 }
             } else if (command == "SetLinearVelocity") {
                 size_t split1 = data.find(':');
-                if (split1 != std::string::npos) {
-                    std::string id = data.substr(0, split1);
-                    std::string velStr = data.substr(split1 + 1);
-
-                    std::vector<float> vel;
-                    std::stringstream vss(velStr);
-                    std::string v;
-                    while (std::getline(vss, v, ',')) {
-                        if (!v.empty()) vel.push_back(safeStof(v));
-                    }
-
-                    if (vel.size() == 3) {
-                        setLinearVelocity(id, vel);
-                    }
+                if (split1 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: SetLinearVelocity (missing id)" << std::endl;
+                    continue;
                 }
+
+                std::string id = data.substr(0, split1);
+                std::string velStr = data.substr(split1 + 1);
+
+                std::vector<float> vel;
+                std::stringstream vss(velStr);
+                std::string v;
+                while (std::getline(vss, v, ',')) {
+                    if (!v.empty()) vel.push_back(safeStof(v));
+                }
+
+                if (vel.size() != 3) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: SetLinearVelocity (expected 3 components) for id '" << id << "'" << std::endl;
+                    continue;
+                }
+
+                setLinearVelocity(id, vel);
             } else if (command == "SetAngularVelocity") {
                 size_t split1 = data.find(':');
                 if (split1 != std::string::npos) {
@@ -356,14 +376,15 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
 }
 
 void BulletPhysicEngine::destroyBody(const std::string& id) {
-    if (_bodies.find(id) != _bodies.end()) {
-        btRigidBody* body = _bodies[id];
+    auto it = _bodies.find(id);
+    if (it != _bodies.end()) {
+        btRigidBody* body = it->second;
         _dynamicsWorld->removeRigidBody(body);
         delete body->getMotionState();
         delete body->getCollisionShape();
         delete body;
-        _bodies.erase(id);
         _bodyIds.erase(body);
+        _bodies.erase(it);
     }
 }
 
@@ -372,36 +393,46 @@ void BulletPhysicEngine::createBody(const std::string& id, const std::string& ty
     btScalar mass(1.f);
     btScalar friction(0.5f);
 
-    if (type == "Box" && params.size() >= 3) {
+    std::string typeLower = type;
+    std::transform(typeLower.begin(), typeLower.end(), typeLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (typeLower == "box" && params.size() >= 3) {
         shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
         if (params.size() >= 4) mass = params[3];
         if (params.size() >= 5) friction = params[4];
-    } else if (type == "Sphere" && params.size() >= 1) {
+    } else if (typeLower == "sphere" && params.size() >= 1) {
         shape = new btSphereShape(params[0]);
         if (params.size() >= 2) mass = params[1];
         if (params.size() >= 3) friction = params[2];
+    } else {
+        std::cerr << "[Bullet] ERROR: CreateBody unknown type or insufficient params for '" << id << "' (type='" << type << "', params=" << params.size() << ")" << std::endl;
+        return;
     }
 
-    if (shape) {
-        btTransform startTransform;
-        startTransform.setIdentity();
-        startTransform.setOrigin(btVector3(0, 0, 0));
-
-        bool isDynamic = (mass != 0.f);
-
-        btVector3 localInertia(0, 0, 0);
-        if (isDynamic)
-            shape->calculateLocalInertia(mass, localInertia);
-
-        btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
-        btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
-        rbInfo.m_friction = friction;
-        btRigidBody* body = new btRigidBody(rbInfo);
-
-        _dynamicsWorld->addRigidBody(body);
-        _bodies[id] = body;
-        _bodyIds[body] = id;
+    if (!shape) {
+        std::cerr << "[Bullet] ERROR: CreateBody failed to create shape for '" << id << "'" << std::endl;
+        return;
     }
+
+    btTransform startTransform;
+    startTransform.setIdentity();
+    startTransform.setOrigin(btVector3(0, 0, 0));
+
+    bool isDynamic = (mass != 0.f);
+    btVector3 localInertia(0, 0, 0);
+    if (isDynamic) {
+        shape->calculateLocalInertia(mass, localInertia);
+    }
+
+    btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
+    rbInfo.m_friction = friction;
+    btRigidBody* body = new btRigidBody(rbInfo);
+
+    _dynamicsWorld->addRigidBody(body);
+    _bodies[id] = body;
+    _bodyIds[body] = id;
+    std::cout << "[Bullet] Created Body for ID: " << id << " (Mass: " << mass << ", Friction: " << friction << ")" << std::endl;
 }
 
 void BulletPhysicEngine::applyForce(const std::string& id, const std::vector<float>& force) {
@@ -455,10 +486,14 @@ void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::ve
 }
 
 void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& vel) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
+    auto it = _bodies.find(id);
+    if (it == _bodies.end()) {
+        std::cerr << "[Bullet] ERROR: SetLinearVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
+        return;
     }
+    it->second->activate(true);
+    it->second->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
+    std::cout << "[Bullet] Velocity set for " << id << " (" << vel[0] << ", " << vel[1] << ", " << vel[2] << ")" << std::endl;
 }
 
 void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {

@@ -16,7 +16,10 @@
 namespace rtypeEngine {
 
 LuaECSManager::LuaECSManager(const char *pubEndpoint, const char *subEndpoint)
-    : IECSManager(pubEndpoint, subEndpoint) {}
+    : IECSManager(pubEndpoint, subEndpoint) {
+  // Initialize Fixed Timestep timer
+  _lastFrameTime = std::chrono::high_resolution_clock::now();
+}
 
 LuaECSManager::~LuaECSManager() {}
 
@@ -24,14 +27,34 @@ void LuaECSManager::init() {
   _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string,
                       sol::lib::table, sol::lib::math);
 
-  setupLuaBindings();
+  try {
+    setupLuaBindings();
+  } catch (const sol::error &e) {
+    std::cerr << "[LuaECSManager] ERROR in setupLuaBindings: " << e.what() << std::endl;
+  } catch (const std::exception &e) {
+    std::cerr << "[LuaECSManager] ERROR in setupLuaBindings (std): " << e.what() << std::endl;
+  }
 
   subscribe("NetworkStatus", [this](const std::string &msg) {
     if (msg.find("Bound") != std::string::npos) {
       _isServer = true;
+      _capabilities["isServer"] = true;
+      _capabilities["isClientMode"] = false;
+      _capabilities["isLocalMode"] = false; // Not local if it's a dedicated server
+      _capabilities["hasAuthority"] = true;
+      _capabilities["hasRendering"] = false; // Dedicated server doesn't render
+      _capabilities["hasLocalInput"] = false;
+      _capabilities["hasNetworkSync"] = true;
       std::cout << "[LuaECSManager] Detected Server Mode" << std::endl;
     } else if (msg.find("Connected") != std::string::npos) {
       _isServer = false;
+      _capabilities["isServer"] = false;
+      _capabilities["isClientMode"] = true;
+      _capabilities["isLocalMode"] = false;
+      _capabilities["hasAuthority"] = false; // Client doesn't have authority
+      _capabilities["hasRendering"] = true;
+      _capabilities["hasLocalInput"] = true;
+      _capabilities["hasNetworkSync"] = true;
       std::cout << "[LuaECSManager] Detected Client Mode" << std::endl;
     }
   });
@@ -180,6 +203,17 @@ void LuaECSManager::init() {
           }
         }
       }
+
+      // Keep the renderer in sync even if a Lua handler is missing.
+      std::stringstream renderStream;
+      renderStream << "SetPosition:" << id << "," << x << "," << y
+                   << "," << z;
+      sendMessage("RenderEntityCommand", renderStream.str());
+
+      std::stringstream rotStream;
+      rotStream << "SetRotation:" << id << "," << rx << "," << ry
+                 << "," << rz;
+      sendMessage("RenderEntityCommand", rotStream.str());
     }
   });
 
@@ -219,10 +253,69 @@ std::string LuaECSManager::generateUuid() {
 }
 
 void LuaECSManager::setupLuaBindings() {
+  std::cout << "[LuaECSManager] DEBUG: setupLuaBindings() START" << std::endl;
+  std::cout.flush();
+  
   auto ecs = _lua.create_named_table("ECS");
 
-  ecs.set_function("isServer", [this]() { return _isServer; });
+  // Initialize the capabilities table and expose it
+  _capabilities = _lua.create_named_table("capabilities");
+  ecs["capabilities"] = _capabilities;
 
+  // Set initial default capabilities
+  _capabilities["hasAuthority"] = false;
+  _capabilities["hasRendering"] = false;
+  _capabilities["hasLocalInput"] = false;
+  _capabilities["hasNetworkSync"] = false;
+  _capabilities["isLocalMode"] = false;
+  _capabilities["isClientMode"] = false;
+  _capabilities["isServer"] = false;
+
+  std::cout << "[LuaECSManager] DEBUG: Created ECS table, adding bindings..." << std::endl;
+
+  // Bind setGameMode function
+  ecs.set_function("setGameMode", [this](const std::string &mode_name) {
+      if (mode_name == "SOLO") {
+          _capabilities["hasAuthority"] = true;
+          _capabilities["hasRendering"] = true;
+          _capabilities["hasLocalInput"] = true;
+          _capabilities["hasNetworkSync"] = false;
+          _capabilities["isLocalMode"] = true;
+          _capabilities["isClientMode"] = false;
+          _capabilities["isServer"] = false;
+      } else if (mode_name == "MULTI_CLIENT") {
+          _capabilities["hasAuthority"] = false;
+          _capabilities["hasRendering"] = true;
+          _capabilities["hasLocalInput"] = true;
+          _capabilities["hasNetworkSync"] = true;
+          _capabilities["isLocalMode"] = false;
+          _capabilities["isClientMode"] = true;
+          _capabilities["isServer"] = false;
+      } else if (mode_name == "MULTI_SERVER") {
+          _capabilities["hasAuthority"] = true;
+          _capabilities["hasRendering"] = false;
+          _capabilities["hasLocalInput"] = false;
+          _capabilities["hasNetworkSync"] = true;
+          _capabilities["isLocalMode"] = false;
+          _capabilities["isClientMode"] = false;
+          _capabilities["isServer"] = true;
+      } else {
+          // Default to a safe, disabled state or throw an error
+          _capabilities["hasAuthority"] = false;
+          _capabilities["hasRendering"] = false;
+          _capabilities["hasLocalInput"] = false;
+          _capabilities["hasNetworkSync"] = false;
+          _capabilities["isLocalMode"] = false;
+          _capabilities["isClientMode"] = false;
+          _capabilities["isServer"] = false;
+      }
+      std::cout << "[LuaECSManager] Set game mode to: " << mode_name << std::endl;
+  });
+
+  // Expose isServer, isLocalMode, isClientMode directly from capabilities table
+  ecs.set_function("isServer", [this]() { return _capabilities["isServer"]; });
+  ecs.set_function("isLocalMode", [this]() { return _capabilities["isLocalMode"]; });
+  ecs.set_function("isClientMode", [this]() { return _capabilities["isClientMode"]; });
   ecs.set_function("createEntity", [this]() -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
@@ -307,6 +400,17 @@ void LuaECSManager::setupLuaBindings() {
       }
     }
   });
+
+  std::cout << "[LuaECSManager] DEBUG: Setting hasComponent function..." << std::endl;
+  ecs.set_function("hasComponent", [this](const std::string &id,
+                                          const std::string &name) -> bool {
+    if (_pools.find(name) != _pools.end()) {
+      ComponentPool &pool = _pools[name];
+      return pool.sparse.count(id) > 0;
+    }
+    return false;
+  });
+  std::cout << "[LuaECSManager] DEBUG: hasComponent function set successfully" << std::endl;
 
   ecs.set_function(
       "getComponent",
@@ -436,10 +540,31 @@ void LuaECSManager::setupLuaBindings() {
   ecs.set_function("getSaves", [this](const std::string &saveName) {
     sendMessage("GetSaves", saveName);
   });
+
+  std::cout << "[LuaECSManager] DEBUG: setupLuaBindings completed, ECS table should be available" << std::endl;
 }
 
 void LuaECSManager::loadScript(const std::string &path) {
   try {
+    sol::table ecsGlobal = _lua.globals()["ECS"];
+    if (ecsGlobal.valid()) {
+      std::cout << "[LuaECSManager] DEBUG: ECS table exists before loading script" << std::endl;
+
+      std::cout << "[LuaECSManager] DEBUG: ECS table keys:" << std::endl;
+      for (auto& pair : ecsGlobal) {
+        std::cout << "  - " << pair.first.as<std::string>() << std::endl;
+      }
+
+      sol::function hasComponentFunc = ecsGlobal["hasComponent"];
+      if (hasComponentFunc.valid()) {
+        std::cout << "[LuaECSManager] DEBUG: hasComponent function found" << std::endl;
+      } else {
+        std::cout << "[LuaECSManager] DEBUG: hasComponent function NOT found in ECS table" << std::endl;
+      }
+    } else {
+      std::cout << "[LuaECSManager] DEBUG: ECS table does NOT exist before loading script" << std::endl;
+    }
+
     _lua.script_file(path);
     std::cout << "[LuaECSManager] Loaded script: " << path << std::endl;
   } catch (const sol::error &e) {
@@ -449,18 +574,36 @@ void LuaECSManager::loadScript(const std::string &path) {
 }
 
 void LuaECSManager::loop() {
-  auto frameDuration = std::chrono::milliseconds(16);
-  for (auto &system : _systems) {
-    if (system["update"].valid()) {
-      try {
-        system["update"](0.016f);
-      } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error in system update: " << e.what()
-                  << std::endl;
+  processMessages();
+
+  auto currentTime = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> frameTime = currentTime - _lastFrameTime;
+  _lastFrameTime = currentTime;
+
+  double deltaTime = frameTime.count();
+  if (deltaTime > MAX_FRAME_TIME) {
+    deltaTime = MAX_FRAME_TIME;
+  }
+
+  _accumulator += deltaTime;
+
+  while (_accumulator >= FIXED_DT) {
+    for (auto &system : _systems) {
+      if (system["update"].valid()) {
+        try {
+          system["update"](FIXED_DT);
+        } catch (const sol::error &e) {
+          std::cerr << "[LuaECSManager] Error in system update: " << e.what()
+                    << std::endl;
+        }
       }
     }
+
+    _accumulator -= FIXED_DT;
   }
-  std::this_thread::sleep_for(frameDuration);
+
+  auto sleepTime = std::chrono::milliseconds(10);
+  std::this_thread::sleep_for(sleepTime);
 }
 
 void LuaECSManager::cleanup() {

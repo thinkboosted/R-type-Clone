@@ -1,8 +1,24 @@
 
 #include "AApplication.hpp"
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept> // For std::stoi
+#include <string>
+
+namespace {
+bool debugEnabled() {
+  static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
+  return enabled;
+}
+
+std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
+  if (msg.size() <= limit) {
+    return msg;
+  }
+  return msg.substr(0, limit) + "...";
+}
+} // namespace
 
 namespace rtypeEngine {
 
@@ -81,6 +97,11 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
 
             _isBrokerActive = true;
 
+            if (debugEnabled()) {
+              std::cout << "[App] Broker started (server mode) pub=" << _pubBrokerEndpoint
+                    << " sub=" << _subBrokerEndpoint << std::endl;
+            }
+
             _proxyThread = std::thread([this]() {
                 try {
                     zmq::proxy(zmq::socket_ref(*_xsubSocket), zmq::socket_ref(*_xpubSocket));
@@ -105,6 +126,11 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
             _subscriber->set(zmq::sockopt::subscribe, "");
 
             _isBrokerActive = true;
+
+            if (debugEnabled()) {
+              std::cout << "[App] Broker connected (client mode) pub=" << _pubBrokerEndpoint
+                    << " sub=" << _subBrokerEndpoint << std::endl;
+            }
         } catch (const zmq::error_t& e) {
             std::cerr << "Failed to setup client message connections: " << e.what() << std::endl;
             throw;
@@ -139,6 +165,9 @@ void AApplication::cleanupMessageBroker() {
 }
 
 void AApplication::addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) {
+  if (debugEnabled()) {
+    std::cout << "[App] Loading module: " << modulePath << " pub=" << pubEndpoint << " sub=" << subEndpoint << std::endl;
+  }
   _modules.push_back(_modulesManager->loadModule(modulePath, pubEndpoint, subEndpoint));
 }
 
@@ -149,6 +178,10 @@ void AApplication::run() {
   });
 
   init();
+
+  if (debugEnabled()) {
+    std::cout << "[App] Starting " << _modules.size() << " modules" << std::endl;
+  }
 
   for (const auto &module : _modules) {
     module->start();
@@ -164,6 +197,10 @@ void AApplication::run() {
     module->stop();
   }
 
+  if (debugEnabled()) {
+    std::cout << "[App] Shutdown complete" << std::endl;
+  }
+
   cleanupMessageBroker();
 }
 
@@ -176,6 +213,10 @@ void AApplication::sendMessage(const std::string& topic, const std::string& mess
   zmq::message_t zmqMessage(fullMessage.size());
   memcpy(zmqMessage.data(), fullMessage.c_str(), fullMessage.size());
   _publisher->send(zmqMessage, zmq::send_flags::none);
+
+  if (debugEnabled()) {
+    std::cout << "[Bus->] " << topic << " | " << truncatePayload(message) << std::endl;
+  }
 }
 
 std::string AApplication::getMessage(const std::string& topic) {
@@ -252,6 +293,13 @@ void AApplication::processMessages() {
     size_t spacePos = fullMessage.find(' ');
     if (spacePos != std::string::npos) {
       messageTopic = fullMessage.substr(0, spacePos);
+    }
+
+    if (debugEnabled()) {
+        std::string payload = (spacePos != std::string::npos && spacePos + 1 < fullMessage.size())
+                                  ? fullMessage.substr(spacePos + 1)
+                                  : "";
+        std::cout << "[Bus<-] " << messageTopic << " | " << truncatePayload(payload) << std::endl;
     }
 
     for (const auto& subscription : _subscriptions) {

@@ -1,9 +1,35 @@
 
 #include "AModule.hpp"
-#include <zmq.hpp>
-#include <stdexcept>
-#include <iostream>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <typeinfo>
+#include <zmq.hpp>
+
+namespace {
+bool debugEnabled() {
+    static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
+    return enabled;
+}
+
+bool sniperDebugEnabled() {
+    static bool enabled = (std::getenv("RTYPE_SNIPER_DEBUG") != nullptr);
+    return enabled;
+}
+
+std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
+    if (msg.size() <= limit) {
+        return msg;
+    }
+    return msg.substr(0, limit) + "...";
+}
+
+std::string moduleName(const rtypeEngine::AModule* module) {
+    return module ? typeid(*module).name() : "AModule";
+}
+} // namespace
 
 namespace rtypeEngine {
 
@@ -14,18 +40,40 @@ AModule::~AModule() {
 void AModule::start() {
     _running = true;
     _moduleThread = std::thread([this]() {
+        const std::string name = moduleName(this);
+        bool isBullet = (name.find("Bullet") != std::string::npos);
+        bool sniper = sniperDebugEnabled() && isBullet;
+
+        if (debugEnabled()) {
+            std::cout << "[Module] Start " << name << std::endl;
+        }
         if (!_initialized) {
+            if (debugEnabled()) {
+                std::cout << "[Module] Init " << name << std::endl;
+            }
             init();
             _initialized = true;
         }
         while (_running) {
+            if (sniper) std::cout << "[Sniper] " << name << " Step 1: Entering processMessages" << std::endl;
             processMessages();
+            if (sniper) std::cout << "[Sniper] " << name << " Step 2: Exited processMessages" << std::endl;
+
+            if (sniper) std::cout << "[Sniper] " << name << " Step 3: Entering loop" << std::endl;
             loop();
+            if (sniper) std::cout << "[Sniper] " << name << " Step 4: Exited loop" << std::endl;
+
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if (_initialized) {
+            if (debugEnabled()) {
+                std::cout << "[Module] Cleanup " << name << std::endl;
+            }
             cleanup();
             _initialized = false;
+        }
+        if (debugEnabled()) {
+            std::cout << "[Module] Stop " << name << std::endl;
         }
     });
 }
@@ -76,6 +124,10 @@ void AModule::sendMessage(const std::string& topic, const std::string& message) 
     zmq::message_t zmqMessage(fullMessage.size());
     memcpy(zmqMessage.data(), fullMessage.c_str(), fullMessage.size());
     auto result = _publisher->send(zmqMessage, zmq::send_flags::none);
+
+    if (debugEnabled()) {
+        std::cout << "[Module->] " << moduleName(this) << " " << topic << " | " << truncatePayload(message) << std::endl;
+    }
 }
 
 std::string AModule::getMessage(const std::string& topic) {
@@ -144,6 +196,9 @@ void AModule::processMessages() {
                     std::string payload = "";
                     if (fullMessage.length() > topic.length() + 1) {
                         payload = fullMessage.substr(topic.length() + 1);
+                    }
+                    if (debugEnabled()) {
+                        std::cout << "[Module<-] " << moduleName(this) << " " << topic << " | " << truncatePayload(payload) << std::endl;
                     }
                     handler(payload);
                 }
