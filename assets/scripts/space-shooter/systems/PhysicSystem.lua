@@ -34,11 +34,12 @@ end
 -- This is the "Missing Link" that syncs physics state back to rendering.
 function PhysicSystem.onEntityUpdated(id, x, y, z, rx, ry, rz)
     -- Verify the entity has a Transform component
-    if not ECS.hasComponent(id, "Transform") then return end
+    local transform = ECS.getComponent(id, "Transform")
+    if not transform then return end
     
     -- Update Transform with physics-calculated position and rotation
     -- print("[PhysicSystem] Updated Entity " .. id .. " to (" .. x .. ", " .. y .. ", " .. z .. ")")
-    local transform = ECS.getComponent(id, "Transform")
+    -- local transform = ECS.getComponent(id, "Transform") -- Removed redundant get
     transform.x = x
     transform.y = y
     transform.z = z

@@ -137,6 +137,9 @@ void BulletPhysicEngine::checkCollisions() {
 }
 
 void BulletPhysicEngine::sendUpdates() {
+    std::stringstream batchStream;
+    bool hasUpdates = false;
+
     for (auto& pair : _bodies) {
         btTransform trans;
         if (pair.second && pair.second->getMotionState()) {
@@ -146,17 +149,18 @@ void BulletPhysicEngine::sendUpdates() {
             btScalar yaw, pitch, roll;
             trans.getBasis().getEulerYPR(yaw, pitch, roll);
 
-            std::stringstream ss;
-            ss << "EntityUpdated:" << pair.first << ":"
+            batchStream << "EntityUpdated:" << pair.first << ":"
                << pos.x() << "," << pos.y() << "," << pos.z() << ":"
                << pitch << "," << yaw << "," << roll << ";";
-
-            std::string msg = ss.str();
-            sendMessage("EntityUpdated", msg);
-
+            
+            hasUpdates = true;
         } else {
             std::cout << "[Bullet] DEBUG: Missing MotionState for body " << pair.first << std::endl;
         }
+    }
+
+    if (hasUpdates) {
+        sendMessage("EntityUpdated", batchStream.str());
     }
 }
 

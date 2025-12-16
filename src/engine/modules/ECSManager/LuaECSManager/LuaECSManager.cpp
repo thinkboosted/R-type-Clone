@@ -174,13 +174,6 @@ void LuaECSManager::init() {
           }
         }
       }
-      
-      std::stringstream renderStream;
-      renderStream << "SetPosition:" << id << "," << x << "," << y << "," << z;
-      sendMessage("RenderEntityCommand", renderStream.str());
-      std::stringstream rotStream;
-      rotStream << "SetRotation:" << id << "," << rx << "," << ry << "," << rz;
-      sendMessage("RenderEntityCommand", rotStream.str());
     }
   });
 
@@ -528,8 +521,6 @@ void LuaECSManager::unloadScript(const std::string& path) {
 }
 
 void LuaECSManager::loop() {
-  processMessages();
-
   auto currentTime = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> frameTime = currentTime - _lastFrameTime;
   _lastFrameTime = currentTime;
