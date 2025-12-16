@@ -12,4 +12,4 @@
 | **📚 Doc** | **Général** | `README.md` (Install/Run) & `CONTRIBUTING.md` | Tom |
 | **📚 Doc** | **Tech** | Justification des choix majeurs (libs, archi) | Tristan |
 | **👾 Design** | **Mécaniques** | Doc : Gameplay, contrôles, scrolling | Ester |
-| **👾 Design** | **Entités** | Liste des rôles : Joueur, Ennemis, Balles | Ester | 
+| **👾 Design** | **Entités** | Liste des rôles : Joueur, Ennemis, Balles | Ester |
