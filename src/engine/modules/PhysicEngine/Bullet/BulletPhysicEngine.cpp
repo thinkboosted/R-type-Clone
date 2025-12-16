@@ -3,6 +3,10 @@
 #include <sstream>
 #include <vector>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace rtypeEngine {
 
 BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
@@ -114,6 +118,8 @@ void BulletPhysicEngine::checkCollisions() {
 
 void BulletPhysicEngine::sendUpdates() {
     std::stringstream ss;
+    float radToDeg = 180.0f / static_cast<float>(M_PI);
+
     for (auto& pair : _bodies) {
         btTransform trans;
         if (pair.second && pair.second->getMotionState()) {
@@ -125,7 +131,7 @@ void BulletPhysicEngine::sendUpdates() {
 
             ss << "EntityUpdated:" << pair.first << ":"
                << pos.x() << "," << pos.y() << "," << pos.z() << ":"
-               << pitch << "," << yaw << "," << roll << ";";
+               << pitch * radToDeg << "," << yaw * radToDeg << "," << roll * radToDeg << ";";
         }
     }
     std::string msg = ss.str();
@@ -409,8 +415,11 @@ void BulletPhysicEngine::setTransform(const std::string& id, const std::vector<f
         trans.setIdentity();
         trans.setOrigin(btVector3(pos[0], pos[1], pos[2]));
 
+        float degToRad = static_cast<float>(M_PI) / 180.0f;
         btQuaternion quat;
-        quat.setEulerZYX(rot[2], rot[1], rot[0]); // Yaw, Pitch, Roll? Bullet uses ZYX order usually.
+        // setEulerZYX expects Yaw (Y), Pitch (X), Roll (Z) in radians
+        // rot is rx (X), ry (Y), rz (Z) in degrees
+        quat.setEulerZYX(rot[1] * degToRad, rot[0] * degToRad, rot[2] * degToRad);
         trans.setRotation(quat);
 
         body->setWorldTransform(trans);

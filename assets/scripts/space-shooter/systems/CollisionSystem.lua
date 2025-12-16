@@ -46,38 +46,37 @@ function CollisionSystem.update(dt)
     end
 end
 
+function CollisionSystem.hasTag(id, tag)
+    local tagComp = ECS.getComponent(id, "Tag")
+    if tagComp and tagComp.tags then
+        for _, t in ipairs(tagComp.tags) do
+            if t == tag then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 function CollisionSystem.onCollision(id1, id2)
     -- Check Player vs Enemy
-    local p1 = ECS.getComponent(id1, "Player")
-    local e2 = ECS.getComponent(id2, "Enemy")
-    local p2 = ECS.getComponent(id2, "Player")
-    local e1 = ECS.getComponent(id1, "Enemy")
-
-    if p1 and e2 then
+    if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "Enemy") then
         CollisionSystem.handlePlayerEnemy(id1, id2)
-    elseif p2 and e1 then
+    elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "Enemy") then
         CollisionSystem.handlePlayerEnemy(id2, id1)
     end
 
     -- Check Enemy vs Bullet
-    local en1 = ECS.getComponent(id1, "Enemy")
-    local b2 = ECS.getComponent(id2, "Bullet")
-    local en2 = ECS.getComponent(id2, "Enemy")
-    local b1 = ECS.getComponent(id1, "Bullet")
-
-    if en1 and b2 then
+    if CollisionSystem.hasTag(id1, "Enemy") and CollisionSystem.hasTag(id2, "Bullet") then
         CollisionSystem.handleEnemyBullet(id1, id2)
-    elseif en2 and b1 then
+    elseif CollisionSystem.hasTag(id2, "Enemy") and CollisionSystem.hasTag(id1, "Bullet") then
         CollisionSystem.handleEnemyBullet(id2, id1)
     end
 
     -- Check Player vs Bonus
-    local bonus1 = ECS.getComponent(id1, "Bonus")
-    local bonus2 = ECS.getComponent(id2, "Bonus")
-
-    if p1 and bonus2 then
+    if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "Bonus") then
         CollisionSystem.handlePlayerBonus(id1, id2)
-    elseif p2 and bonus1 then
+    elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "Bonus") then
         CollisionSystem.handlePlayerBonus(id2, id1)
     end
 end

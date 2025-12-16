@@ -11,8 +11,18 @@ function LifeSystem.update(dt)
         local life = ECS.getComponent(id, "Life")
         if life.amount <= 0 then
             -- Check if it's the player
-            local player = ECS.getComponent(id, "Player")
-            if player then
+            local tagComp = ECS.getComponent(id, "Tag")
+            local isPlayer = false
+            if tagComp and tagComp.tags then
+                for _, t in ipairs(tagComp.tags) do
+                    if t == "Player" then
+                        isPlayer = true
+                        break
+                    end
+                end
+            end
+
+            if isPlayer then
                 -- Get final score
                 local scoreEntities = ECS.getEntitiesWith({"Score"})
                 local finalScore = 0
