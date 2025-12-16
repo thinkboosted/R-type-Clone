@@ -25,6 +25,9 @@ void RTypeClient::onLoop() {
             std::string payload = _serverIp + " " + std::to_string(_serverPort);
             std::cout << "[Client] Requesting Connect to " << payload << std::endl;
             sendMessage("RequestNetworkConnect", payload);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            sendMessage("RequestNetworkSend", "HELLO");
         }
         _networkInitDone = true;
     }

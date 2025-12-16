@@ -85,6 +85,12 @@ void NetworkManager::loop() {
     sendMessage(entry.first, entry.second);
   }
 
+  {
+    std::lock_guard<std::mutex> lock(_queueMutex);
+    _messageQueue.clear();
+    _enqueuedTotal.store(0, std::memory_order_relaxed);
+  }
+
   // Heartbeat and timeout checks (only for server)
   if (_isServer && _socket && _socket->is_open()) {
     auto now = std::chrono::steady_clock::now();
