@@ -19,7 +19,7 @@ function InputSystem.update(dt)
         local player = ECS.getComponent(id, "Player")
         local transform = ECS.getComponent(id, "Transform")
         local speed = player.speed or 10.0
-        
+
         -- Reset Vitesse
         physic.vx = 0
         physic.vy = 0

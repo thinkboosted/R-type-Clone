@@ -18,6 +18,9 @@ static float safeStof(const std::string &str, float fallback = 0.0f) {
         return fallback;
     }
 }
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace rtypeEngine {
 
@@ -448,8 +451,11 @@ void BulletPhysicEngine::setTransform(const std::string& id, const std::vector<f
         trans.setIdentity();
         trans.setOrigin(btVector3(pos[0], pos[1], pos[2]));
 
+        float degToRad = static_cast<float>(M_PI) / 180.0f;
         btQuaternion quat;
-        quat.setEulerZYX(rot[2], rot[1], rot[0]); // Yaw, Pitch, Roll? Bullet uses ZYX order usually.
+        // setEulerZYX expects Yaw (Y), Pitch (X), Roll (Z) in radians
+        // rot is rx (X), ry (Y), rz (Z) in degrees
+        quat.setEulerZYX(rot[1] * degToRad, rot[0] * degToRad, rot[2] * degToRad);
         trans.setRotation(quat);
 
         body->setWorldTransform(trans);

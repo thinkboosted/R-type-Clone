@@ -54,7 +54,7 @@ function LifeSystem.update(dt)
                         life.deathEventSent = true
                     end
                 end
-                
+
                 -- In Solo Mode (Authority + Rendering), spawn explosion locally
                 if enemy and ECS.capabilities.hasRendering then
                     Spawns.createExplosion(t.x, t.y, t.z)

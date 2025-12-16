@@ -42,6 +42,7 @@ function BonusSystem.spawnBonus()
     ECS.addComponent(bonus, "Collider", Collider("Box", {0.8, 0.8, 0.8}))
     ECS.addComponent(bonus, "Physic", Physic(1.0, 0.0, true, false))
     ECS.addComponent(bonus, "Bonus", Bonus(5.0)) -- 5 second powerup duration
+    ECS.addComponent(bonus, "Tag", Tag({"Bonus"}))
     ECS.addComponent(bonus, "Life", Life(1))
     
     -- Network architecture: Server manages bonuses

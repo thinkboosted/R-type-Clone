@@ -32,6 +32,12 @@ void RTypeGame::init() {
 
 void RTypeGame::loop() {
     onLoop();
+    if (!_scriptsLoaded) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "Loading space-shooter game script..." << std::endl;
+        sendMessage("LoadScript", "assets/scripts/space-shooter/Main.lua");
+        _scriptsLoaded = true;
+    }
 }
 
 } // namespace rtypeGame

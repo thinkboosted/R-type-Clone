@@ -1,6 +1,6 @@
 cmake --build --preset windows
 
 cd ./build/windows/
-./Rtype.exe
+./r-type_client.exe
 
 cd ../../
