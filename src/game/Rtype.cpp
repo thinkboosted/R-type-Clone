@@ -1,6 +1,8 @@
 #include "Rtype.hpp"
 #include "modulesManager/ModulesManager.hpp"
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 namespace rtypeGame {
 
