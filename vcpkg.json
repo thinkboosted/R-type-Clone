@@ -9,6 +9,9 @@
     "cppzmq",
     "lua",
     "sol2",
-    "bullet3"
+    "bullet3",
+    "asio",
+    "msgpack",
+    "gtest"
   ]
 }
