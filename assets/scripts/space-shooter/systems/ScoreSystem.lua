@@ -1,12 +1,21 @@
+-- ============================================================================
+-- ScoreSystem.lua - Score Display for Rendering Instances
+-- ============================================================================
+-- Updates score text UI only on instances with rendering capability.
+-- Score logic itself is managed by authority (Server/Solo).
+-- ============================================================================
 local ScoreSystem = {}
 
 ScoreSystem.lastScore = 0
 
 function ScoreSystem.init()
-    print("[ScoreSystem] Initialized")
+    print("[ScoreSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
 end
 
 function ScoreSystem.update(dt)
+    -- Only update text rendering on instances with rendering capability
+    if not ECS.capabilities.hasRendering then return end
+    
     local scoreEntities = ECS.getEntitiesWith({"Score", "Text"})
     if #scoreEntities == 0 then return end
 

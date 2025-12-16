@@ -1,10 +1,25 @@
+local config = dofile("assets/scripts/space-shooter/config.lua")
+local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
+
 local EnemySystem = {}
 
 EnemySystem.spawnTimer = 0
-EnemySystem.spawnInterval = 2.0 -- Spawn every 2 seconds
+EnemySystem.spawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.gameTime = 0
-EnemySystem.baseSpawnInterval = 2.0
-EnemySystem.baseSpeed = 5.0
+EnemySystem.baseSpawnInterval = config.enemy.spawnInterval or 2.0
+EnemySystem.baseSpeed = config.enemy.speed or 5.0
+
+local function getGameStateState()
+    local entities = ECS.getEntitiesWith({"GameState", "ServerAuthority"})
+    if #entities == 0 then
+        entities = ECS.getEntitiesWith({"GameState"})
+    end
+    if #entities == 0 then
+        return nil
+    end
+    local gs = ECS.getComponent(entities[1], "GameState")
+    return gs and gs.state or nil
+end
 
 function EnemySystem.init()
     print("[EnemySystem] Initialized")
@@ -12,8 +27,11 @@ function EnemySystem.init()
 end
 
 function EnemySystem.update(dt)
-    if not ECS.isServer() and not ECS.isLocal then return end
+    -- Only run on authoritative instances (Server or Solo)
+    if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end
+    local gsState = getGameStateState()
+    if gsState and gsState ~= "PLAYING" then return end
 
     -- Wait for players to join before simulating enemies
     local players = ECS.getEntitiesWith({"Player"})
@@ -53,24 +71,12 @@ function EnemySystem.spawnEnemy()
 
     local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0)
     local speed = EnemySystem.baseSpeed * difficultyMultiplier
-    if speed > 15.0 then
-        speed = 15.0
-    end
+    if config.enemy.maxSpeed and speed > config.enemy.maxSpeed then speed = config.enemy.maxSpeed end
     
     -- Debug Difficulty
     -- print("Spawning Enemy. Time: " .. EnemySystem.gameTime .. " Speed: " .. speed)
 
-    local enemy = ECS.createEntity()
-    ECS.addComponent(enemy, "Transform", Transform(x, y, 0))
-    ECS.addComponent(enemy, "Mesh", Mesh("assets/models/cube.obj"))
-    ECS.addComponent(enemy, "Collider", Collider("Box", {1, 1, 1}))
-    ECS.addComponent(enemy, "Physic", Physic(1.0, 0.0, true, false))
-    ECS.addComponent(enemy, "Enemy", Enemy(speed))
-    ECS.addComponent(enemy, "Life", Life(1))
-    ECS.addComponent(enemy, "Color", Color(1.0, 0.0, 0.0))
-
-    local p = ECS.getComponent(enemy, "Physic")
-    p.vx = -speed
+    Spawns.spawnEnemy(x, y, speed)
 end
 
 -- Hook for NetworkSystem to reset
@@ -78,6 +84,7 @@ function EnemySystem.resetDifficulty()
     print("[EnemySystem] Resetting Difficulty")
     EnemySystem.gameTime = 0
     EnemySystem.spawnTimer = 0
+    EnemySystem.spawnInterval = EnemySystem.baseSpawnInterval
 end
 
 -- Subscribe to global event if possible, or poll?

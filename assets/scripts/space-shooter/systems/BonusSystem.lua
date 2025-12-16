@@ -1,13 +1,23 @@
+-- ============================================================================
+-- BonusSystem.lua - Server-Authoritative Bonus Spawning
+-- ============================================================================
+-- Only spawns bonuses on authoritative instances (Server or Solo).
+-- Clients receive bonus entities via NetworkSystem state updates.
+-- ============================================================================
 local BonusSystem = {}
 
 BonusSystem.spawnTimer = 0
 BonusSystem.spawnInterval = 10.0 -- Spawn bonus every 10 seconds
 
 function BonusSystem.init()
-    print("[BonusSystem] Initialized")
+    print("[BonusSystem] Initialized (hasAuthority: " .. tostring(ECS.capabilities.hasAuthority) .. ")")
 end
 
 function BonusSystem.update(dt)
+    -- Only run on authoritative instances (Server or Solo)
+    if not ECS.capabilities.hasAuthority then return end
+    if not ECS.isGameRunning then return end
+    
     BonusSystem.spawnTimer = BonusSystem.spawnTimer + dt
     if BonusSystem.spawnTimer >= BonusSystem.spawnInterval then
         BonusSystem.spawnTimer = 0
@@ -29,12 +39,21 @@ function BonusSystem.spawnBonus()
 
     local bonus = ECS.createEntity()
     ECS.addComponent(bonus, "Transform", Transform(x, y, 0))
-    ECS.addComponent(bonus, "Mesh", Mesh("assets/models/cube.obj"))
     ECS.addComponent(bonus, "Collider", Collider("Box", {0.8, 0.8, 0.8}))
     ECS.addComponent(bonus, "Physic", Physic(1.0, 0.0, true, false))
     ECS.addComponent(bonus, "Bonus", Bonus(5.0)) -- 5 second powerup duration
     ECS.addComponent(bonus, "Life", Life(1))
-    ECS.addComponent(bonus, "Color", Color(0.0, 0.5, 1.0)) -- Blue bonus
+    
+    -- Network architecture: Server manages bonuses
+    if ECS.capabilities.hasAuthority then
+        ECS.addComponent(bonus, "ServerAuthority", ServerAuthority())
+    end
+    
+    -- Rendering only on instances with rendering capability
+    if ECS.capabilities.hasRendering then
+        ECS.addComponent(bonus, "Mesh", Mesh("assets/models/cube.obj"))
+        ECS.addComponent(bonus, "Color", Color(0.0, 0.5, 1.0)) -- Blue bonus
+    end
 
     local t = ECS.getComponent(bonus, "Transform")
     t.sx = 0.8

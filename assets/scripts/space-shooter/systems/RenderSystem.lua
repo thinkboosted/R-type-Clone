@@ -1,12 +1,22 @@
--- Render System
+-- ============================================================================
+-- RenderSystem.lua - Rendering Only on Capable Instances
+-- ============================================================================
+-- Only runs on instances with hasRendering capability (Client or Solo).
+-- Server instances skip all rendering to save resources.
+-- ============================================================================
 local RenderSystem = {}
 local CameraInitialized = false
 RenderSystem.initializedEntities = {}
+
 function RenderSystem.init()
-    print("[RenderSystem] Initialized")
+    print("[RenderSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
 end
 
 function RenderSystem.update(dt)
+    -- Only render on instances with rendering capability
+    if not ECS.capabilities.hasRendering then
+        return
+    end
     -- Handle Camera
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
     for _, id in ipairs(cameras) do
@@ -30,10 +40,16 @@ function RenderSystem.update(dt)
         local mesh = ECS.getComponent(id, "Mesh")
         local color = ECS.getComponent(id, "Color")
 
+        local isPhysicsDriven = ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority and ECS.hasComponent(id, "Physic")
+
         if not RenderSystem.initializedEntities[id] then
             local type = mesh.modelPath
             ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. id)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+            if isPhysicsDriven then
+                ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+                ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+            end
             RenderSystem.initializedEntities[id] = true
         end
 
@@ -41,8 +57,10 @@ function RenderSystem.update(dt)
             ECS.sendMessage("RenderEntityCommand", "SetColor:" .. id .. "," .. color.r .. "," .. color.g .. "," .. color.b)
         end
 
-        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
-        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+        if not isPhysicsDriven then
+            ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+            ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+        end
     end
 
     -- Handle Text Entities

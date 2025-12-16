@@ -1,11 +1,24 @@
+-- ============================================================================
+-- LifeSystem.lua - Server-Authoritative Life Management
+-- ============================================================================
+-- CRITICAL: This system MUST only run on authoritative instances (Server/Solo).
+-- Clients NEVER modify life values - they wait for ENTITY_UPDATE from server.
+-- 
+-- Why? To prevent cheating and ensure game state consistency:
+-- - Client cannot give themselves infinite health
+-- - Server is the single source of truth for life/death
+-- - All clients see the same state
+-- ============================================================================
+
 local LifeSystem = {}
 
 function LifeSystem.init()
-    print("[LifeSystem] Initialized")
+    print("[LifeSystem] Initialized (hasAuthority: " .. tostring(ECS.capabilities.hasAuthority) .. ")")
 end
 
 function LifeSystem.update(dt)
-    if not ECS.isServer() and not ECS.isLocal then return end
+    -- ⚠️ AUTHORITY CHECK: Only server/solo can modify life
+    if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end
 
     local entities = ECS.getEntitiesWith({"Life"})
@@ -21,7 +34,8 @@ function LifeSystem.update(dt)
                 local player = ECS.getComponent(id, "Player")
                 local enemy = ECS.getComponent(id, "Enemy")
 
-                if enemy and ECS.isServer() and not life.deathEventSent then
+                -- In multiplayer server mode, broadcast enemy death to clients
+                if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
                     local t = ECS.getComponent(id, "Transform")
                     local phys = ECS.getComponent(id, "Physic")
                     local vx, vy, vz = 0, 0, 0
@@ -35,10 +49,12 @@ function LifeSystem.update(dt)
                     end
                 end
 
+                local finalScore = nil
+
                 if player then
                     print("DEBUG: Player Dead. Life Amount: " .. life.amount)
                     local scoreEntities = ECS.getEntitiesWith({"Score"})
-                    local finalScore = 0
+                    finalScore = 0
                     if #scoreEntities > 0 then
                         local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
                         finalScore = scoreComp.value
@@ -54,9 +70,12 @@ function LifeSystem.update(dt)
 
                 ECS.destroyEntity(id)
 
-                if ECS.isServer() then
+                -- Notify clients or trigger local game over
+                if ECS.capabilities.hasNetworkSync then
+                    -- Multiplayer server: Broadcast entity destruction
                     ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
-                elseif ECS.isLocal and player then
+                elseif ECS.capabilities.hasLocalMode and player and finalScore then -- Changed from isServer() to capabilities.isLocalMode
+                    -- Solo mode: Trigger local game over
                     ECS.sendMessage("GAME_OVER", tostring(finalScore))
                 end
             end

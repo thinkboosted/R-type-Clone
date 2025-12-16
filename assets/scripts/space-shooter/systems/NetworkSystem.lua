@@ -1,3 +1,6 @@
+local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
+local config = dofile("assets/scripts/space-shooter/config.lua")
+
 -- Expose globally so other systems (MenuSystem) can read connection state.
 local NetworkSystem = {}
 _G.NetworkSystem = NetworkSystem
@@ -5,7 +8,7 @@ _G.NetworkSystem = NetworkSystem
 NetworkSystem.clientEntities = {}
 NetworkSystem.serverEntities = {}
 NetworkSystem.myServerId = nil
-NetworkSystem.deathAnims = {}
+NetworkSystem.deathAnims = {} -- legacy, no longer used for effects
 
 NetworkSystem.broadcastTimer = 0
 NetworkSystem.broadcastInterval = 0.08
@@ -16,6 +19,12 @@ NetworkSystem.debugSentPlayers = 0
 NetworkSystem.debugSentBullets = 0
 NetworkSystem.debugSentEnemies = 0
 NetworkSystem.debugSentScores = 0
+
+local function destroyEntitySafe(id)
+    if id and ECS.getComponent(id, "Transform") then
+        ECS.destroyEntity(id)
+    end
+end
 
 local function hasActiveClients()
     return next(NetworkSystem.clientEntities) ~= nil
@@ -45,9 +54,9 @@ function NetworkSystem.resetWorldState()
     -- Clear lingering gameplay entities so a new client does not spawn into stale hazards.
     local function destroyAndBroadcast(entities)
         for _, id in ipairs(entities) do
-            ECS.destroyEntity(id)
             ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
             ECS.sendMessage("PhysicCommand", "DestroyBody:" .. id .. ";")
+            ECS.destroyEntity(id)
         end
     end
 
@@ -67,24 +76,57 @@ function NetworkSystem.resetWorldState()
 end
 
 function NetworkSystem.init()
-    if ECS.isServer() then
-        print("[NetworkSystem] Server Mode")
+    -- ========================================================================
+    -- UNIFIED NETWORK SYSTEM: Uses ECS.capabilities instead of direct checks
+    -- ========================================================================
+    -- This system only runs when hasNetworkSync == true (Server or Client)
+    -- It adapts behavior based on hasAuthority:
+    --   - hasAuthority = true:  Server side (spawn players, broadcast state)
+    --   - hasAuthority = false: Client side (receive state, interpolate)
+    -- ========================================================================
+    
+    if ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
+        print("[NetworkSystem] Server Mode - Authoritative Network Sync")
 
-        -- Create Logic Score Entity
+        -- Create Logic Score Entity (only on authority)
         local scoreEnt = ECS.createEntity()
         ECS.addComponent(scoreEnt, "Score", Score(0))
 
         ECS.subscribe("ClientConnected", function(msg)
             local clientId = string.match(msg, "^(%d+)")
-            print("Client Connected: " .. clientId .. " (Auto-Spawning)")
-
-            -- If this is the first/only client, wipe stale enemies/bullets so they don't collide instantly.
-            if not hasActiveClients() then
-                NetworkSystem.resetWorldState()
-            end
-
-            if not NetworkSystem.clientEntities[clientId] then
-                NetworkSystem.spawnPlayerForClient(clientId)
+            print("Client Connected: " .. clientId)
+            
+            -- Check if game is already running
+            local gameStateEntities = ECS.getEntitiesWith({"GameState"})
+            if #gameStateEntities > 0 then
+                local gameState = ECS.getComponent(gameStateEntities[1], "GameState")
+                
+                if gameState.state == "PLAYING" then
+                    print("  -> Spawning player (GameState: PLAYING)")
+                    if not hasActiveClients() then
+                        NetworkSystem.resetWorldState()
+                    end
+                    if not NetworkSystem.clientEntities[clientId] then
+                        NetworkSystem.spawnPlayerForClient(clientId)
+                    end
+                    ECS.isGameRunning = true
+                else
+                    print("  -> Game not started yet (GameState: " .. gameState.state .. ")")
+                    
+                    -- For dedicated server: Auto-start on first client
+                    if gameState.state == "MENU" and not hasActiveClients() then
+                        print("  -> Auto-starting game for first client")
+                        gameState.transitionRequested = true
+                        gameState.nextState = "PLAYING"
+                        gameState.lastScore = 0
+                    else
+                        -- Store pending client to spawn later when game starts
+                        if not NetworkSystem.pendingClients then NetworkSystem.pendingClients = {} end
+                        NetworkSystem.pendingClients[clientId] = true
+                    end
+                end
+            else
+                print("  -> ERROR: No GameState entity found!")
             end
         end)
 
@@ -92,6 +134,7 @@ function NetworkSystem.init()
             local clientId = string.match(msg, "^(%d+)")
             if not clientId then return end
             NetworkSystem.readyClients[clientId] = true
+            ECS.isGameRunning = true
             -- Send initial score snapshot
             local scoreEntities = ECS.getEntitiesWith({"Score"})
             if #scoreEntities > 0 then
@@ -110,7 +153,37 @@ function NetworkSystem.init()
 
         ECS.subscribe("RESET_GAME", function(msg)
             print("DEBUG SERVER: Reset Game Requested")
+            -- Full reset: clear arena and all players/clients to mirror solo restart.
             NetworkSystem.resetWorldState()
+            for cid, pid in pairs(NetworkSystem.clientEntities) do
+                if pid then
+                    ECS.broadcastNetworkMessage("ENTITY_DESTROY", pid)
+                    ECS.sendMessage("PhysicCommand", "DestroyBody:" .. pid .. ";")
+                    ECS.destroyEntity(pid)
+                end
+                NetworkSystem.clientEntities[cid] = nil
+                NetworkSystem.readyClients[cid] = nil
+            end
+            NetworkSystem.pendingClients = {}
+            ECS.isGameRunning = false
+        end)
+        
+        -- When game starts (MENU -> PLAYING), spawn pending clients
+        ECS.subscribe("GAME_STARTED", function(msg)
+            print("[NetworkSystem] Game started - spawning pending clients")
+            if NetworkSystem.pendingClients then
+                for clientId, _ in pairs(NetworkSystem.pendingClients) do
+                    print("  -> Spawning pending client " .. clientId)
+                    if not hasActiveClients() then
+                        NetworkSystem.resetWorldState()
+                    end
+                    if not NetworkSystem.clientEntities[clientId] then
+                        NetworkSystem.spawnPlayerForClient(clientId)
+                    end
+                end
+                NetworkSystem.pendingClients = {}
+                ECS.isGameRunning = true
+            end
         end)
 
         ECS.subscribe("REQUEST_SPAWN", function(msg)
@@ -138,6 +211,7 @@ function NetworkSystem.init()
                  -- When the last client leaves, clear the arena for the next joiner.
                  if not hasActiveClients() then
                      NetworkSystem.resetWorldState()
+                     ECS.isGameRunning = false
                  end
              end
         end)
@@ -158,21 +232,6 @@ function NetworkSystem.init()
             end
         end)
 
-        ECS.subscribe("ENTITY_DESTROY", function(msg)
-            local id = string.match(msg, "([^%s]+)")
-            if id then
-                -- Find which client owned this entity
-                for cid, eid in pairs(NetworkSystem.clientEntities) do
-                    if eid == id then
-                        print("DEBUG SERVER: Player " .. cid .. " Entity Destroyed")
-                        NetworkSystem.clientEntities[cid] = nil
-                        NetworkSystem.readyClients[cid] = nil
-                        break
-                    end
-                end
-            end
-        end)
-
         -- Player death notification from LifeSystem to clean server state and stop broadcasts
         ECS.subscribe("SERVER_PLAYER_DEAD", function(msg)
             local clientId = string.match(msg, "^(%d+)")
@@ -182,10 +241,11 @@ function NetworkSystem.init()
             NetworkSystem.readyClients[clientId] = nil
             ECS.sendToClient(tonumber(clientId), "CLIENT_RESET", "")
             NetworkSystem.resetWorldState()
+            ECS.isGameRunning = false
         end)
 
-    else
-        print("[NetworkSystem] Client Mode")
+    elseif not ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
+        print("[NetworkSystem] Client Mode - Receiving Network Sync")
 
         ECS.subscribe("PLAYER_ASSIGN", function(msg)
             local id = string.match(msg, "([^%s]+)")
@@ -195,6 +255,7 @@ function NetworkSystem.init()
                 NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, -90, 0, 0, 0, "1")
                 -- Send a ready ping; network layer will prefix client id.
                 ECS.sendNetworkMessage("CLIENT_READY", "ready")
+                ECS.isGameRunning = true
             end
         end)
 
@@ -222,54 +283,46 @@ function NetworkSystem.init()
         ECS.subscribe("ENTITY_DESTROY", function(msg)
             local id = string.match(msg, "([^%s]+)")
             if id and NetworkSystem.serverEntities[id] then
-                ECS.destroyEntity(NetworkSystem.serverEntities[id])
+                destroyEntitySafe(NetworkSystem.serverEntities[id])
                 NetworkSystem.serverEntities[id] = nil
             end
         end)
 
         ECS.subscribe("ENEMY_DEAD", function(msg)
-            if not ECS.isGameRunning then return end
-            local id, x, y, z, vx, vy, vz = string.match(msg, "([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+)")
-            if not id then return end
-
-            local existing = NetworkSystem.serverEntities[id]
-            if existing then
-                NetworkSystem.serverEntities[id] = nil
-            end
-
-            local nx, ny, nz = tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0
-            local nvx, nvy, nvz = tonumber(vx) or 0, tonumber(vy) or 0, tonumber(vz) or 0
-
-            local effectEntity = existing or ECS.createEntity()
-            if not ECS.getComponent(effectEntity, "Transform") then
-                ECS.addComponent(effectEntity, "Transform", Transform(nx, ny, nz))
-            else
-                local t = ECS.getComponent(effectEntity, "Transform")
-                t.x, t.y, t.z = nx, ny, nz
-            end
-
-            if not ECS.getComponent(effectEntity, "Mesh") then
-                ECS.addComponent(effectEntity, "Mesh", Mesh("assets/models/cube.obj"))
-            end
-            if not ECS.getComponent(effectEntity, "Color") then
-                ECS.addComponent(effectEntity, "Color", Color(1.0, 0.0, 0.0))
-            end
-
-            NetworkSystem.deathAnims[id] = {
-                entity = effectEntity,
-                vx = nvx,
-                vy = nvy,
-                vz = nvz,
-                timer = 0,
-                lifetime = 1.2
-            }
+                if not ECS.isGameRunning then return end
+                local id = string.match(msg, "([^%s]+)")
+                if not id then return end
+                local existing = NetworkSystem.serverEntities[id]
+                if existing then
+                    destroyEntitySafe(existing)
+                    NetworkSystem.serverEntities[id] = nil
+                end
         end)
 
         ECS.subscribe("CLIENT_RESET", function(msg)
             print("DEBUG CLIENT: Resetting Network State")
             NetworkSystem.myServerId = nil
             NetworkSystem.serverEntities = {}
-            NetworkSystem.deathAnims = {}
+            ECS.isGameRunning = false
+            -- Cleanup any remaining rendered entities to avoid lingering cubes between modes.
+            local cleanupIds = ECS.getEntitiesWith({"Transform"})
+            for _, eid in ipairs(cleanupIds) do
+                -- Preserve UI/menu tags and camera
+                local tag = ECS.getComponent(eid, "Tag")
+                local camera = ECS.getComponent(eid, "Camera")
+                local keep = camera ~= nil
+                if tag and not keep then
+                    for _, t in ipairs(tag.tags) do
+                        if t == "MenuEntity" or t == "GameUI" or t == "GameOverEntity" or t == "ErrorEntity" or t == "LoadingEntity" then
+                            keep = true
+                            break
+                        end
+                    end
+                end
+                if not keep then
+                    destroyEntitySafe(eid)
+                end
+            end
             -- Entities are destroyed by MenuSystem cleaning tags,
             -- but clearing the map prevents "ghost" updates.
         end)
@@ -278,15 +331,7 @@ end
 
 function NetworkSystem.spawnPlayerForClient(clientId)
     print("DEBUG: Spawning Player for Client " .. clientId)
-    local player = ECS.createEntity()
-    ECS.addComponent(player, "Transform", Transform(-8, 0, 0, 0, 0, -90))
-    ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
-    ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false))
-    ECS.addComponent(player, "Player", Player(20.0))
-    ECS.addComponent(player, "Weapon", Weapon(0.2))
-    ECS.addComponent(player, "Life", { amount = 3, max = 3, invulnerableTime = 1.0 }) -- 1 second invulnerability
-    ECS.addComponent(player, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
-    ECS.addComponent(player, "NetworkId", { id = clientId })
+    local player = Spawns.createPlayer(-8, 0, 0, clientId)
 
     NetworkSystem.clientEntities[clientId] = player
     ECS.sendToClient(tonumber(clientId), "PLAYER_ASSIGN", player)
@@ -311,6 +356,18 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
         if nType == 1 then
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/aircraft.obj"))
              ECS.addComponent(localId, "Color", Color(0.0, 1.0, 0.0))
+
+             -- If this is ME, add prediction components so InputSystem can drive it locally
+             if serverId == NetworkSystem.myServerId then
+                 print("DEBUG: Adding Prediction Components to Local Player " .. serverId)
+                 ECS.addComponent(localId, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
+                 ECS.addComponent(localId, "Player", Player(config.player.speed))
+                 ECS.addComponent(localId, "Weapon", Weapon(config.player.weaponCooldown))
+                 ECS.addComponent(localId, "Physic", Physic(1.0, 0.0, true, false))
+                 -- We do NOT add Collider yet, to avoid local collision resolution conflicts.
+                 -- We trust the server for collisions.
+             end
+
         elseif nType == 2 then
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
              ECS.addComponent(localId, "Color", Color(1.0, 1.0, 0.0))
@@ -319,8 +376,6 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
         elseif nType == 3 then
              ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
              ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0))
-             -- local t = ECS.getComponent(localId, "Transform")
-             -- t.ry = 90
         end
         NetworkSystem.serverEntities[serverId] = localId
     else
@@ -342,51 +397,50 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
 end
 
 function NetworkSystem.update(dt)
-    if not ECS.isServer() then
+    -- ========================================================================
+    -- CLIENT-SIDE: Interpolation Logic
+    -- ========================================================================
+    if not ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
+        if not ECS.isGameRunning then
+            return
+        end
         local entities = ECS.getEntitiesWith({"Transform"})
         local lerpSpeed = 18.0 -- Slightly softened; prediction handles quickness
         for _, id in ipairs(entities) do
-            local t = ECS.getComponent(id, "Transform")
-            if t.targetX then
-                t.netAge = (t.netAge or 0) + dt
-                local age = math.min(t.netAge or 0, 0.2)
-                local predictedX = t.targetX + (t.netVX or 0) * age
-                local predictedY = t.targetY + (t.netVY or 0) * age
-                local predictedZ = t.targetZ + (t.netVZ or 0) * age
+            -- Skip interpolation for our own player (Client-Side Prediction)
+            local isMyPlayer = (NetworkSystem.myServerId and NetworkSystem.serverEntities[NetworkSystem.myServerId] == id)
 
-                t.x = t.x + (predictedX - t.x) * lerpSpeed * dt
-                t.y = t.y + (predictedY - t.y) * lerpSpeed * dt
-                t.z = t.z + (predictedZ - t.z) * lerpSpeed * dt
-                -- Also interpolate rotation
-                t.rx = t.rx + (t.targetRX - t.rx) * lerpSpeed * dt
-                t.ry = t.ry + (t.targetRY - t.ry) * lerpSpeed * dt
-                t.rz = t.rz + (t.targetRZ - t.rz) * lerpSpeed * dt
-            end
-        end
+            if not isMyPlayer then
+                local t = ECS.getComponent(id, "Transform")
+                if t.targetX then
+                    t.netAge = (t.netAge or 0) + dt
+                    local age = math.min(t.netAge or 0, 0.2)
+                    local predictedX = t.targetX + (t.netVX or 0) * age
+                    local predictedY = t.targetY + (t.netVY or 0) * age
+                    local predictedZ = t.targetZ + (t.netVZ or 0) * age
 
-        for id, anim in pairs(NetworkSystem.deathAnims) do
-            local entity = anim.entity
-            local t = entity and ECS.getComponent(entity, "Transform")
-            if t then
-                anim.vy = anim.vy - 9.8 * dt
-                t.x = t.x + (anim.vx or 0) * dt
-                t.y = t.y + (anim.vy or 0) * dt
-                t.z = t.z + (anim.vz or 0) * dt
-                t.ry = t.ry + 180 * dt
-            end
-
-            anim.timer = anim.timer + dt
-            if anim.timer >= (anim.lifetime or 1.0) then
-                if entity then
-                    ECS.destroyEntity(entity)
+                    t.x = t.x + (predictedX - t.x) * lerpSpeed * dt
+                    t.y = t.y + (predictedY - t.y) * lerpSpeed * dt
+                    t.z = t.z + (predictedZ - t.z) * lerpSpeed * dt
+                    -- Also interpolate rotation
+                    t.rx = t.rx + (t.targetRX - t.rx) * lerpSpeed * dt
+                    t.ry = t.ry + (t.targetRY - t.ry) * lerpSpeed * dt
+                    t.rz = t.rz + (t.targetRZ - t.rz) * lerpSpeed * dt
                 end
-                NetworkSystem.deathAnims[id] = nil
             end
         end
+
         return
     end
 
-    if not hasReadyClients() then
+    -- ========================================================================
+    -- SERVER-SIDE: State Broadcasting Logic
+    -- ========================================================================
+    if not ECS.capabilities.hasAuthority or not ECS.capabilities.hasNetworkSync then
+        return
+    end
+
+    if not hasReadyClients() or not ECS.isGameRunning then
         return
     end
 
