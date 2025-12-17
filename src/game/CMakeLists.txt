@@ -1,6 +1,10 @@
 # R-Type Game Executables
+
+# Client Executable
 add_executable(r-type_client
-    main.cpp
+    client/main.cpp
+    client/RTypeClient.cpp
+    client/RTypeClient.hpp
     Rtype.cpp
     Rtype.hpp
     ../engine/app/AApplication.cpp
@@ -13,8 +17,11 @@ add_executable(r-type_client
     ../engine/modulesManager/ModulesManager.hpp
 )
 
+# Server Executable
 add_executable(r-type_server
-    main.cpp
+    server/main.cpp
+    server/RTypeServer.cpp
+    server/RTypeServer.hpp
     Rtype.cpp
     Rtype.hpp
     ../engine/app/AApplication.cpp
@@ -32,6 +39,7 @@ target_include_directories(r-type_client PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/modules
     ${CMAKE_SOURCE_DIR}/src/engine/types
     ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/client
 )
 
 target_include_directories(r-type_server PRIVATE
@@ -39,12 +47,13 @@ target_include_directories(r-type_server PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/modules
     ${CMAKE_SOURCE_DIR}/src/engine/types
     ${CMAKE_SOURCE_DIR}/src/game
+    ${CMAKE_SOURCE_DIR}/src/game/server
 )
 
-# Find and link SFML Window component
+# Find and link SFML Window component (Client only)
 find_package(SFML COMPONENTS Window REQUIRED)
 target_link_libraries(r-type_client PRIVATE SFML::Window)
-target_link_libraries(r-type_server PRIVATE SFML::Window)
+# No SFML::Window for server
 
 # Link with ZeroMQ for message broker
 target_link_libraries(r-type_client PRIVATE
@@ -74,8 +83,10 @@ set_target_properties(r-type_server PROPERTIES
     OUTPUT_NAME "r-type_server"
 )
 
-# Copy modules to output directory after build (only if they exist)
-# Apply for both client and server executables
+# Copy modules to output directory after build
+# The specific modules copied are now determined by what each executable loads in main.cpp.
+# So, we just need to ensure ALL potential modules are considered for copying if they exist.
+# The 'addModule' calls in C++ will find them.
 foreach(EXECUTABLE_TARGET r-type_client r-type_server)
     if(TARGET SFMLWindowManager)
         add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
@@ -93,44 +104,6 @@ foreach(EXECUTABLE_TARGET r-type_client r-type_server)
                 $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
             COMMENT "Copying GLEWSFML Renderer to executable directory for ${EXECUTABLE_TARGET}"
         )
-    endif()
-
-    if(TARGET EngineSceneManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:EngineSceneManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying Engine Scene Manager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET LuaECS)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:LuaECS>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying LuaECS to executable directory for ${EXECUTABLE_TARGET}"
-        )
-
-        if(WIN32)
-            # Find and copy liblua.dll
-            if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-                find_file(LUA_DLL liblua.dll PATHS ${CMAKE_PREFIX_PATH}/debug/bin NO_DEFAULT_PATH)
-            else()
-                find_file(LUA_DLL liblua.dll PATHS ${CMAKE_PREFIX_PATH}/bin NO_DEFAULT_PATH)
-            endif()
-
-            if(LUA_DLL)
-                add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${LUA_DLL}"
-                        $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-                    COMMENT "Copying liblua.dll to executable directory for ${EXECUTABLE_TARGET}"
-                )
-            else()
-                message(WARNING "Could not find liblua.dll to copy for ${EXECUTABLE_TARGET}")
-            endif()
-        endif()
     endif()
 
     if(TARGET LuaECSManager)

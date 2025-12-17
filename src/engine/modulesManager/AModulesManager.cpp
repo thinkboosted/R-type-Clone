@@ -1,6 +1,14 @@
 #include "AModulesManager.hpp"
-#include <stdexcept>
+#include <cstdlib>
 #include <iostream>
+#include <stdexcept>
+
+namespace {
+bool debugEnabled() {
+    static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
+    return enabled;
+}
+}
 
 namespace rtypeEngine {
 std::shared_ptr<IModule> AModulesManager::loadModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) {
@@ -41,6 +49,10 @@ std::shared_ptr<IModule> AModulesManager::loadModule(const std::string &modulePa
     std::shared_ptr<IModule> module(rawModule);
     _modules.push_back(module);
     _handles.push_back(handle);
+
+    if (debugEnabled()) {
+        std::cout << "[ModulesManager] Loaded " << modulePath << " pub=" << pubEndpoint << " sub=" << subEndpoint << std::endl;
+    }
 
     return module;
 }
