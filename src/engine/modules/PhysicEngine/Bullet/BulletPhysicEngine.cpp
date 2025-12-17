@@ -292,10 +292,9 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
 
                 if (vel.size() != 3) {
                     std::cerr << "[Bullet] ERROR: Failed to parse command: SetLinearVelocity (expected 3 components) for id '" << id << "'" << std::endl;
-                    continue;
+                } else {
+                    setLinearVelocity(id, vel);
                 }
-
-                setLinearVelocity(id, vel);
             } else if (command == "SetAngularVelocity") {
                 size_t split1 = data.find(':');
                 if (split1 != std::string::npos) {
