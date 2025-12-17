@@ -505,10 +505,13 @@ void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vec
 }
 
 void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
+    auto it = _bodies.find(id);
+    if (it == _bodies.end()) {
+        std::cerr << "[Bullet] ERROR: SetAngularVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
+        return;
     }
+    it->second->activate(true);
+    it->second->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
 }
 
 void BulletPhysicEngine::setMass(const std::string& id, float mass) {
