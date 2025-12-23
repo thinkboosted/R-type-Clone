@@ -11,7 +11,7 @@ target_include_directories(BulletPhysicEngine PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 
-find_package(Bullet CONFIG REQUIRED PATHS "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/share/bullet3")
+find_package(Bullet CONFIG REQUIRED)
 find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
