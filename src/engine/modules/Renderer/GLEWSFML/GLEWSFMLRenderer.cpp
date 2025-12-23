@@ -987,15 +987,38 @@ namespace rtypeEngine
             else if (_meshCache.find(obj.meshPath) != _meshCache.end())
             {
                 const auto &mesh = _meshCache[obj.meshPath];
+                GLuint texID;
 
-                glColor3f(obj.color.x, obj.color.y, obj.color.z);
-
+                if (!obj.texturePath.empty())
+                {
+                    texID = loadTexture(obj.texturePath);
+                    glEnable(GL_TEXTURE_2D);
+                    glBindTexture(GL_TEXTURE_2D, texID);
+                    glColor3f(1, 1, 1);
+                }
+                else
+                {
+                    glDisable(GL_TEXTURE_2D);
+                    glColor3f(obj.color.x, obj.color.y, obj.color.z);
+                }
                 glBegin(GL_TRIANGLES);
+
                 for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
                 {
                     unsigned int idx0 = mesh.indices[i];
                     unsigned int idx1 = mesh.indices[i + 1];
                     unsigned int idx2 = mesh.indices[i + 2];
+
+                    unsigned int uvIdx0 = 0;
+                    unsigned int uvIdx1 = 0;
+                    unsigned int uvIdx2 = 0;
+
+                    if (i + 2 < mesh._textureIndices.size())
+                    {
+                        uvIdx0 = mesh._textureIndices[i];
+                        uvIdx1 = mesh._textureIndices[i + 1];
+                        uvIdx2 = mesh._textureIndices[i + 2];
+                    }
 
                     if (idx0 * 3 + 2 < mesh.vertices.size() &&
                         idx1 * 3 + 2 < mesh.vertices.size() &&
@@ -1036,12 +1059,25 @@ namespace rtypeEngine
                             glNormal3f(nx, ny, nz);
                         }
 
+                        if (!obj.texturePath.empty() && uvIdx0 * 2 + 1 < mesh.uvs.size())
+                        {
+                            glTexCoord2f(mesh.uvs[uvIdx0 * 2], mesh.uvs[uvIdx0 * 2 + 1]);
+                        }
                         glVertex3f(x0, y0, z0);
+                        if (!obj.texturePath.empty() && uvIdx1 * 2 + 1 < mesh.uvs.size())
+                        {
+                            glTexCoord2f(mesh.uvs[uvIdx1 * 2], mesh.uvs[uvIdx1 * 2 + 1]);
+                        }
                         glVertex3f(x1, y1, z1);
+                        if (!obj.texturePath.empty() && uvIdx2 * 2 + 1 < mesh.uvs.size())
+                        {
+                            glTexCoord2f(mesh.uvs[uvIdx2 * 2], mesh.uvs[uvIdx2 * 2 + 1]);
+                        }
                         glVertex3f(x2, y2, z2);
                     }
                 }
                 glEnd();
+                glDisable(GL_TEXTURE_2D);
             }
 
             glPopMatrix();
