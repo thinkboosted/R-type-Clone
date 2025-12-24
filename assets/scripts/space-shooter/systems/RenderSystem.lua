@@ -33,6 +33,20 @@ function RenderSystem.update(dt)
             local type = mesh.modelPath
             ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. id)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+            
+            if mesh.texturePath then
+                print("[RenderSystem] Sending SetTexture for " .. id .. " (Model: " .. tostring(mesh.modelPath) .. ") with path: " .. mesh.texturePath) -- debug
+                ECS.sendMessage("RenderEntityCommand", "SetTexture:" .. id .. ":" .. mesh.texturePath)
+            else
+                if mesh.modelPath ~= "assets/models/cube.obj" then
+                    print("[RenderSystem] No texture path for " .. id .. " (Model: " .. tostring(mesh.modelPath) .. ")")
+                    -- Debug: print keys
+                    for k, v in pairs(mesh) do
+                        print("  Key: " .. tostring(k) .. ", Value: " .. tostring(v))
+                    end
+                end
+            end
+
             RenderSystem.initializedEntities[id] = true
         end
 

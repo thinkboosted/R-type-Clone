@@ -177,7 +177,6 @@ namespace rtypeEngine
                             obj.scale = {1, 1, 1};
                             obj.color = {1.0f, 1.0f, 1.0f};
                             _renderObjects[realId] = obj;
-                            loadTexture(texturePath);
                         }
                     }
                     else if (type == "HUDSprite" || type == "HUDSPRITE")
@@ -198,7 +197,6 @@ namespace rtypeEngine
                             obj.scale = {1, 1, 1};
                             obj.color = {1.0f, 1.0f, 1.0f};
                             _renderObjects[realId] = obj;
-                            loadTexture(texturePath);
                         }
                     }
                     else
@@ -377,6 +375,21 @@ namespace rtypeEngine
                 if (v.size() >= 3 && _renderObjects.find(id) != _renderObjects.end())
                 {
                     _renderObjects[id].color = {v[0], v[1], v[2]};
+                }
+            }
+            else if (command == "SetTexture")
+            {
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string texturePath = data.substr(split + 1);
+
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        _renderObjects[id].texturePath = texturePath;
+                        // loadTexture(texturePath);
+                    }
                 }
             }
             else if (command == "SetLightProperties")
@@ -617,6 +630,7 @@ namespace rtypeEngine
             meshData.uvs.push_back(v.x);
             meshData.uvs.push_back(v.y);
         }
+        std::cout << "[GLEWSFMLRenderer] Loaded mesh " << path << " with " << meshData.vertices.size() / 3 << " vertices, " << meshData.uvs.size() / 2 << " UVs, and " << meshData._textureIndices.size() << " UV indices." << std::endl; // debug
         _meshCache[path] = meshData;
     }
 
@@ -630,7 +644,7 @@ namespace rtypeEngine
         sf::Image image;
         if (!image.loadFromFile(path))
         {
-            std::cerr << "[GLEWSFMLRenderer] Failed to load texture: " << path << std::endl;
+            std::cerr << "Failed to load texture: " << path << std::endl;
             return 0;
         }
 
@@ -992,13 +1006,19 @@ namespace rtypeEngine
                 if (!obj.texturePath.empty())
                 {
                     texID = loadTexture(obj.texturePath);
+                    glDisable(GL_LIGHTING);
                     glEnable(GL_TEXTURE_2D);
                     glBindTexture(GL_TEXTURE_2D, texID);
-                    glColor3f(1, 1, 1);
+
+                    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+                    glColor3f(obj.color.x, obj.color.y, obj.color.z);
                 }
                 else
                 {
+                    glEnable(GL_LIGHTING);
                     glDisable(GL_TEXTURE_2D);
+                    // Reset to modulate for non-textured objects (though disabled texture makes this moot)
+                    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
                     glColor3f(obj.color.x, obj.color.y, obj.color.z);
                 }
                 glBegin(GL_TRIANGLES);
