@@ -23,7 +23,7 @@ dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 dofile("assets/scripts/space-shooter/systems/FollowSystem.lua")
 dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
 
-ECS.loadLastSave("space-shooter-save-level-1")
+-- ECS.loadLastSave("space-shooter-save-level-1")
 
 -- Create Camera
 local camera = ECS.createEntity()
@@ -33,13 +33,13 @@ ECS.addComponent(camera, "Camera", Camera(90))
 -- Create Player
 local player = ECS.createEntity()
 ECS.addComponent(player, "Transform", Transform(-8, 0, 0, 0, 0, 0))
-ECS.addComponent(player, "Mesh", Mesh("assets/models/aircraft.obj"))
+ECS.addComponent(player, "Mesh", Mesh("assets/models/simple_plane.obj", "assets/textures/plane_texture.png"))
 ECS.addComponent(player, "Collider", Collider("Box", {1, 1, 1}))
 ECS.addComponent(player, "Physic", Physic(1.0, 0.0, true, false)) -- mass 1, friction 0, fixedRot, noGravity
 ECS.addComponent(player, "Player", Player(20.0))
 ECS.addComponent(player, "Tag", Tag({"Player"}))
 ECS.addComponent(player, "Life", Life(3))
-ECS.addComponent(player, "Color", Color(0.0, 1.0, 0.0)) -- Green player
+ECS.addComponent(player, "Color", Color(1.0, 1.0, 1.0)) -- White player (to see texture)
 ECS.addComponent(player, "ParticleGenerator", ParticleGenerator(
     -2.5, 0.5, -1.0,    -- Offset (Behind the ship in local space, assuming +Y is forward)
     -1.0, 0.0, 0.0,     -- Direction (Backwards in local space)
