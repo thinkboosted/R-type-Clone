@@ -35,8 +35,8 @@ function Spawns.createPlayer(x, y, z, clientId)
 
     -- 3. Visuals (Only if rendering is enabled)
     if hasRendering() then
-        ECS.addComponent(e, "Mesh", Mesh("assets/models/aircraft.obj"))
-        -- Add a light or other visuals?
+        ECS.addComponent(e, "Mesh", Mesh("assets/models/simple_plane.obj", "assets/textures/plane_texture.png"))
+        ECS.addComponent(e, "Color", Color(1.0, 1.0, 1.0)) -- White (removes default orange)
     end
 
     -- 4. Network & Architecture
