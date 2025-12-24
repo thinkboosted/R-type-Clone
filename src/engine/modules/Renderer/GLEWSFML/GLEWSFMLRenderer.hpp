@@ -22,7 +22,6 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void onRenderEntityCommand(const std::string& message);
     void handleWindowResized(const std::string& message);
 
-    void addMesh(/* mesh parameters */) override;
     void clearBuffer() override;
     void render() override;
     std::vector<uint32_t> getPixels() const override;
@@ -86,6 +85,8 @@ class GLEWSFMLRenderer : public I3DRenderer {
     struct MeshData {
         std::vector<float> vertices;
         std::vector<unsigned int> indices;
+        std::vector<float> uvs;
+        std::vector<unsigned int> _textureIndices;
     };
 
     Vector2u _resolution;

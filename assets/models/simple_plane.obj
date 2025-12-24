@@ -1,0 +1,36 @@
+# Simple Airplane
+# Vertices (x, y, z)
+v 0.0 0.0 2.0   # Nose
+v -0.5 -0.5 -1.0 # Body BL
+v 0.5 -0.5 -1.0  # Body BR
+v 0.5 0.5 -1.0   # Body TR
+v -0.5 0.5 -1.0  # Body TL
+v 0.0 0.0 -2.0  # Tail end
+
+# Wings
+v -2.5 0.0 0.0  # Left Wing Tip
+v 2.5 0.0 0.0   # Right Wing Tip
+
+# Texture Coordinates (u, v)
+vt 0.5 1.0 # Nose (Top Center)
+vt 0.0 0.0 # Body Back Left
+vt 1.0 0.0 # Body Back Right
+vt 0.0 0.5 # Wing Left
+vt 1.0 0.5 # Wing Right
+
+# Normals (simplified)
+vn 0.0 1.0 0.0
+vn 0.0 -1.0 0.0
+vn 1.0 0.0 0.0
+vn -1.0 0.0 0.0
+
+# Faces (v/vt/vn)
+# Body (Pyramid to Nose)
+f 1/1/1 4/3/1 3/2/1
+f 1/1/1 3/2/1 2/2/1
+f 1/1/1 2/2/1 5/2/1
+f 1/1/1 5/2/1 4/3/1
+
+# Wings (Simple triangles attached to body)
+f 2/2/2 7/4/2 5/2/2 # Left Wing
+f 3/2/2 4/3/2 8/5/2 # Right Wing

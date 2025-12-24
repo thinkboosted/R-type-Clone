@@ -14,9 +14,10 @@ function Transform(x, y, z, rx, ry, rz, sx, sy, sz)
     }
 end
 
-function Mesh(modelPath)
+function Mesh(modelPath, texturePath)
     return {
-        modelPath = modelPath
+        modelPath = modelPath,
+        texturePath = texturePath
     }
 end
 

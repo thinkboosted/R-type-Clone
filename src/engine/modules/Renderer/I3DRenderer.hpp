@@ -12,7 +12,6 @@ class I3DRenderer : public AModule {
     virtual ~I3DRenderer() = default;
 
   protected:
-    virtual void addMesh() = 0;
     virtual void clearBuffer() = 0;
     virtual void render() = 0;
     virtual std::vector<uint32_t> getPixels() const = 0;
