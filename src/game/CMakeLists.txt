@@ -141,6 +141,13 @@ foreach(EXECUTABLE_TARGET r-type_client r-type_server)
             COMMENT "Copying NetworkManager to executable directory for ${EXECUTABLE_TARGET}"
         )
     endif()
+
+    add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>/assets
+        COMMENT "Copying assets to executable directory for ${EXECUTABLE_TARGET}"
+    )
 endforeach()
 
 # Install rules

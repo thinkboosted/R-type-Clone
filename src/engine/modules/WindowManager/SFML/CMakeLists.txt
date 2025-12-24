@@ -42,10 +42,7 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SFML::System>
             $<TARGET_FILE_DIR:SFMLWindowManager>
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/$<IF:$<CONFIG:Debug>,debug/bin,bin>
-            $<TARGET_FILE_DIR:SFMLWindowManager>
-        COMMENT "Copying SFML and dependency DLLs to module directory"
+        COMMENT "Copying SFML DLLs to module directory"
     )
 endif()
 
