@@ -1,79 +1,66 @@
 local PhysicSystem = {}
 
-PhysicSystem.initializedEntities = {}
-PhysicSystem.previousStates = {}
-
 function PhysicSystem.init()
     print("[PhysicSystem] Initialized")
+    -- Note: EntityUpdated messages are handled by the C++ LuaECSManager
+    -- which calls PhysicSystem.onEntityUpdated() directly for each update.
+    -- No explicit subscription needed here.
 end
 
 function PhysicSystem.update(dt)
-    local entities = ECS.getEntitiesWith({"Transform", "Physic"})
+    -- GUARD : Si je ne suis pas le serveur (Local ou Distant), je ne touche pas à la physique.
+    if not ECS.capabilities.hasAuthority then return end
+
+    local entities = ECS.getEntitiesWith({"Physic"})
 
     for _, id in ipairs(entities) do
-        local transform = ECS.getComponent(id, "Transform")
         local physic = ECS.getComponent(id, "Physic")
-        local collider = ECS.getComponent(id, "Collider")
-
-        -- If entity has a collider, we assume it's managed by the physics engine
-        if collider then
-            if not PhysicSystem.previousStates[id] then
-                PhysicSystem.previousStates[id] = { mass = physic.mass, friction = physic.friction }
-            else
-                local prevState = PhysicSystem.previousStates[id]
-                if prevState.mass ~= physic.mass then
-                    ECS.sendMessage("PhysicCommand", "SetMass:" .. id .. ":" .. physic.mass .. ";")
-                    prevState.mass = physic.mass
-                end
-                if prevState.friction ~= physic.friction then
-                    ECS.sendMessage("PhysicCommand", "SetFriction:" .. id .. ":" .. physic.friction .. ";")
-                    prevState.friction = physic.friction
-                end
-            end
-
-            -- Sync velocity to physics engine
-            if physic.mass > 0 then
-                local vMsg = "SetLinearVelocity:" .. id .. ":" .. physic.vx .. "," .. physic.vy .. "," .. physic.vz .. ";"
-                ECS.sendMessage("PhysicCommand", vMsg)
-
-                local vaMsg = "SetAngularVelocity:" .. id .. ":" .. physic.vax .. "," .. physic.vay .. "," .. physic.vaz .. ";"
-                ECS.sendMessage("PhysicCommand", vaMsg)
-
-                if not physic.useGravity then
-                    -- Apply anti-gravity force: F = m * g_up. g is -30, so g_up is 30.
-                    local forceY = physic.mass * 30.0
-                    ECS.sendMessage("PhysicCommand", "ApplyForce:" .. id .. ":0," .. forceY .. ",0;")
-                end
-            end
-        else
-            -- Simple manual physics if no collider/physics engine body
-            if physic.mass > 0 then
-                if physic.useGravity then
-                    physic.vy = physic.vy - 9.81 * dt -- Manual gravity if not using engine
-                end
-            end
-
-            transform.x = transform.x + physic.vx * dt
-            transform.y = transform.y + physic.vy * dt
-            transform.z = transform.z + physic.vz * dt
-
-            transform.rx = transform.rx + physic.vax * dt
-            transform.ry = transform.ry + physic.vay * dt
-            transform.rz = transform.rz + physic.vaz * dt
+        
+        -- Si une vitesse est demandée, on l'envoie au moteur C++
+        if physic.vx ~= 0 or physic.vy ~= 0 then
+            local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
+            ECS.sendMessage("PhysicCommand", msg)
+            -- print("[PhysicSystem] Sending: " .. msg)
         end
     end
 end
 
+-- ============================================================================
+-- CALLBACK: Physics Engine → Lua Transform Sync
+-- ============================================================================
+-- Called by C++ LuaECSManager after receiving EntityUpdated messages from Bullet.
+-- The C++ code parses the message and invokes this with individual parameters.
+-- Receives updated positions/rotations from physics simulation.
+-- This is the "Missing Link" that syncs physics state back to rendering.
 function PhysicSystem.onEntityUpdated(id, x, y, z, rx, ry, rz)
+    -- Verify the entity has a Transform component
     local transform = ECS.getComponent(id, "Transform")
-    if transform then
-        transform.x = x
-        transform.y = y
-        transform.z = z
-        transform.rx = rx
-        transform.ry = ry
-        transform.rz = rz
-    end
+    if not transform then return end
+    
+    -- Update Transform with physics-calculated position and rotation
+    -- print("[PhysicSystem] Updated Entity " .. id .. " to (" .. x .. ", " .. y .. ", " .. z .. ")")
+    -- local transform = ECS.getComponent(id, "Transform") -- Removed redundant get
+    transform.x = x
+    transform.y = y
+    transform.z = z
+    transform.rx = rx
+    transform.ry = ry
+    transform.rz = rz
+    
+    -- ====================================================================
+    -- CRITICAL: Force Visual Sync - Notify Renderer Immediately
+    -- ====================================================================
+    -- Send SetPosition command to ensure renderer draws at correct position
+    -- This bypasses any potential RenderSystem latency
+    local renderMsg = string.format("SetPosition:%s,%f,%f,%f", id, x, y, z)
+    ECS.sendMessage("RenderEntityCommand", renderMsg)
+
+    local rotMsg = string.format("SetRotation:%s,%f,%f,%f", id, rx, ry, rz)
+    ECS.sendMessage("RenderEntityCommand", rotMsg)
+    
+    -- print("[PhysicSystem] Forced Render Sync: " .. renderMsg)
 end
 
+-- Register system at end to avoid init recursion
 ECS.registerSystem(PhysicSystem)
+return PhysicSystem

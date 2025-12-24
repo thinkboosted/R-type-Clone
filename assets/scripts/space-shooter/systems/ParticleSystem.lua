@@ -1,11 +1,20 @@
+-- ============================================================================
+-- ParticleSystem.lua - Particle Effects for Rendering Instances
+-- ============================================================================
+-- Only creates and updates particle generators on instances with rendering.
+-- Clients and Solo instances render particles; servers skip them.
+-- ============================================================================
 local ParticleSystem = {}
 ParticleSystem.initializedParticles = {}
 
 function ParticleSystem.init()
-    print("[ParticleSystem] Initialized")
+    print("[ParticleSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
 end
 
 function ParticleSystem.update(dt)
+    -- Only process particles on instances with rendering capability
+    if not ECS.capabilities.hasRendering then return end
+    
     local entities = ECS.getEntitiesWith({"Transform", "ParticleGenerator"})
     for _, id in ipairs(entities) do
         local t = ECS.getComponent(id, "Transform")

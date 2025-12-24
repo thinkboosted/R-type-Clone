@@ -68,6 +68,22 @@ function Player(speed)
     }
 end
 
+function Weapon(cooldown)
+    return {
+        cooldown = cooldown or 0.2,
+        timeSinceLastShot = 0.0
+    }
+end
+
+function Button(action, width, height)
+    return {
+        action = action or "",
+        width = width or 100,
+        height = height or 50,
+        hovered = false
+    }
+end
+
 function Enemy(speed)
     return {
         speed = speed or 5.0
@@ -131,6 +147,12 @@ function Follow(targetId, offsetX, offsetY, offsetZ)
     }
 end
 
+function NetworkId(id)
+    return {
+        id = id or 0
+    }
+end
+
 function ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
     return {
         offsetX = offsetX or 0,
@@ -147,5 +169,75 @@ function ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, 
         r = r or 1.0,
         g = g or 1.0,
         b = b or 1.0
+    }
+end
+
+-- ============================================================================
+-- SERVER-AUTHORITATIVE ARCHITECTURE COMPONENTS
+-- ============================================================================
+-- These components are required for the unified Client-Server architecture
+-- as defined in docs/examples/
+
+-- NetworkIdentity - Identifies network entities with ownership
+function NetworkIdentity(uuid, ownerId, isLocalPlayer)
+    return {
+        uuid = uuid or "",
+        ownerId = ownerId or -1,              -- -1 = server, >= 0 = client
+        isLocalPlayer = isLocalPlayer or false,
+        lastSyncTime = 0,
+        interpolate = true
+    }
+end
+
+-- InputBuffer - Buffer inputs for prediction/reconciliation (Client only)
+function InputBuffer(maxHistory)
+    return {
+        sequence = 0,
+        commands = {},
+        maxHistory = maxHistory or 60,
+        lastProcessedSeq = 0
+    }
+end
+
+-- ServerAuthority - Marks entities with server authority
+function ServerAuthority()
+    return {
+        canSimulate = true,
+        broadcastRate = 0.05,
+        timeSinceLastBroadcast = 0
+    }
+end
+
+-- ClientPredicted - Marks entities with client-side prediction
+function ClientPredicted()
+    return {
+        enabled = true,
+        reconcile = true,
+        snapThreshold = 2.0
+    }
+end
+
+-- InputState - Unified input state component (replaces direct key checks)
+function InputState()
+    return {
+        up = false,
+        down = false,
+        left = false,
+        right = false,
+        shoot = false
+    }
+end
+
+-- GameState - Server-Authoritative game state management
+-- Replaces MenuSystem global variables with ECS-based state
+function GameState(state, lastScore)
+    return {
+        state = state or "MENU",              -- MENU, PLAYING, GAMEOVER, ERROR
+        lastScore = lastScore or 0,
+        connectionTimeout = 0,
+        assignmentHandled = false,
+        -- Server-side transition tracking
+        transitionRequested = false,
+        nextState = nil
     }
 end

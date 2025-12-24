@@ -3,6 +3,21 @@
 #include <sstream>
 #include <vector>
 
+static void split(const std::string &s, char delim, std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        elems.push_back(item);
+    }
+}
+
+static float safeStof(const std::string &str, float fallback = 0.0f) {
+    try {
+        return std::stof(str);
+    } catch (const std::exception &) {
+        return fallback;
+    }
+}
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -25,8 +40,8 @@ void BulletPhysicEngine::init() {
     _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
-
-    _dynamicsWorld->setGravity(btVector3(0, -30, 0));
+    // Need to be changed in lua
+    _dynamicsWorld->setGravity(btVector3(0, 0, 0));
 
     subscribe("PhysicCommand", [this](const std::string& msg) {
         this->onPhysicCommand(msg);
@@ -53,6 +68,11 @@ void BulletPhysicEngine::cleanup() {
 }
 
 void BulletPhysicEngine::loop() {
+    static int heartbeat = 0;
+    if (++heartbeat % 60 == 0) {
+        std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodies.size() << std::endl;
+    }
+
     stepSimulation();
     checkCollisions();
     sendUpdates();
@@ -117,8 +137,8 @@ void BulletPhysicEngine::checkCollisions() {
 }
 
 void BulletPhysicEngine::sendUpdates() {
-    std::stringstream ss;
-    float radToDeg = 180.0f / static_cast<float>(M_PI);
+    std::stringstream batchStream;
+    bool hasUpdates = false;
 
     for (auto& pair : _bodies) {
         btTransform trans;
@@ -129,125 +149,137 @@ void BulletPhysicEngine::sendUpdates() {
             btScalar yaw, pitch, roll;
             trans.getBasis().getEulerYPR(yaw, pitch, roll);
 
-            ss << "EntityUpdated:" << pair.first << ":"
+            batchStream << "EntityUpdated:" << pair.first << ":"
                << pos.x() << "," << pos.y() << "," << pos.z() << ":"
-               << pitch * radToDeg << "," << yaw * radToDeg << "," << roll * radToDeg << ";";
+               << pitch << "," << yaw << "," << roll << ";";
+            
+            hasUpdates = true;
+        } else {
+            std::cout << "[Bullet] DEBUG: Missing MotionState for body " << pair.first << std::endl;
         }
     }
-    std::string msg = ss.str();
-    if (!msg.empty()) {
-        sendMessage("EntityUpdated", msg);
+
+    if (hasUpdates) {
+        sendMessage("EntityUpdated", batchStream.str());
     }
 }
 
 void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
-    std::stringstream ss(message);
-    std::string segment;
-    while (std::getline(ss, segment, ';')) {
-        if (segment.empty()) continue;
-        size_t colonPos = segment.find(':');
-        if (colonPos == std::string::npos) continue;
+    try {
+        std::stringstream ss(message);
+        std::string segment;
 
-        std::string command = segment.substr(0, colonPos);
-        std::string data = segment.substr(colonPos + 1);
+        while (std::getline(ss, segment, ';')) {
+            if (segment.empty()) continue;
+            size_t colonPos = segment.find(':');
+            if (colonPos == std::string::npos) continue;
 
-        if (command == "CreateBody") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
+            std::string command = segment.substr(0, colonPos);
+            std::string data = segment.substr(colonPos + 1);
+
+            if (command == "CreateBody") {
+                size_t split1 = data.find(':');
+                if (split1 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: CreateBody (missing id/type)" << std::endl;
+                    continue;
+                }
+
                 std::string id = data.substr(0, split1);
                 std::string rest = data.substr(split1 + 1);
                 size_t split2 = rest.find(':');
-                if (split2 != std::string::npos) {
-                    std::string type = rest.substr(0, split2);
-                    std::string paramsStr = rest.substr(split2 + 1);
+                if (split2 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: CreateBody (missing type/params) for id '" << id << "'" << std::endl;
+                    continue;
+                }
 
-                    std::vector<float> params;
-                    std::stringstream pss(paramsStr);
-                    std::string p;
-                    while (std::getline(pss, p, ',')) {
-                        try {
-                            if (!p.empty()) {
-                                params.push_back(std::stof(p));
-                            }
-                        } catch (const std::exception& e) {
-                            std::cerr << "[BulletPhysicEngine] Error parsing float '" << p << "' in '" << paramsStr << "': " << e.what() << std::endl;
+                std::string type = rest.substr(0, split2);
+                std::string paramsStr = rest.substr(split2 + 1);
+
+                std::vector<float> params;
+                std::stringstream pss(paramsStr);
+                std::string p;
+                while (std::getline(pss, p, ',')) {
+                    if (!p.empty()) {
+                        params.push_back(safeStof(p));
+                    }
+                }
+                createBody(id, type, params);
+            } else if (command == "ApplyForce") {
+                size_t split = data.find(':');
+                if (split != std::string::npos) {
+                    std::string id = data.substr(0, split);
+                    std::string forceStr = data.substr(split + 1);
+                    std::vector<float> force;
+                    std::stringstream fss(forceStr);
+                    std::string f;
+                    while (std::getline(fss, f, ',')) {
+                        if (!f.empty()) force.push_back(safeStof(f));
+                    }
+                    if (force.size() == 3) {
+                        applyForce(id, force);
+                    }
+                }
+            } else if (command == "SetTransform") {
+                // SetTransform:id:x,y,z:rx,ry,rz
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    std::string rest = data.substr(split1 + 1);
+                    size_t split2 = rest.find(':');
+                    if (split2 != std::string::npos) {
+                        std::string posStr = rest.substr(0, split2);
+                        std::string rotStr = rest.substr(split2 + 1);
+
+                        std::vector<float> pos;
+                        std::stringstream pss(posStr);
+                        std::string p;
+                        while (std::getline(pss, p, ',')) {
+                            if (!p.empty()) pos.push_back(safeStof(p));
+                        }
+
+                        std::vector<float> rot;
+                        std::stringstream rss(rotStr);
+                        std::string r;
+                        while (std::getline(rss, r, ',')) {
+                            if (!r.empty()) rot.push_back(safeStof(r));
+                        }
+
+                        if (pos.size() == 3 && rot.size() == 3) {
+                            setTransform(id, pos, rot);
                         }
                     }
-                    createBody(id, type, params);
                 }
-            }
-        } else if (command == "ApplyForce") {
-             size_t split = data.find(':');
-             if (split != std::string::npos) {
-                 std::string id = data.substr(0, split);
-                 std::string forceStr = data.substr(split + 1);
-                 std::vector<float> force;
-                 std::stringstream fss(forceStr);
-                 std::string f;
-                 while (std::getline(fss, f, ',')) {
-                     force.push_back(std::stof(f));
-                 }
-                 if (force.size() == 3) {
-                     applyForce(id, force);
-                 }
-             }
-        } else if (command == "SetTransform") {
-             // SetTransform:id:x,y,z:rx,ry,rz
-             size_t split1 = data.find(':');
-             if (split1 != std::string::npos) {
-                 std::string id = data.substr(0, split1);
-                 std::string rest = data.substr(split1 + 1);
-                 size_t split2 = rest.find(':');
-                 if (split2 != std::string::npos) {
-                     std::string posStr = rest.substr(0, split2);
-                     std::string rotStr = rest.substr(split2 + 1);
+            } else if (command == "Raycast") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string originStr = data.substr(0, split1);
+                    std::string dirStr = data.substr(split1 + 1);
 
-                     std::vector<float> pos;
-                     std::stringstream pss(posStr);
-                     std::string p;
-                     while (std::getline(pss, p, ',')) {
-                         pos.push_back(std::stof(p));
-                     }
+                    std::vector<float> origin;
+                    std::stringstream oss(originStr);
+                    std::string o;
+                    while (std::getline(oss, o, ',')) {
+                        if (!o.empty()) origin.push_back(safeStof(o));
+                    }
 
-                     std::vector<float> rot;
-                     std::stringstream rss(rotStr);
-                     std::string r;
-                     while (std::getline(rss, r, ',')) {
-                         rot.push_back(std::stof(r));
-                     }
+                    std::vector<float> dir;
+                    std::stringstream dss(dirStr);
+                    std::string d;
+                    while (std::getline(dss, d, ',')) {
+                        if (!d.empty()) dir.push_back(safeStof(d));
+                    }
 
-                     if (pos.size() == 3 && rot.size() == 3) {
-                         setTransform(id, pos, rot);
-                     }
-                 }
-             }
-        } else if (command == "Raycast") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string originStr = data.substr(0, split1);
-                std::string dirStr = data.substr(split1 + 1);
-
-                std::vector<float> origin;
-                std::stringstream oss(originStr);
-                std::string o;
-                while (std::getline(oss, o, ',')) {
-                    origin.push_back(std::stof(o));
+                    if (origin.size() == 3 && dir.size() == 3) {
+                        raycast(origin, dir);
+                    }
+                }
+            } else if (command == "SetLinearVelocity") {
+                size_t split1 = data.find(':');
+                if (split1 == std::string::npos) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: SetLinearVelocity (missing id)" << std::endl;
+                    continue;
                 }
 
-                std::vector<float> dir;
-                std::stringstream dss(dirStr);
-                std::string d;
-                while (std::getline(dss, d, ',')) {
-                    dir.push_back(std::stof(d));
-                }
-
-                if (origin.size() == 3 && dir.size() == 3) {
-                    raycast(origin, dir);
-                }
-            }
-        } else if (command == "SetLinearVelocity") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
                 std::string id = data.substr(0, split1);
                 std::string velStr = data.substr(split1 + 1);
 
@@ -255,112 +287,109 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                 std::stringstream vss(velStr);
                 std::string v;
                 while (std::getline(vss, v, ',')) {
-                    try {
-                        if (!v.empty()) vel.push_back(std::stof(v));
-                    } catch (...) {}
+                    if (!v.empty()) vel.push_back(safeStof(v));
                 }
 
-                if (vel.size() == 3) {
+                if (vel.size() != 3) {
+                    std::cerr << "[Bullet] ERROR: Failed to parse command: SetLinearVelocity (expected 3 components) for id '" << id << "'" << std::endl;
+                } else {
                     setLinearVelocity(id, vel);
                 }
-            }
-        } else if (command == "SetAngularVelocity") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string id = data.substr(0, split1);
-                std::string velStr = data.substr(split1 + 1);
+            } else if (command == "SetAngularVelocity") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    std::string velStr = data.substr(split1 + 1);
 
-                std::vector<float> vel;
-                std::stringstream vss(velStr);
-                std::string v;
-                while (std::getline(vss, v, ',')) {
-                    try {
-                        if (!v.empty()) vel.push_back(std::stof(v));
-                    } catch (...) {}
-                }
+                    std::vector<float> vel;
+                    std::stringstream vss(velStr);
+                    std::string v;
+                    while (std::getline(vss, v, ',')) {
+                        if (!v.empty()) vel.push_back(safeStof(v));
+                    }
 
-                if (vel.size() == 3) {
-                    setAngularVelocity(id, vel);
+                    if (vel.size() == 3) {
+                        setAngularVelocity(id, vel);
+                    }
                 }
-            }
-        } else if (command == "SetVelocityXZ") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string id = data.substr(0, split1);
-                std::string velStr = data.substr(split1 + 1);
-                std::vector<float> vel;
-                std::stringstream vss(velStr);
-                std::string v;
-                while (std::getline(vss, v, ',')) {
-                    try {
-                        if (!v.empty()) vel.push_back(std::stof(v));
-                    } catch (...) {}
+            } else if (command == "SetVelocityXZ") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    std::string velStr = data.substr(split1 + 1);
+                    std::vector<float> vel;
+                    std::stringstream vss(velStr);
+                    std::string v;
+                    while (std::getline(vss, v, ',')) {
+                        if (!v.empty()) vel.push_back(safeStof(v));
+                    }
+                    if (vel.size() == 2) {
+                        setVelocityXZ(id, vel[0], vel[1]);
+                    }
                 }
-                if (vel.size() == 2) {
-                    setVelocityXZ(id, vel[0], vel[1]);
+            } else if (command == "ApplyImpulse") {
+                size_t split = data.find(':');
+                if (split != std::string::npos) {
+                    std::string id = data.substr(0, split);
+                    std::string forceStr = data.substr(split + 1);
+                    std::vector<float> force;
+                    std::stringstream fss(forceStr);
+                    std::string f;
+                    while (std::getline(fss, f, ',')) {
+                        if (!f.empty()) force.push_back(safeStof(f));
+                    }
+                    if (force.size() == 3) {
+                        applyImpulse(id, force);
+                    }
                 }
-            }
-        } else if (command == "ApplyImpulse") {
-             size_t split = data.find(':');
-             if (split != std::string::npos) {
-                 std::string id = data.substr(0, split);
-                 std::string forceStr = data.substr(split + 1);
-                 std::vector<float> force;
-                 std::stringstream fss(forceStr);
-                 std::string f;
-                 while (std::getline(fss, f, ',')) {
-                     force.push_back(std::stof(f));
-                 }
-                 if (force.size() == 3) {
-                     applyImpulse(id, force);
-                 }
-             }
-        } else if (command == "SetAngularFactor") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string id = data.substr(0, split1);
-                std::string factorStr = data.substr(split1 + 1);
-                std::vector<float> factor;
-                std::stringstream fss(factorStr);
-                std::string f;
-                while (std::getline(fss, f, ',')) {
-                    try {
-                        if (!f.empty()) factor.push_back(std::stof(f));
-                    } catch (...) {}
+            } else if (command == "SetAngularFactor") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    std::string factorStr = data.substr(split1 + 1);
+                    std::vector<float> factor;
+                    std::stringstream fss(factorStr);
+                    std::string f;
+                    while (std::getline(fss, f, ',')) {
+                        if (!f.empty()) factor.push_back(safeStof(f));
+                    }
+                    if (factor.size() == 3) {
+                        setAngularFactor(id, factor);
+                    }
                 }
-                if (factor.size() == 3) {
-                    setAngularFactor(id, factor);
+            } else if (command == "SetMass") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    float mass = safeStof(data.substr(split1 + 1));
+                    setMass(id, mass);
                 }
+            } else if (command == "SetFriction") {
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string id = data.substr(0, split1);
+                    float friction = safeStof(data.substr(split1 + 1));
+                    setFriction(id, friction);
+                }
+            } else if (command == "DestroyBody") {
+                destroyBody(data);
             }
-        } else if (command == "SetMass") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string id = data.substr(0, split1);
-                float mass = std::stof(data.substr(split1 + 1));
-                setMass(id, mass);
-            }
-        } else if (command == "SetFriction") {
-            size_t split1 = data.find(':');
-            if (split1 != std::string::npos) {
-                std::string id = data.substr(0, split1);
-                float friction = std::stof(data.substr(split1 + 1));
-                setFriction(id, friction);
-            }
-        } else if (command == "DestroyBody") {
-            destroyBody(data);
         }
+    } catch (const std::exception& e) {
+        std::cerr << "[BulletPhysicEngine] PhysicCommand parse error: " << e.what() << " in msg='" << message << "'" << std::endl;
     }
 }
 
 void BulletPhysicEngine::destroyBody(const std::string& id) {
-    if (_bodies.find(id) != _bodies.end()) {
-        btRigidBody* body = _bodies[id];
+    auto it = _bodies.find(id);
+    if (it != _bodies.end()) {
+        btRigidBody* body = it->second;
         _dynamicsWorld->removeRigidBody(body);
         delete body->getMotionState();
         delete body->getCollisionShape();
         delete body;
-        _bodies.erase(id);
         _bodyIds.erase(body);
+        _bodies.erase(it);
     }
 }
 
@@ -369,36 +398,46 @@ void BulletPhysicEngine::createBody(const std::string& id, const std::string& ty
     btScalar mass(1.f);
     btScalar friction(0.5f);
 
-    if (type == "Box" && params.size() >= 3) {
+    std::string typeLower = type;
+    std::transform(typeLower.begin(), typeLower.end(), typeLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (typeLower == "box" && params.size() >= 3) {
         shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
         if (params.size() >= 4) mass = params[3];
         if (params.size() >= 5) friction = params[4];
-    } else if (type == "Sphere" && params.size() >= 1) {
+    } else if (typeLower == "sphere" && params.size() >= 1) {
         shape = new btSphereShape(params[0]);
         if (params.size() >= 2) mass = params[1];
         if (params.size() >= 3) friction = params[2];
+    } else {
+        std::cerr << "[Bullet] ERROR: CreateBody unknown type or insufficient params for '" << id << "' (type='" << type << "', params=" << params.size() << ")" << std::endl;
+        return;
     }
 
-    if (shape) {
-        btTransform startTransform;
-        startTransform.setIdentity();
-        startTransform.setOrigin(btVector3(0, 0, 0));
-
-        bool isDynamic = (mass != 0.f);
-
-        btVector3 localInertia(0, 0, 0);
-        if (isDynamic)
-            shape->calculateLocalInertia(mass, localInertia);
-
-        btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
-        btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
-        rbInfo.m_friction = friction;
-        btRigidBody* body = new btRigidBody(rbInfo);
-
-        _dynamicsWorld->addRigidBody(body);
-        _bodies[id] = body;
-        _bodyIds[body] = id;
+    if (!shape) {
+        std::cerr << "[Bullet] ERROR: CreateBody failed to create shape for '" << id << "'" << std::endl;
+        return;
     }
+
+    btTransform startTransform;
+    startTransform.setIdentity();
+    startTransform.setOrigin(btVector3(0, 0, 0));
+
+    bool isDynamic = (mass != 0.f);
+    btVector3 localInertia(0, 0, 0);
+    if (isDynamic) {
+        shape->calculateLocalInertia(mass, localInertia);
+    }
+
+    btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
+    rbInfo.m_friction = friction;
+    btRigidBody* body = new btRigidBody(rbInfo);
+
+    _dynamicsWorld->addRigidBody(body);
+    _bodies[id] = body;
+    _bodyIds[body] = id;
+    std::cout << "[Bullet] Created Body for ID: " << id << " (Mass: " << mass << ", Friction: " << friction << ")" << std::endl;
 }
 
 void BulletPhysicEngine::applyForce(const std::string& id, const std::vector<float>& force) {
@@ -455,17 +494,23 @@ void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::ve
 }
 
 void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& vel) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
+    auto it = _bodies.find(id);
+    if (it == _bodies.end()) {
+        std::cerr << "[Bullet] ERROR: SetLinearVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
+        return;
     }
+    it->second->activate(true);
+    it->second->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
 }
 
 void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
+    auto it = _bodies.find(id);
+    if (it == _bodies.end()) {
+        std::cerr << "[Bullet] ERROR: SetAngularVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
+        return;
     }
+    it->second->activate(true);
+    it->second->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
 }
 
 void BulletPhysicEngine::setMass(const std::string& id, float mass) {

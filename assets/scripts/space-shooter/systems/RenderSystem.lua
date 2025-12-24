@@ -1,17 +1,28 @@
--- Render System
+-- ============================================================================
+-- RenderSystem.lua - Rendering Only on Capable Instances
+-- ============================================================================
+-- Only runs on instances with hasRendering capability (Client or Solo).
+-- Server instances skip all rendering to save resources.
+-- ============================================================================
 local RenderSystem = {}
 local CameraInitialized = false
 RenderSystem.initializedEntities = {}
+
 function RenderSystem.init()
-    print("[RenderSystem] Initialized")
+    print("[RenderSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
 end
 
 function RenderSystem.update(dt)
+    -- Only render on instances with rendering capability
+    if not ECS.capabilities.hasRendering then
+        return
+    end
     -- Handle Camera
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
     for _, id in ipairs(cameras) do
         local cam = ECS.getComponent(id, "Camera")
         if cam.isActive and not CameraInitialized then
+            print("RenderSystem: Activating Camera " .. id)
             ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
             CameraInitialized = true
 
@@ -66,6 +77,7 @@ function RenderSystem.update(dt)
         local color = ECS.getComponent(id, "Color")
 
         if not RenderSystem.initializedEntities[id] then
+            print("RenderSystem: Creating Text '" .. text.text .. "' for Entity " .. id)
             ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
             RenderSystem.initializedEntities[id] = true

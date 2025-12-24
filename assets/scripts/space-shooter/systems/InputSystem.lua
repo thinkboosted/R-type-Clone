@@ -1,175 +1,84 @@
-
 local InputSystem = {}
-
-InputSystem.keys = {
-    up = false,
-    down = false,
-    left = false,
-    right = false,
-    shoot = false
-}
-
-InputSystem.timeSinceLastShoot = 0
-InputSystem.shootCooldown = 0.2
-InputSystem.blinkTimer = 0
 
 function InputSystem.init()
     print("[InputSystem] Initialized")
+    -- AJOUT CRUCIAL : On s'abonne aux événements clavier
+    ECS.subscribe("KeyPressed", InputSystem.onKeyPressed)
+    ECS.subscribe("KeyReleased", InputSystem.onKeyReleased)
 end
 
 function InputSystem.update(dt)
-    InputSystem.timeSinceLastShoot = InputSystem.timeSinceLastShoot + dt
-    InputSystem.blinkTimer = InputSystem.blinkTimer + dt
+    -- REMOVED GUARD: Update must run on Server (to process network inputs) AND Client (for prediction)
+    -- if not ECS.capabilities.hasLocalInput then return end
 
-    local players = ECS.getEntitiesWith({"Player", "Physic", "Transform"})
-    if #players == 0 then return end
+    local entities = ECS.getEntitiesWith({"InputState", "Physic", "Player", "Transform"})
 
-    local id = players[1]
-    local physic = ECS.getComponent(id, "Physic")
-    local transform = ECS.getComponent(id, "Transform")
-    local playerComp = ECS.getComponent(id, "Player")
-    local powerUp = ECS.getComponent(id, "PowerUp")
-    local color = ECS.getComponent(id, "Color")
-
-
-    local activeCooldown = InputSystem.shootCooldown
-    if powerUp then
-        powerUp.timeRemaining = powerUp.timeRemaining - dt
-        if powerUp.timeRemaining <= 0 then
-
-            ECS.removeComponent(id, "PowerUp")
-            if color then
-                color.r = 0.0
-                color.g = 1.0
-                color.b = 0.0
-            end
-        else
-
-            activeCooldown = 0.05
-
-            if color then
-                local blinkSpeed = 15.0
-                local t = (math.sin(InputSystem.blinkTimer * blinkSpeed) + 1.0) / 2.0
-                color.r = 0.0
-                color.g = 0.5 + t
-                color.b = 0.0 + t * 0.5
-            end
-        end
-    end
-
-    local speed = playerComp.speed
-    local vx = 0
-    local vy = 0
-
-    if InputSystem.keys.up then
-        vy = vy + 1
-    end
-    if InputSystem.keys.down then
-        vy = vy - 1
-    end
-    if InputSystem.keys.left then
-        vx = vx - 1
-    end
-    if InputSystem.keys.right then
-        vx = vx + 1
-    end
-
-    physic.vx = vx * speed
-    physic.vy = vy * speed
-    physic.vz = 0
-
-    if InputSystem.keys.shoot then
-        if InputSystem.timeSinceLastShoot > activeCooldown then
-            InputSystem.spawnBullet(transform.x + 1.0, transform.y, transform.z)
-            InputSystem.timeSinceLastShoot = 0
-        end
-    end
-end
-
-function InputSystem.spawnBullet(x, y, z)
-    local bullet = ECS.createEntity()
-    ECS.addComponent(bullet, "Transform", Transform(x, y, z))
-    ECS.addComponent(bullet, "Mesh", Mesh("assets/models/cube.obj"))
-    ECS.addComponent(bullet, "Collider", Collider("Sphere", {0.2}))
-    ECS.addComponent(bullet, "Physic", Physic(1.0, 0.0, true, false))
-    ECS.addComponent(bullet, "Bullet", Bullet(10))
-    ECS.addComponent(bullet, "Tag", Tag({"Bullet"}))
-    ECS.addComponent(bullet, "Life", Life(1))
-    ECS.addComponent(bullet, "Color", Color(1.0, 1.0, 0.0))
-    ECS.addComponent(bullet, "ParticleGenerator", ParticleGenerator(
-        0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0,
-        0.3,
-        5.0,
-        0.5,
-        50.0,
-        0.1,
-        1.0, 0.6, 0.1
-    ))
-    local t = ECS.getComponent(bullet, "Transform")
-    t.sx = 0.2
-    t.sy = 0.2
-    t.sz = 0.2
-
-    local p = ECS.getComponent(bullet, "Physic")
-    p.vx = 20.0
-end
-
-function InputSystem.clearBullets()
-    local bullets = ECS.getEntitiesWith({"Bullet", "Transform"})
-    for _, id in ipairs(bullets) do
+    for _, id in ipairs(entities) do
+        local input = ECS.getComponent(id, "InputState")
+        local physic = ECS.getComponent(id, "Physic")
+        local player = ECS.getComponent(id, "Player")
         local transform = ECS.getComponent(id, "Transform")
-        if transform.x > 20 then
-            ECS.destroyEntity(id)
+        local speed = player.speed or 10.0
+
+        -- Reset Vitesse
+        physic.vx = 0
+        physic.vy = 0
+
+        -- Application des inputs stockés dans le composant InputState
+        if input.left then physic.vx = -speed end
+        if input.right then physic.vx = speed end
+        if input.up then physic.vy = speed end
+        if input.down then physic.vy = -speed end
+
+        -- CLIENT PREDICTION: If we don't have authority (Client), apply movement immediately
+        if not ECS.capabilities.hasAuthority then
+             transform.x = transform.x + physic.vx * dt
+             transform.y = transform.y + physic.vy * dt
         end
     end
 end
 
 function InputSystem.onKeyPressed(key)
-    if key == "Z" or key == "W" then
-        InputSystem.keys.up = true
-    elseif key == "S" then
-        InputSystem.keys.down = true
-    elseif key == "Q" or key == "A" then
-        InputSystem.keys.left = true
-    elseif key == "D" then
-        InputSystem.keys.right = true
-    elseif key == "SPACE" then
-        InputSystem.keys.shoot = true
+    if not ECS.capabilities.hasLocalInput then return end
+    
+    -- Network Sync: Send Input to Server
+    if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
+        ECS.sendNetworkMessage("INPUT", key .. " 1")
+    end
+
+    local entities = ECS.getEntitiesWith({"InputState"})
+    for _, id in ipairs(entities) do
+        local input = ECS.getComponent(id, "InputState")
+        if key == "UP" or key == "Z" or key == "W" then input.up = true end
+        if key == "DOWN" or key == "S" then input.down = true end
+        if key == "LEFT" or key == "Q" or key == "A" then input.left = true end
+        if key == "RIGHT" or key == "D" then input.right = true end
+        if key == "SPACE" then input.shoot = true end
     end
 end
 
 function InputSystem.onKeyReleased(key)
-    if key == "Z" or key == "W" then
-        InputSystem.keys.up = false
-    elseif key == "S" then
-        InputSystem.keys.down = false
-    elseif key == "Q" or key == "A" then
-        InputSystem.keys.left = false
-    elseif key == "D" then
-        InputSystem.keys.right = false
-    elseif key == "SPACE" then
-        InputSystem.keys.shoot = false
-    elseif key == "R" then
-        ECS.sendMessage("UnloadScript", "assets/scripts/space-shooter/Main.lua");
-        ECS.sendMessage("LoadScript", "assets/scripts/space-shooter/Main.lua");
-    elseif key == "ESCAPE" then
-        local players = ECS.getEntitiesWith({"Player", "Life"})
-        local player = players and players[1]
-        if player then
-            local lifeComp = ECS.getComponent(player, "Life")
-            if lifeComp and lifeComp.amount > 0 then
-                local saveName = "space-shooter-save-level-" .. (CurrentLevel or 1)
-                ECS.saveState(saveName)
-                print("Saved state to " .. saveName)
-            end
-        end
+    if not ECS.capabilities.hasLocalInput then return end
+    
+    -- Network Sync: Send Input to Server
+    if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
+        ECS.sendNetworkMessage("INPUT", key .. " 0")
+    end
+
+    local entities = ECS.getEntitiesWith({"InputState"})
+    for _, id in ipairs(entities) do
+        local input = ECS.getComponent(id, "InputState")
+        if key == "UP" or key == "Z" or key == "W" then input.up = false end
+        if key == "DOWN" or key == "S" then input.down = false end
+        if key == "LEFT" or key == "Q" or key == "A" then input.left = false end
+        if key == "RIGHT" or key == "D" then input.right = false end
+        if key == "SPACE" then input.shoot = false end
+    end
+    
+    if key == "ESCAPE" then
         ECS.sendMessage("ExitApplication", "")
     end
-    InputSystem.clearBullets()
-end
-
-function InputSystem.onMouseMoved(x, y)
 end
 
 ECS.registerSystem(InputSystem)
+return InputSystem
