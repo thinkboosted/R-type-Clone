@@ -25,10 +25,16 @@ function InputSystem.update(dt)
         physic.vy = 0
 
         -- Application des inputs stockés dans le composant InputState
-        if input.left then physic.vx = -speed end
-        if input.right then physic.vx = speed end
-        if input.up then physic.vy = speed end
-        if input.down then physic.vy = -speed end
+        local moveX = 0
+        local moveY = 0
+
+        if input.left then moveX = moveX - 1 end
+        if input.right then moveX = moveX + 1 end
+        if input.up then moveY = moveY + 1 end
+        if input.down then moveY = moveY - 1 end
+
+        physic.vx = moveX * speed
+        physic.vy = moveY * speed
 
         -- CLIENT PREDICTION: If we don't have authority (Client), apply movement immediately
         if not ECS.capabilities.hasAuthority then
@@ -40,7 +46,7 @@ end
 
 function InputSystem.onKeyPressed(key)
     if not ECS.capabilities.hasLocalInput then return end
-    
+
     -- Network Sync: Send Input to Server
     if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
         ECS.sendNetworkMessage("INPUT", key .. " 1")
@@ -60,6 +66,7 @@ end
 function InputSystem.onKeyReleased(key)
     if not ECS.capabilities.hasLocalInput then return end
     
+
     -- Network Sync: Send Input to Server
     if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
         ECS.sendNetworkMessage("INPUT", key .. " 0")

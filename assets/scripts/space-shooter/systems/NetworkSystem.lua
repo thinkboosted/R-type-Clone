@@ -225,6 +225,7 @@ function NetworkSystem.init()
             local clientId, key, state = string.match(msg, "(%d+) (%w+) (%d)")
             if clientId then
                 clientId = tonumber(clientId)
+                -- key = string.upper(key)
                 if NetworkSystem.clientEntities[clientId] then
                     local entityId = NetworkSystem.clientEntities[clientId]
                     local input = ECS.getComponent(entityId, "InputState")
@@ -391,7 +392,7 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
                  ECS.addComponent(localId, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
                  ECS.addComponent(localId, "Player", Player(config.player.speed))
                  ECS.addComponent(localId, "Weapon", Weapon(config.player.weaponCooldown))
-                 ECS.addComponent(localId, "Physic", Physic(1.0, 0.0, true, false))
+                 ECS.addComponent(localId, "Physic", Physic(1.0, 0.0, false, false))
                  -- We do NOT add Collider yet, to avoid local collision resolution conflicts.
                  -- We trust the server for collisions.
              end
@@ -474,10 +475,9 @@ function NetworkSystem.update(dt)
                     local dx = t.x - t.targetX
                     local dy = t.y - t.targetY
                     local distSq = dx*dx + dy*dy
-                    
                     -- Threshold: 2.0 units (approx 200ms lag at speed 10)
                     -- If we are farther than that, something is wrong (packet loss/drift).
-                    if distSq > 4.0 then 
+                    if distSq > 4.0 then
                         local correctionSpeed = 5.0 * dt
                         t.x = t.x + (t.targetX - t.x) * correctionSpeed
                         t.y = t.y + (t.targetY - t.y) * correctionSpeed
