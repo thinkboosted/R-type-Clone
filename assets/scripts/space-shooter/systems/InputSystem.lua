@@ -55,17 +55,17 @@ function InputSystem.onKeyPressed(key)
     local entities = ECS.getEntitiesWith({"InputState"})
     for _, id in ipairs(entities) do
         local input = ECS.getComponent(id, "InputState")
-        if key == "UP" or key == "Z" or key == "W" then input.up = true end
-        if key == "DOWN" or key == "S" then input.down = true end
-        if key == "LEFT" or key == "Q" or key == "A" then input.left = true end
-        if key == "RIGHT" or key == "D" then input.right = true end
+        if key == "UP" then input.up = true end
+        if key == "DOWN" then input.down = true end
+        if key == "LEFT" then input.left = true end
+        if key == "RIGHT" then input.right = true end
         if key == "SPACE" then input.shoot = true end
     end
 end
 
 function InputSystem.onKeyReleased(key)
     if not ECS.capabilities.hasLocalInput then return end
-    
+
 
     -- Network Sync: Send Input to Server
     if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
@@ -75,13 +75,13 @@ function InputSystem.onKeyReleased(key)
     local entities = ECS.getEntitiesWith({"InputState"})
     for _, id in ipairs(entities) do
         local input = ECS.getComponent(id, "InputState")
-        if key == "UP" or key == "Z" or key == "W" then input.up = false end
-        if key == "DOWN" or key == "S" then input.down = false end
-        if key == "LEFT" or key == "Q" or key == "A" then input.left = false end
-        if key == "RIGHT" or key == "D" then input.right = false end
+        if key == "UP" then input.up = false end
+        if key == "DOWN" then input.down = false end
+        if key == "LEFT" then input.left = false end
+        if key == "RIGHT" then input.right = false end
         if key == "SPACE" then input.shoot = false end
     end
-    
+
     if key == "ESCAPE" then
         ECS.sendMessage("ExitApplication", "")
     end
