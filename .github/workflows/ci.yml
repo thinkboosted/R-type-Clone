@@ -12,25 +12,68 @@ env:
   MIRROR_URL: "git@github.com:EpitechPGE3-2025/G-CPP-500-NAN-5-2-rtype-5.git"
 
 jobs:
-  build-and-test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.os == 'ubuntu-latest' && 'epitechcontent/epitest-docker' || null }}
+  build-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: epitechcontent/epitest-docker
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Bootstrap vcpkg (Linux)
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
       - name: Build project with Python script
         run: python3 build.py
 
-      - name: Run tests
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg (Windows)
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Build project with Python script
+        run: python3 build.py
+
+  test-linux:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    container:
+      image: epitechcontent/epitest-docker
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg (Linux)
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Build + Test (Linux)
         run: |
+          python3 build.py
+          cd build
+          ctest --output-on-failure
+
+  test-windows:
+    needs: build-windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bootstrap vcpkg (Windows)
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Build + Test (Windows)
+        run: |
+          python3 build.py
           cd build
           ctest --output-on-failure
 
   push_to_mirror:
+    needs: [test-linux, test-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code for mirror
