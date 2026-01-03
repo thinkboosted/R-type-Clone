@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(RTypePOC VERSION 1.0.0 LANGUAGES CXX)
 
+# Support Conan fallback - REMOVED (Replaced by FetchContent in cmake/Dependencies.cmake)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -8,52 +10,35 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Enable position independent code for shared libraries
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Copy assets directory to build directory
-if (EXISTS "${CMAKE_SOURCE_DIR}/assets")
-  add_custom_target(copy_assets ALL
-    COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "${CMAKE_BINARY_DIR}/assets"
-    COMMENT "Copying assets to ${CMAKE_BINARY_DIR}/assets"
-  )
-  if (TARGET rtype_game)
-    add_dependencies(rtype_game copy_assets)
-  endif()
+# --- Dependencies Management ---
+include(cmake/Dependencies.cmake)
+
+# --- Compatibility Aliases (FetchContent vs Vcpkg) ---
+if (NOT TARGET SFML::Graphics AND TARGET sfml-graphics)
+    add_library(SFML::Graphics ALIAS sfml-graphics)
+    add_library(SFML::Window ALIAS sfml-window)
+    add_library(SFML::System ALIAS sfml-system)
+    add_library(SFML::Network ALIAS sfml-network)
+    add_library(SFML::Audio ALIAS sfml-audio)
 endif()
 
-# Find required packages
-message(STATUS "Looking for SFML...")
-find_package(SFML COMPONENTS Window Graphics)
-if(NOT SFML_FOUND)
-    message(WARNING "SFML not found. Please install via vcpkg: vcpkg install sfml")
+if (NOT TARGET BulletDynamics AND TARGET Bullet3::BulletDynamics)
+     # Vcpkg exports Bullet3::BulletDynamics, plain cmake might just do BulletDynamics.
+     # Let's standardize on what the sub-modules use: BulletDynamics
+     # If fetched content provides 'BulletDynamics' target directly, we are good.
 endif()
 
+# Find System/Graphics Libs (Usually provided by OS, hard to FetchContent properly)
 message(STATUS "Looking for GLEW...")
-find_package(GLEW)
+find_package(GLEW QUIET)
 if(NOT GLEW_FOUND)
-    message(WARNING "GLEW not found. Please install via vcpkg: vcpkg install glew")
+    message(WARNING "GLEW not found via find_package. On Linux, try: sudo apt install libglew-dev")
 endif()
 
 message(STATUS "Looking for OpenGL...")
-find_package(OpenGL)
+find_package(OpenGL QUIET)
 if(NOT OpenGL_FOUND)
-    message(WARNING "OpenGL not found. Please install via vcpkg: vcpkg install opengl")
-endif()
-
-message(STATUS "Looking for ZeroMQ...")
-find_package(cppzmq CONFIG REQUIRED)
-find_package(ZeroMQ CONFIG REQUIRED)
-if(NOT cppzmq_FOUND OR NOT ZeroMQ_FOUND)
-    message(WARNING "ZeroMQ or cppzmq not found. Please install via vcpkg: vcpkg install zeromq cppzmq")
-endif()
-
-if(NOT TARGET libzmq AND TARGET libzmq-static)
-    add_library(libzmq ALIAS libzmq-static)
-endif()
-
-message(STATUS "Looking for Bullet...")
-find_package(Bullet CONFIG REQUIRED PATHS "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/share/bullet3")
-if(NOT Bullet_FOUND)
-    message(WARNING "Bullet not found. Please install via vcpkg: vcpkg install bullet3")
+    message(WARNING "OpenGL not found. On Linux, try: sudo apt install libgl1-mesa-dev")
 endif()
 
 # Set output directories
@@ -67,10 +52,10 @@ include_directories(
 )
 
 # Add subdirectories for modules
-if(SFML_FOUND)
+if(SFML_FOUND OR TARGET sfml-system)
     add_subdirectory(src/engine/modules/WindowManager/SFML)
 else()
-    message(WARNING "Skipping SFML Window Manager module")
+    message(WARNING "Skipping SFML Window Manager module (SFML not found)")
 endif()
 
 if(GLEW_FOUND AND OpenGL_FOUND)
@@ -82,11 +67,12 @@ endif()
 add_subdirectory(src/engine/modules/ECSManager/LuaECSManager)
 add_subdirectory(src/engine/modules/ECSSavesManager/BasicECSSavesManager)
 
-if(Bullet_FOUND)
+if(Bullet_FOUND OR TARGET BulletDynamics)
     add_subdirectory(src/engine/modules/PhysicEngine/Bullet)
 else()
     message(WARNING "Skipping Bullet Physics Engine module")
 endif()
+
 
 add_subdirectory(src/engine/modules/NetworkManager)
 
