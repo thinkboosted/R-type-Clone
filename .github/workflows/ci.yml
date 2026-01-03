@@ -38,8 +38,10 @@ jobs:
 
       - name: Bootstrap vcpkg (Windows)
         shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        run: |
+          cd /d %GITHUB_WORKSPACE%
+          dir vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build project with Python script
         run: python3 build.py
@@ -75,8 +77,10 @@ jobs:
 
       - name: Bootstrap vcpkg (Windows)
         shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        run: |
+          cd /d %GITHUB_WORKSPACE%
+          dir vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build + Test (Windows)
         run: |
