@@ -3,25 +3,43 @@ run-name: CI ${{ github.repository }}
 on:
   push:
     branches-ignore:
-        - 'ga-ignore-**'
+      - 'ga-ignore-**'
   pull_request:
     branches-ignore:
-        - 'ga-ignore-**'
+      - 'ga-ignore-**'
 
 env:
   MIRROR_URL: "git@github.com:EpitechPGE3-2025/G-CPP-500-NAN-5-2-rtype-5.git"
 
 jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.os == 'ubuntu-latest' && 'epitechcontent/epitest-docker' || null }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build project with Python script
+        run: python3 build.py
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
   push_to_mirror:
     runs-on: ubuntu-latest
     steps:
-      - name: Push to mirror
+      - name: Checkout code for mirror
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: pixta-dev/repository-mirroring-action@v1
+
+      - name: Push to mirror
+        uses: pixta-dev/repository-mirroring-action@v1
         with:
-          target_repo_url:
-            ${{ env.MIRROR_URL }}
-          ssh_private_key:
-            ${{ secrets.ORG_DEPLOY_KEY }}
+          target_repo_url: ${{ env.MIRROR_URL }}
+          ssh_private_key: ${{ secrets.ORG_DEPLOY_KEY }}
