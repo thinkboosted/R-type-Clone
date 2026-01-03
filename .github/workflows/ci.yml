@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Bootstrap vcpkg (Windows)
+        shell: cmd
         run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build project with Python script
@@ -64,6 +65,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Bootstrap vcpkg (Windows)
+        shell: cmd
         run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build + Test (Windows)
