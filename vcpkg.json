@@ -13,5 +13,11 @@
     "asio",
     "msgpack",
     "gtest"
+  ],
+  "overrides": [
+    {
+      "name": "lua",
+      "version-string": "5.4.6"
+    }
   ]
 }
