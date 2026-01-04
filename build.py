@@ -12,7 +12,7 @@ def run_command(command, cwd=None):
 def main():
     source_dir = os.path.dirname(os.path.abspath(__file__))
     build_dir = os.path.join(source_dir, "build")
-    
+
     if not os.path.exists(build_dir):
         os.makedirs(build_dir)
 
@@ -20,10 +20,10 @@ def main():
     vcpkg_path = os.path.join(source_dir, "vcpkg", "vcpkg")
     if platform.system() == "Windows":
         vcpkg_path += ".exe"
-    
+
     vcpkg_toolchain = os.path.join(source_dir, "vcpkg", "scripts", "buildsystems", "vcpkg.cmake")
     has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
-    
+
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
 
     if has_vcpkg:
@@ -32,7 +32,7 @@ def main():
         vcpkg_install_cmd = [vcpkg_path, "install"]
         if platform.system() == "Windows":
              vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
-        
+
         if run_command(vcpkg_install_cmd, cwd=source_dir):
             cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_toolchain}")
         else:
@@ -48,10 +48,10 @@ def main():
 
     # 3. Build
     print("--- Building project ---")
-    if not run_command(["cmake", "--build", build_dir, "-j", "4"]): # Parallel build
+    if not run_command(["cmake", "--build", build_dir, "-j", "--verbose"]): # Parallel build with verbose output
         print("Build failed.")
         sys.exit(1)
-    
+
     print("Build successful!")
 
 if __name__ == "__main__":
