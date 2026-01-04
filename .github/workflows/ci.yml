@@ -40,20 +40,24 @@ jobs:
             git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           fi
 
-      # Install system dependencies for Lua/Sol2 compilation
+      # Install system dependencies (fallback if vcpkg fails)
       - name: Install system dependencies
         run: |
           apt-get update && apt-get install -y \
             curl zip unzip tar \
             lua5.4 liblua5.4-dev \
-            pkg-config
+            pkg-config \
+            libzmq3-dev libzmq5 \
+            libglew-dev \
+            libsfml-dev
 
       # Bootstrap vcpkg (only once)
       - name: Bootstrap vcpkg
         working-directory: ${{ github.workspace }}
+        timeout-minutes: 15
         run: |
           chmod +x vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics 2>&1 | head -100
 
       # Clean and build
       - name: Build project
@@ -124,14 +128,18 @@ jobs:
           apt-get update && apt-get install -y \
             curl zip unzip tar \
             lua5.4 liblua5.4-dev \
-            pkg-config
+            pkg-config \
+            libzmq3-dev libzmq5 \
+            libglew-dev \
+            libsfml-dev
 
       # Bootstrap vcpkg
       - name: Bootstrap vcpkg
         working-directory: ${{ github.workspace }}
+        timeout-minutes: 15
         run: |
           chmod +x vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics 2>&1 | head -100
 
       # Build and test
       - name: Build + Test (Linux)
