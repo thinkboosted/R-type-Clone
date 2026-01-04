@@ -44,13 +44,12 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update && apt-get install -y \
-            curl zip unzip tar \
+            curl zip unzip tar git \
             lua5.4 liblua5.4-dev \
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
-            libsfml-dev \
-            libsol2-dev
+            libsfml-dev
 
       # Bootstrap vcpkg (only once)
       - name: Bootstrap vcpkg
@@ -127,13 +126,12 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update && apt-get install -y \
-            curl zip unzip tar \
+            curl zip unzip tar git \
             lua5.4 liblua5.4-dev \
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
-            libsfml-dev \
-            libsol2-dev
+            libsfml-dev
 
       # Bootstrap vcpkg
       - name: Bootstrap vcpkg
