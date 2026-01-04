@@ -10,6 +10,10 @@ on:
 
 env:
   MIRROR_URL: "git@github.com:EpitechPGE3-2025/G-CPP-500-NAN-5-2-rtype-5.git"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+permissions:
+  contents: read
 
 jobs:
   build-linux:
@@ -20,49 +24,71 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clone vcpkg if not present
+      # Setup vcpkg cache
+      - name: Setup vcpkg cache
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      # Clone vcpkg (shallow clone to save time)
+      - name: Clone vcpkg
         working-directory: ${{ github.workspace }}
         run: |
           if [ ! -d vcpkg ]; then
-            git clone https://github.com/Microsoft/vcpkg.git
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           fi
 
-      - name: Install vcpkg dependencies
-        run: apt-get update && apt-get install -y curl zip unzip tar
+      # Install system dependencies for Lua/Sol2 compilation
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y \
+            curl zip unzip tar \
+            lua5.4 liblua5.4-dev \
+            pkg-config
 
-      - name: Bootstrap vcpkg (Linux)
+      # Bootstrap vcpkg (only once)
+      - name: Bootstrap vcpkg
         working-directory: ${{ github.workspace }}
         run: |
           chmod +x vcpkg/bootstrap-vcpkg.sh
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
-      - name: Build project with Python script
+      # Clean and build
+      - name: Build project
+        working-directory: ${{ github.workspace }}
         run: |
           rm -rf build
           python3 build.py
 
   build-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clone vcpkg if not present
+      # Clone vcpkg (shallow)
+      - name: Clone vcpkg
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
           if not exist vcpkg (
-            git clone https://github.com/Microsoft/vcpkg.git
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           )
 
-      - name: Bootstrap vcpkg (Windows)
+      # Bootstrap vcpkg
+      - name: Bootstrap vcpkg
         shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        working-directory: ${{ github.workspace }}
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
-      - name: Build project with Python script
+      # Build
+      - name: Build project
         shell: cmd
+        working-directory: ${{ github.workspace }}
         run: |
           if exist build rmdir /s /q build
           python3 build.py
@@ -76,23 +102,40 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clone vcpkg if not present
+      # Setup vcpkg cache
+      - name: Setup vcpkg cache
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      # Clone vcpkg (shallow)
+      - name: Clone vcpkg
         working-directory: ${{ github.workspace }}
         run: |
           if [ ! -d vcpkg ]; then
-            git clone https://github.com/Microsoft/vcpkg.git
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           fi
 
-      - name: Install vcpkg dependencies
-        run: apt-get update && apt-get install -y curl zip unzip tar
+      # Install system dependencies
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y \
+            curl zip unzip tar \
+            lua5.4 liblua5.4-dev \
+            pkg-config
 
-      - name: Bootstrap vcpkg (Linux)
+      # Bootstrap vcpkg
+      - name: Bootstrap vcpkg
         working-directory: ${{ github.workspace }}
         run: |
           chmod +x vcpkg/bootstrap-vcpkg.sh
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
+      # Build and test
       - name: Build + Test (Linux)
+        working-directory: ${{ github.workspace }}
         run: |
           rm -rf build
           python3 build.py
@@ -102,26 +145,31 @@ jobs:
   test-windows:
     needs: build-windows
     runs-on: windows-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clone vcpkg if not present
+      # Clone vcpkg (shallow)
+      - name: Clone vcpkg
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
           if not exist vcpkg (
-            git clone https://github.com/Microsoft/vcpkg.git
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           )
 
-      - name: Bootstrap vcpkg (Windows)
+      # Bootstrap vcpkg
+      - name: Bootstrap vcpkg
         shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        working-directory: ${{ github.workspace }}
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
+      # Build and test
       - name: Build + Test (Windows)
         shell: cmd
+        working-directory: ${{ github.workspace }}
         run: |
           if exist build rmdir /s /q build
           python3 build.py

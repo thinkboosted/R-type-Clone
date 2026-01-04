@@ -25,6 +25,7 @@ def main():
     has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
 
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
+    cmake_args.extend(["-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE"])  # Force verbose CMake output
 
     if has_vcpkg:
         print("--- Vcpkg detected, attempting to use it ---")
@@ -50,7 +51,8 @@ def main():
     print("--- Building project ---")
     build_cmd = ["cmake", "--build", build_dir, "-j"]
     if platform.system() != "Windows":
-        build_cmd.extend(["--", "VERBOSE=1"])  # Force verbose output on Unix makefiles
+        # Force verbose Make output to see actual compiler commands and errors
+        build_cmd.extend(["--", "VERBOSE=1", "CXXFLAGS=-v"])
     if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)
