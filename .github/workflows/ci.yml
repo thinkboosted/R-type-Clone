@@ -20,14 +20,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clone vcpkg if not present
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ ! -d vcpkg ]; then
+            git clone https://github.com/Microsoft/vcpkg.git
+          fi
+
       - name: Bootstrap vcpkg (Linux)
         working-directory: ${{ github.workspace }}
         run: |
-          echo "WS=$GITHUB_WORKSPACE"
-          ls -la
-          ls -la vcpkg
           chmod +x vcpkg/bootstrap-vcpkg.sh
-          vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Build project with Python script
         run: python3 build.py
@@ -57,14 +61,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clone vcpkg if not present
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ ! -d vcpkg ]; then
+            git clone https://github.com/Microsoft/vcpkg.git
+          fi
+
       - name: Bootstrap vcpkg (Linux)
         working-directory: ${{ github.workspace }}
         run: |
-          echo "WS=$GITHUB_WORKSPACE"
-          ls -la
-          ls -la vcpkg
           chmod +x vcpkg/bootstrap-vcpkg.sh
-          vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Build + Test (Linux)
         run: |
