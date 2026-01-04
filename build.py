@@ -48,7 +48,10 @@ def main():
 
     # 3. Build
     print("--- Building project ---")
-    if not run_command(["cmake", "--build", build_dir, "-j", "--verbose"]): # Parallel build with verbose output
+    build_cmd = ["cmake", "--build", build_dir, "-j"]
+    if platform.system() != "Windows":
+        build_cmd.extend(["--", "VERBOSE=1"])  # Force verbose output on Unix makefiles
+    if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)
 
