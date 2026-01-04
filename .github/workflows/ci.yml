@@ -49,7 +49,8 @@ jobs:
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
-            libsfml-dev
+            libsfml-dev \
+            libsol2-dev
 
       # Bootstrap vcpkg (only once)
       - name: Bootstrap vcpkg
@@ -131,7 +132,8 @@ jobs:
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
-            libsfml-dev
+            libsfml-dev \
+            libsol2-dev
 
       # Bootstrap vcpkg
       - name: Bootstrap vcpkg

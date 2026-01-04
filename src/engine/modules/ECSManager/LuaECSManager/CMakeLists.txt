@@ -13,12 +13,27 @@ target_include_directories(LuaECSManager PUBLIC
 )
 
 find_package(Lua 5.4 REQUIRED)
+
+# Try find sol2 via CONFIG first, then pkg-config, then header search
 find_package(sol2 CONFIG QUIET)
 if(NOT sol2_FOUND)
-    # Try fallback method for sol2
-    find_path(SOL2_INCLUDE_DIR sol.hpp PATHS /usr/include /usr/local/include)
-    if(NOT SOL2_INCLUDE_DIR)
-        message(FATAL_ERROR "sol2 not found and fallback search failed")
+    # Try pkg-config
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SOL2 QUIET sol2)
+    endif()
+    
+    if(NOT SOL2_FOUND)
+        # Fallback: search for headers directly
+        find_path(SOL2_INCLUDE_DIR sol/sol.hpp
+            PATHS /usr/include /usr/local/include /opt/include
+            PATH_SUFFIXES sol2
+        )
+        if(SOL2_INCLUDE_DIR)
+            message(STATUS "Found sol2 headers at ${SOL2_INCLUDE_DIR}")
+        else()
+            message(FATAL_ERROR "sol2 not found. Please install libsol2-dev or provide sol2 via vcpkg")
+        endif()
     endif()
 endif()
 
@@ -41,6 +56,7 @@ endif()
 target_include_directories(LuaECSManager PRIVATE 
     ${LUA_INCLUDE_DIR}
     ${SOL2_INCLUDE_DIR}
+    ${SOL2_INCLUDE_DIRS}
     ${ZeroMQ_INCLUDE_DIRS}
     ${CPPZMQ_INCLUDE_DIR}
 )
