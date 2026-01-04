@@ -33,9 +33,6 @@ def main():
         vcpkg_install_cmd = [vcpkg_path, "install"]
         if platform.system() == "Windows":
              vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
-        
-        # Add verbose flag to see what vcpkg is doing
-        vcpkg_install_cmd.append("--verbose")
 
         if run_command(vcpkg_install_cmd, cwd=source_dir):
             cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_toolchain}")

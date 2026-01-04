@@ -14,14 +14,35 @@ target_include_directories(SFMLWindowManager PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine/types
 )
 
-find_package(ZeroMQ CONFIG REQUIRED)
-find_package(cppzmq CONFIG REQUIRED)
+# Try find_package with CONFIG first (for vcpkg), fall back to pkg-config
+find_package(ZeroMQ CONFIG QUIET)
+if(NOT ZeroMQ_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ZeroMQ REQUIRED libzmq)
+endif()
+
+find_package(cppzmq CONFIG QUIET)
+if(NOT cppzmq_FOUND)
+    # cppzmq is header-only, try to find the headers
+    find_path(CPPZMQ_INCLUDE_DIR zmq.hpp
+        PATHS /usr/include /usr/local/include /opt/include
+        PATH_SUFFIXES cppzmq
+    )
+    if(NOT CPPZMQ_INCLUDE_DIR)
+        message(WARNING "cppzmq headers not found, hoping they're in standard paths")
+    endif()
+endif()
 
 target_link_libraries(SFMLWindowManager
     SFML::Window
     SFML::Graphics
-    cppzmq
-    libzmq
+    ${ZeroMQ_LIBRARIES}
+)
+
+# Add include directories for ZeroMQ and cppzmq
+target_include_directories(SFMLWindowManager PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
 )
 
 # Set output name without lib prefix
