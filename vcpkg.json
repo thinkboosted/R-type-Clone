@@ -7,7 +7,7 @@
     "opengl",
     "zeromq",
     "cppzmq",
-    "lua",
+    "lua[lua54]",
     "sol2",
     "bullet3",
     "asio",

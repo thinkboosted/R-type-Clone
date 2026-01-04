@@ -26,12 +26,6 @@ def main():
 
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
     cmake_args.extend(["-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE"])  # Force verbose CMake output
-    
-    # Pass LUA_DIR if set in environment (for CI)
-    if "LUA_DIR" in os.environ:
-        lua_dir = os.environ["LUA_DIR"]
-        cmake_args.extend([f"-DLUA_DIR={lua_dir}"])
-        print(f"Using LUA_DIR={lua_dir}")
 
     if has_vcpkg:
         print("--- Vcpkg detected, attempting to use it ---")

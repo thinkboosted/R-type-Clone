@@ -60,8 +60,6 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           rm -rf build
-          # Force Lua 5.4 detection
-          export LUA_DIR=/usr
           python3 build.py
 
   build-windows:
@@ -138,8 +136,6 @@ jobs:
       # Build and test
       - name: Build + Test (Linux)
         working-directory: ${{ github.workspace }}
-        env:
-          LUA_DIR: /usr
         run: |
           rm -rf build
           python3 build.py
