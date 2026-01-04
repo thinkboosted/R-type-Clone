@@ -11,9 +11,7 @@ target_include_directories(LuaECSManager PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 
-# Find Lua first and immediately propagate includes/libs
-find_package(Lua REQUIRED)
-target_include_directories(LuaECSManager PRIVATE ${LUA_INCLUDE_DIR})
+# Lua found globally (see root CMakeLists); link here
 target_link_libraries(LuaECSManager ${LUA_LIBRARIES})
 
 # Find sol2 (vcpkg) then fallback to FetchContent
