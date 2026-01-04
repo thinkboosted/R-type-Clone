@@ -12,7 +12,7 @@ target_include_directories(LuaECSManager PUBLIC
     ${LUA_INCLUDE_DIR}
 )
 
-find_package(Lua 5.4 REQUIRED)
+find_package(Lua REQUIRED)
 
 # Try to find sol2 via CONFIG (vcpkg), then fallback to FetchContent
 find_package(sol2 CONFIG QUIET)

@@ -45,7 +45,6 @@ jobs:
         run: |
           apt-get update && apt-get install -y \
             curl zip unzip tar git \
-            lua5.4 liblua5.4-dev \
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
@@ -127,7 +126,6 @@ jobs:
         run: |
           apt-get update && apt-get install -y \
             curl zip unzip tar git \
-            lua5.4 liblua5.4-dev \
             pkg-config \
             libzmq3-dev libzmq5 \
             libglew-dev \
