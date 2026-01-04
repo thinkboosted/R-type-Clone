@@ -42,11 +42,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clone vcpkg if not present
+        shell: cmd
+        run: |
+          cd /d %GITHUB_WORKSPACE%
+          if not exist vcpkg (
+            git clone https://github.com/Microsoft/vcpkg.git
+          )
+
       - name: Bootstrap vcpkg (Windows)
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
-          dir vcpkg
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build project with Python script
@@ -87,11 +94,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clone vcpkg if not present
+        shell: cmd
+        run: |
+          cd /d %GITHUB_WORKSPACE%
+          if not exist vcpkg (
+            git clone https://github.com/Microsoft/vcpkg.git
+          )
+
       - name: Bootstrap vcpkg (Windows)
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
-          dir vcpkg
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build + Test (Windows)
