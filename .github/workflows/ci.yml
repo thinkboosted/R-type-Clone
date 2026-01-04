@@ -37,7 +37,9 @@ jobs:
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
       - name: Build project with Python script
-        run: python3 build.py
+        run: |
+          rm -rf build
+          python3 build.py
 
   build-windows:
     runs-on: windows-latest
@@ -60,7 +62,10 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build project with Python script
-        run: python3 build.py
+        shell: cmd
+        run: |
+          if exist build rmdir /s /q build
+          python3 build.py
 
   test-linux:
     needs: build-linux
@@ -89,6 +94,7 @@ jobs:
 
       - name: Build + Test (Linux)
         run: |
+          rm -rf build
           python3 build.py
           cd build
           ctest --output-on-failure
@@ -115,7 +121,9 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Build + Test (Windows)
+        shell: cmd
         run: |
+          if exist build rmdir /s /q build
           python3 build.py
           cd build
           ctest --output-on-failure
