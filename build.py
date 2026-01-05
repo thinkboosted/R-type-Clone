@@ -17,13 +17,29 @@ def main():
         os.makedirs(build_dir)
 
     # 1. Try Vcpkg Configuration
-    vcpkg_root = os.environ.get("VCPKG_ROOT", os.path.join(source_dir, "vcpkg"))
-    vcpkg_path = os.path.join(vcpkg_root, "vcpkg")
-    if platform.system() == "Windows":
-        vcpkg_path += ".exe"
+    vcpkg_candidates = []
+    if "VCPKG_ROOT" in os.environ:
+        vcpkg_candidates.append(os.environ["VCPKG_ROOT"])
+    vcpkg_candidates.append(os.path.join(source_dir, "vcpkg"))
 
-    vcpkg_toolchain = os.path.join(vcpkg_root, "scripts", "buildsystems", "vcpkg.cmake")
-    has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
+    vcpkg_root = None
+    vcpkg_path = None
+    vcpkg_toolchain = None
+
+    for candidate in vcpkg_candidates:
+        candidate_exe = os.path.join(candidate, "vcpkg")
+        if platform.system() == "Windows":
+            candidate_exe += ".exe"
+        
+        candidate_toolchain = os.path.join(candidate, "scripts", "buildsystems", "vcpkg.cmake")
+
+        if os.path.exists(candidate_exe) and os.path.exists(candidate_toolchain):
+            vcpkg_root = candidate
+            vcpkg_path = candidate_exe
+            vcpkg_toolchain = candidate_toolchain
+            break
+    
+    has_vcpkg = vcpkg_root is not None
 
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
 
