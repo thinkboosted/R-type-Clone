@@ -136,7 +136,7 @@ void SFMLSoundManager::handleSoundSetVolume(const std::string& message) {
 }
 
 void SFMLSoundManager::playSound(const std::string& soundId, const std::string& filePath, float volume) {
-    std::string fullPath = _assetsPath + filePath;
+    std::string fullPath = std::string(ASSETS_PATH) + filePath;
     std::cout << "[SFMLSoundManager] playSound called: id=" << soundId << " path=" << fullPath << " volume=" << volume << std::endl;
 
     if (_soundBuffers.find(filePath) == _soundBuffers.end()) {
@@ -157,22 +157,23 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
     std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
 
     static unsigned long long counter = 0;
-    std::string uniqueKey = soundId + "_" + std::to_string(counter++);
+    std::string uniqueKey = soundId + ":" + std::to_string(counter++);
     _activeSounds[uniqueKey] = std::move(sound);
 }
 
 void SFMLSoundManager::stopSound(const std::string& soundId) {
-    // Stop all sounds matching the soundId prefix
+    std::string prefix = soundId + ":";
     for (auto& [key, sound] : _activeSounds) {
-        if (key.find(soundId) == 0 && sound) {
+        if (key.find(prefix) == 0 && sound) {
             sound->stop();
         }
     }
 }
 
 void SFMLSoundManager::setSoundVolume(const std::string& soundId, float volume) {
+    std::string prefix = soundId + ":";
     for (auto& [key, sound] : _activeSounds) {
-        if (key.find(soundId) == 0 && sound) {
+        if (key.find(prefix) == 0 && sound) {
             sound->setVolume(std::clamp(volume, 0.0f, 100.0f));
         }
     }
@@ -214,7 +215,7 @@ void SFMLSoundManager::handleMusicSetVolume(const std::string& message) {
 }
 
 void SFMLSoundManager::playMusic(const std::string& musicId, const std::string& filePath, float volume, bool loop) {
-    std::string fullPath = _assetsPath + filePath;
+    std::string fullPath = std::string(ASSETS_PATH) + filePath;
 
     if (_activeMusic.find(musicId) != _activeMusic.end()) {
         _activeMusic[musicId]->stop();

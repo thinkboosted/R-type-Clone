@@ -56,7 +56,9 @@ class SFMLSoundManager : public ISoundManager {
     std::unordered_map<std::string, BufferInfo> _soundBuffers;
     std::unordered_map<std::string, std::unique_ptr<sf::Sound>> _activeSounds;
     std::unordered_map<std::string, std::unique_ptr<sf::Music>> _activeMusic;
-    std::string _assetsPath = "assets/sounds/";
+    
+    static constexpr const char* ASSETS_PATH = "assets/sounds/";
+    
     float _bufferCleanupTimer = 0.0f;
     const float _bufferCleanupInterval = 30.0f;
     const float _bufferUnusedThreshold = 60.0f;
