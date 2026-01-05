@@ -57,12 +57,10 @@ target_link_libraries(r-type_client PRIVATE SFML::Window)
 
 # Link with ZeroMQ for message broker
 target_link_libraries(r-type_client PRIVATE
-    cppzmq
-    libzmq
+    cppzmq-static
 )
 target_link_libraries(r-type_server PRIVATE
-    cppzmq
-    libzmq
+    cppzmq-static
 )
 
 # Link with dynamic loading library
@@ -94,6 +92,15 @@ foreach(EXECUTABLE_TARGET r-type_client r-type_server)
                 $<TARGET_FILE:SFMLWindowManager>
                 $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
             COMMENT "Copying SFML Window Manager to executable directory for ${EXECUTABLE_TARGET}"
+        )
+    endif()
+
+    if(TARGET SFMLSoundManager)
+        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SFMLSoundManager>
+                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
+            COMMENT "Copying SFML Sound Manager to executable directory for ${EXECUTABLE_TARGET}"
         )
     endif()
 

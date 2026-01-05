@@ -1,5 +1,6 @@
 
 find_package(GTest CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
 
 add_executable(NetworkManagerTests
     NetworkManagerTests.cpp
@@ -15,8 +16,7 @@ target_link_libraries(NetworkManagerTests PRIVATE
     GTest::gmock_main
     asio
     msgpack-cxx
-    cppzmq
-    libzmq
+    cppzmq-static
 )
 
 if(WIN32)

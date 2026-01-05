@@ -12,7 +12,6 @@ target_include_directories(GLEWSFMLRenderer PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 
-find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
 if(NOT WIN32)
@@ -23,8 +22,7 @@ target_link_libraries(GLEWSFMLRenderer
     GLEW::GLEW
     OpenGL::GL
     SFML::Graphics
-    libzmq
-    cppzmq
+    cppzmq-static
 )
 
 if(NOT WIN32)
