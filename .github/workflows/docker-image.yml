@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 9-high-workflow-repository-standards
     paths:
       - '.github/docker/Dockerfile'
 
