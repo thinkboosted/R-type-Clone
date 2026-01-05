@@ -56,13 +56,36 @@ target_link_libraries(r-type_client PRIVATE SFML::Window)
 # No SFML::Window for server
 
 # Link with ZeroMQ for message broker
+find_package(ZeroMQ CONFIG QUIET)
+if(NOT ZeroMQ_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ZeroMQ REQUIRED libzmq)
+    set(ZeroMQ_LINK_LIBS ${ZeroMQ_LINK_LIBRARIES})
+else()
+    set(ZeroMQ_LINK_LIBS libzmq)
+endif()
+
+find_package(cppzmq CONFIG QUIET)
+if(NOT cppzmq_FOUND)
+    find_path(CPPZMQ_INCLUDE_DIR zmq.hpp
+        PATHS /usr/include /usr/local/include
+    )
+endif()
+
 target_link_libraries(r-type_client PRIVATE
-    cppzmq
-    libzmq
+    ${ZeroMQ_LINK_LIBS}
 )
 target_link_libraries(r-type_server PRIVATE
-    cppzmq
-    libzmq
+    ${ZeroMQ_LINK_LIBS}
+)
+
+target_include_directories(r-type_client PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
+)
+target_include_directories(r-type_server PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
 )
 
 # Link with dynamic loading library
@@ -141,6 +164,14 @@ foreach(EXECUTABLE_TARGET r-type_client r-type_server)
             COMMENT "Copying NetworkManager to executable directory for ${EXECUTABLE_TARGET}"
         )
     endif()
+
+    # Copy all .so modules from lib/ directory
+    add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_BINARY_DIR}/lib
+            $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
+        COMMENT "Copying all module libraries to executable directory for ${EXECUTABLE_TARGET}"
+    )
 
     add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory

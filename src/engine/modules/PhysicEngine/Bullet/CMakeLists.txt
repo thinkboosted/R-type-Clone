@@ -18,6 +18,9 @@ find_package(ZeroMQ CONFIG QUIET)
 if(NOT ZeroMQ_FOUND)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(ZeroMQ REQUIRED libzmq)
+    set(ZeroMQ_LINK_LIBS ${ZeroMQ_LINK_LIBRARIES})
+else()
+    set(ZeroMQ_LINK_LIBS libzmq)
 endif()
 
 find_package(cppzmq CONFIG QUIET)
@@ -32,7 +35,7 @@ target_link_libraries(BulletPhysicEngine
     BulletDynamics
     BulletCollision
     LinearMath
-    ${ZeroMQ_LIBRARIES}
+    ${ZeroMQ_LINK_LIBS}
 )
 
 target_include_directories(BulletPhysicEngine PRIVATE

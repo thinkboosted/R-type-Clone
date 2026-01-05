@@ -1,4 +1,4 @@
-run-name: CI ${{ github.repository }}
+name: CI
 
 on:
   push:
@@ -14,9 +14,10 @@ env:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
-  build-linux:
+  build-and-test-linux:
     runs-on: ubuntu-latest
     container:
       image: epitechcontent/epitest-docker
@@ -24,166 +25,82 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup vcpkg cache
-      - name: Setup vcpkg cache
+      # Setup vcpkg binary caching
+      - name: Export GitHub Actions Cache Env
         uses: actions/github-script@v7
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      # Clone vcpkg (shallow clone to save time)
-      - name: Clone vcpkg
-        working-directory: ${{ github.workspace }}
-        run: |
-          if [ ! -d vcpkg ]; then
-            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
-          fi
-
-      # Install system dependencies (fallback if vcpkg fails)
+      # Install system dependencies required by Vcpkg ports (SFML, etc.)
       - name: Install system dependencies
         run: |
           apt-get update && apt-get install -y \
-            curl zip unzip tar git \
-            pkg-config \
-            libzmq3-dev libzmq5 \
-            libglew-dev \
-            libsfml-dev
+            curl zip unzip tar git pkg-config \
+            libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libflac-dev libogg-dev libvorbis-dev libopenal-dev libfreetype6-dev \
+            libzmq3-dev
 
-      # Bootstrap vcpkg (only once)
-      - name: Bootstrap vcpkg
+      # Setup Vcpkg
+      - name: Setup Vcpkg
         working-directory: ${{ github.workspace }}
-        timeout-minutes: 15
         run: |
-          chmod +x vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics 2>&1 | head -100
+          if [ ! -d "vcpkg" ]; then
+            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
+          fi
+          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
-      # Clean and build
+      # Build Project
       - name: Build project
         working-directory: ${{ github.workspace }}
         run: |
           rm -rf build
           python3 build.py
 
-  build-windows:
+      # Run Tests
+      - name: Run Tests
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure -j$(nproc)
+
+  build-and-test-windows:
     runs-on: windows-latest
-    env:
-      VCPKG_BINARY_SOURCES: "clear"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Clone vcpkg (shallow)
-      - name: Clone vcpkg
-        shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%
-          if not exist vcpkg (
-            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
-          )
-
-      # Bootstrap vcpkg
-      - name: Bootstrap vcpkg
-        shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
-      # Build
-      - name: Build project
-        shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: |
-          if exist build rmdir /s /q build
-          python3 build.py
-
-  test-linux:
-    needs: build-linux
-    runs-on: ubuntu-latest
-    container:
-      image: epitechcontent/epitest-docker
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Setup vcpkg cache
-      - name: Setup vcpkg cache
+      - name: Export GitHub Actions Cache Env
         uses: actions/github-script@v7
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      # Clone vcpkg (shallow)
-      - name: Clone vcpkg
-        working-directory: ${{ github.workspace }}
-        run: |
-          if [ ! -d vcpkg ]; then
-            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
-          fi
-
-      # Install system dependencies
-      - name: Install system dependencies
-        run: |
-          apt-get update && apt-get install -y \
-            curl zip unzip tar git \
-            pkg-config \
-            libzmq3-dev libzmq5 \
-            libglew-dev \
-            libsfml-dev
-
-      # Bootstrap vcpkg
-      - name: Bootstrap vcpkg
-        working-directory: ${{ github.workspace }}
-        timeout-minutes: 15
-        run: |
-          chmod +x vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics 2>&1 | head -100
-
-      # Build and test
-      - name: Build + Test (Linux)
-        working-directory: ${{ github.workspace }}
-        run: |
-          rm -rf build
-          python3 build.py
-          cd build
-          ctest --output-on-failure
-
-  test-windows:
-    needs: build-windows
-    runs-on: windows-latest
-    env:
-      VCPKG_BINARY_SOURCES: "clear"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Clone vcpkg (shallow)
-      - name: Clone vcpkg
+      - name: Setup Vcpkg
         shell: cmd
+        working-directory: ${{ github.workspace }}
         run: |
-          cd /d %GITHUB_WORKSPACE%
           if not exist vcpkg (
             git clone --depth 1 https://github.com/Microsoft/vcpkg.git
           )
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
-      # Bootstrap vcpkg
-      - name: Bootstrap vcpkg
-        shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
-      # Build and test
-      - name: Build + Test (Windows)
+      - name: Build project
         shell: cmd
         working-directory: ${{ github.workspace }}
         run: |
           if exist build rmdir /s /q build
-          python3 build.py
-          cd build
-          ctest --output-on-failure
+          python build.py
+
+      - name: Run Tests
+        shell: cmd
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure -C Release
 
   push_to_mirror:
-    needs: [test-linux, test-windows]
+    needs: [build-and-test-linux, build-and-test-windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code for mirror

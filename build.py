@@ -25,8 +25,7 @@ def main():
     has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
 
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
-    cmake_args.extend(["-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE"])  # Force verbose CMake output
-
+    
     if has_vcpkg:
         print("--- Vcpkg detected, attempting to use it ---")
         # Attempt to install deps first
@@ -37,9 +36,10 @@ def main():
         if run_command(vcpkg_install_cmd, cwd=source_dir):
             cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_toolchain}")
         else:
-            print("--- Vcpkg install failed. Falling back to FetchContent (CMake internal) ---")
+            print("--- Vcpkg install failed. Exiting. ---")
+            sys.exit(1)
     else:
-        print("--- Vcpkg not found. Using FetchContent (CMake internal) for dependencies ---")
+        print("--- Vcpkg not found. Using FetchContent (CMake internal) if configured ---")
 
     # 2. Configure CMake
     print("--- Configuring CMake ---")
@@ -50,9 +50,7 @@ def main():
     # 3. Build
     print("--- Building project ---")
     build_cmd = ["cmake", "--build", build_dir, "-j"]
-    if platform.system() != "Windows":
-        # Force verbose Make output to see actual compiler commands and errors
-        build_cmd.extend(["--", "VERBOSE=1", "CXXFLAGS=-v"])
+    
     if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)

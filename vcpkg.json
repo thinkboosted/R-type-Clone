@@ -1,6 +1,7 @@
 {
   "name": "r-type-poc-modules",
   "version": "1.0.0",
+  "builtin-baseline": "da93ad9cabf14d54dd9b460a12a458d359a970ff",
   "dependencies": [
     "sfml",
     "glew",
@@ -17,7 +18,7 @@
   "overrides": [
     {
       "name": "lua",
-      "version-string": "5.4.6"
+      "version": "5.4.6"
     }
   ]
 }
