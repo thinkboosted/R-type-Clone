@@ -156,7 +156,8 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
     sound->play();
     std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
 
-    std::string uniqueKey = soundId + "_" + std::to_string(reinterpret_cast<uintptr_t>(sound.get()));
+    static unsigned long long counter = 0;
+    std::string uniqueKey = soundId + "_" + std::to_string(counter++);
     _activeSounds[uniqueKey] = std::move(sound);
 }
 
