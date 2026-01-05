@@ -48,10 +48,18 @@ class SFMLSoundManager : public ISoundManager {
     };
     ParsedSoundMessage parseMessage(const std::string& message);
 
-    std::unordered_map<std::string, std::unique_ptr<sf::SoundBuffer>> _soundBuffers;
+    struct BufferInfo {
+        std::unique_ptr<sf::SoundBuffer> buffer;
+        float timeSinceLastUse = 0.0f;
+    };
+
+    std::unordered_map<std::string, BufferInfo> _soundBuffers;
     std::unordered_map<std::string, std::unique_ptr<sf::Sound>> _activeSounds;
     std::unordered_map<std::string, std::unique_ptr<sf::Music>> _activeMusic;
     std::string _assetsPath = "assets/sounds/";
+    float _bufferCleanupTimer = 0.0f;
+    const float _bufferCleanupInterval = 30.0f;
+    const float _bufferUnusedThreshold = 60.0f;
 };
 
 }  // namespace rtypeEngine

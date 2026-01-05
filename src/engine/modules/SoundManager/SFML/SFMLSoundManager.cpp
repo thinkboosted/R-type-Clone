@@ -51,11 +51,30 @@ void SFMLSoundManager::init() {
 }
 
 void SFMLSoundManager::loop() {
+    static float dt = 0.01f;
+    
     for (auto it = _activeSounds.begin(); it != _activeSounds.end();) {
         if (it->second && it->second->getStatus() == sf::Sound::Status::Stopped) {
             it = _activeSounds.erase(it);
         } else {
             ++it;
+        }
+    }
+
+    for (auto& [path, bufferInfo] : _soundBuffers) {
+        bufferInfo.timeSinceLastUse += dt;
+    }
+
+    _bufferCleanupTimer += dt;
+    if (_bufferCleanupTimer >= _bufferCleanupInterval) {
+        _bufferCleanupTimer = 0.0f;
+        
+        for (auto it = _soundBuffers.begin(); it != _soundBuffers.end();) {
+            if (it->second.timeSinceLastUse >= _bufferUnusedThreshold) {
+                it = _soundBuffers.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 }
@@ -127,10 +146,12 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
             return;
         }
         std::cout << "[SFMLSoundManager] Sound buffer loaded successfully: " << fullPath << std::endl;
-        _soundBuffers[filePath] = std::move(buffer);
+        _soundBuffers[filePath] = BufferInfo{std::move(buffer), 0.0f};
     }
 
-    auto sound = std::make_unique<sf::Sound>(*_soundBuffers[filePath]);
+    _soundBuffers[filePath].timeSinceLastUse = 0.0f;
+
+    auto sound = std::make_unique<sf::Sound>(*_soundBuffers[filePath].buffer);
     sound->setVolume(volume);
     sound->play();
     std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
