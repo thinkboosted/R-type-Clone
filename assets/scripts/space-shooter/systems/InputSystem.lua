@@ -1,3 +1,4 @@
+local config = dofile("assets/scripts/space-shooter/config.lua")
 local InputSystem = {}
 
 function InputSystem.init()
@@ -27,11 +28,12 @@ function InputSystem.update(dt)
         -- Application des inputs stockés dans le composant InputState
         local moveX = 0
         local moveY = 0
+        local bounds = config.player.boundaries
 
-        if input.left then moveX = moveX - 1 end
-        if input.right then moveX = moveX + 1 end
-        if input.up then moveY = moveY + 1 end
-        if input.down then moveY = moveY - 1 end
+        if input.left and transform.x > bounds.minX then moveX = moveX - 1 end
+        if input.right and transform.x < bounds.maxX then moveX = moveX + 1 end
+        if input.up and transform.y < bounds.maxY then moveY = moveY + 1 end
+        if input.down and transform.y > bounds.minY then moveY = moveY - 1 end
 
         physic.vx = moveX * speed
         physic.vy = moveY * speed
@@ -40,6 +42,12 @@ function InputSystem.update(dt)
         if not ECS.capabilities.hasAuthority then
              transform.x = transform.x + physic.vx * dt
              transform.y = transform.y + physic.vy * dt
+
+             -- Hard Clamp for visual smoothness
+             if transform.x < bounds.minX then transform.x = bounds.minX end
+             if transform.x > bounds.maxX then transform.x = bounds.maxX end
+             if transform.y < bounds.minY then transform.y = bounds.minY end
+             if transform.y > bounds.maxY then transform.y = bounds.maxY end
         end
     end
 end
