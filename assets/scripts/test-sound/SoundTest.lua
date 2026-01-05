@@ -104,6 +104,9 @@ local steps = {
         print("[SoundTest]   - powerup.wav (bonus)")
         print("[SoundTest]   - gameover.wav (game over)")
         print("[SoundTest]   - background.ogg (music)")
+        
+        -- Signal completion to C++ test app
+        ECS.sendMessage("TestComplete", "all_tests_passed")
     end },
 }
 
