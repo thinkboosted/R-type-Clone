@@ -15,6 +15,7 @@ env:
 permissions:
   contents: read
   actions: write
+  packages: read
 
 jobs:
   build-and-test-linux:
