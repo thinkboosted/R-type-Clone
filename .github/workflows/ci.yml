@@ -50,6 +50,8 @@ jobs:
 
   build-and-test-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,20 +63,13 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - name: Setup Vcpkg
-        shell: cmd
-        working-directory: ${{ github.workspace }}
-        run: |
-          if not exist vcpkg (
-            git clone https://github.com/Microsoft/vcpkg.git
-          )
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
       - name: Build project
-        shell: cmd
+        shell: pwsh
         working-directory: ${{ github.workspace }}
         run: |
-          if exist build rmdir /s /q build
+          if (Test-Path build) { Remove-Item -Recurse -Force build }
+          # Utilise le VCPKG_INSTALLATION_ROOT défini par la VM GitHub
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
           python build.py
 
       - name: Run Tests
