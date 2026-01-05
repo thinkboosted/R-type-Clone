@@ -1,27 +1,95 @@
-run-name: CI ${{ github.repository }}
+name: CI
 
 on:
   push:
     branches-ignore:
-        - 'ga-ignore-**'
+      - 'ga-ignore-**'
   pull_request:
     branches-ignore:
-        - 'ga-ignore-**'
+      - 'ga-ignore-**'
 
 env:
   MIRROR_URL: "git@github.com:EpitechPGE3-2025/G-CPP-500-NAN-5-2-rtype-5.git"
 
+permissions:
+  contents: read
+  actions: write
+  packages: read
+
 jobs:
+  build-and-test-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/thinkboosted/r-type-clone:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Standard GitHub Cache for Vcpkg (Linux)
+      - name: Restore Vcpkg Cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/vcpkg/installed
+          key: linux-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            linux-vcpkg-
+
+      # Build Project (Vcpkg is pre-installed in /opt/vcpkg and detected by build.py via VCPKG_ROOT)
+      - name: Build project
+        working-directory: ${{ github.workspace }}
+        run: |
+          rm -rf build
+          python3 build.py
+
+      # Run Tests
+      - name: Run Tests
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure -j$(nproc)
+
+  build-and-test-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Standard GitHub Cache for Vcpkg (Windows)
+      - name: Restore Vcpkg Cache
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: windows-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            windows-vcpkg-
+
+      - name: Build project
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          if (Test-Path build) { Remove-Item -Recurse -Force build }
+          # Utilise le VCPKG_INSTALLATION_ROOT défini par la VM GitHub
+          $env:VCPKG_ROOT = $env:VCPKG_INSTALLATION_ROOT
+          python build.py
+
+      - name: Run Tests
+        shell: cmd
+        working-directory: ${{ github.workspace }}/build
+        run: ctest --output-on-failure -C Release
+
   push_to_mirror:
+    needs: [build-and-test-linux, build-and-test-windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Push to mirror
+      - name: Checkout code for mirror
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: pixta-dev/repository-mirroring-action@v1
+
+      - name: Push to mirror
+        uses: pixta-dev/repository-mirroring-action@v1
         with:
-          target_repo_url:
-            ${{ env.MIRROR_URL }}
-          ssh_private_key:
-            ${{ secrets.ORG_DEPLOY_KEY }}
+          target_repo_url: ${{ env.MIRROR_URL }}
+          ssh_private_key: ${{ secrets.ORG_DEPLOY_KEY }}
