@@ -32,7 +32,7 @@ def main():
         # Attempt to install deps first
         vcpkg_install_cmd = [vcpkg_path, "install"]
         if platform.system() == "Windows":
-             vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
+            vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
 
         if run_command(vcpkg_install_cmd, cwd=source_dir):
             cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_toolchain}")
