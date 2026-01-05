@@ -48,7 +48,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           if [ ! -d "vcpkg" ]; then
-            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
+            git clone https://github.com/Microsoft/vcpkg.git
           fi
           ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
@@ -82,7 +82,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           if not exist vcpkg (
-            git clone --depth 1 https://github.com/Microsoft/vcpkg.git
+            git clone https://github.com/Microsoft/vcpkg.git
           )
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
