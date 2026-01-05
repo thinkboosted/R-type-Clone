@@ -53,7 +53,6 @@ void SFMLSoundManager::init() {
 }
 
 void SFMLSoundManager::loop() {
-    // Clean up finished sounds to free resources
     for (auto it = _activeSounds.begin(); it != _activeSounds.end();) {
         if (it->second && it->second->getStatus() == sf::Sound::Status::Stopped) {
             it = _activeSounds.erase(it);
@@ -101,10 +100,6 @@ SFMLSoundManager::ParsedSoundMessage SFMLSoundManager::parseMessage(const std::s
     return result;
 }
 
-// ============================================================================
-// Sound Effects (short clips, loaded into memory)
-// ============================================================================
-
 void SFMLSoundManager::handleSoundPlay(const std::string& message) {
     auto parsed = parseMessage(message);
     if (!parsed.id.empty() && !parsed.path.empty()) {
@@ -127,7 +122,6 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
     std::string fullPath = _assetsPath + filePath;
     std::cout << "[SFMLSoundManager] playSound called: id=" << soundId << " path=" << fullPath << " volume=" << volume << std::endl;
 
-    // Check if buffer is already loaded, if not load it
     if (_soundBuffers.find(filePath) == _soundBuffers.end()) {
         auto buffer = std::make_unique<sf::SoundBuffer>();
         if (!buffer->loadFromFile(fullPath)) {
@@ -138,13 +132,11 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
         _soundBuffers[filePath] = std::move(buffer);
     }
 
-    // Create and play sound
     auto sound = std::make_unique<sf::Sound>(*_soundBuffers[filePath]);
     sound->setVolume(volume);
     sound->play();
     std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
 
-    // Store with unique key (soundId + timestamp for multiple instances)
     std::string uniqueKey = soundId + "_" + std::to_string(reinterpret_cast<uintptr_t>(sound.get()));
     _activeSounds[uniqueKey] = std::move(sound);
 }
@@ -175,10 +167,6 @@ void SFMLSoundManager::stopAllSounds() {
     _activeSounds.clear();
 }
 
-// ============================================================================
-// Music (streamed, looped by default)
-// ============================================================================
-
 void SFMLSoundManager::handleMusicPlay(const std::string& message) {
     auto parsed = parseMessage(message);
     if (!parsed.id.empty() && !parsed.path.empty()) {
@@ -208,12 +196,10 @@ void SFMLSoundManager::handleMusicSetVolume(const std::string& message) {
 void SFMLSoundManager::playMusic(const std::string& musicId, const std::string& filePath, float volume, bool loop) {
     std::string fullPath = _assetsPath + filePath;
 
-    // Stop existing music with the same ID
     if (_activeMusic.find(musicId) != _activeMusic.end()) {
         _activeMusic[musicId]->stop();
     }
 
-    // Create and play music
     auto music = std::make_unique<sf::Music>();
     if (!music->openFromFile(fullPath)) {
         std::cerr << "[SFMLSoundManager] Failed to load music: " << fullPath << std::endl;
