@@ -80,6 +80,7 @@ if ECS.capabilities.hasRendering then
     dofile("assets/scripts/space-shooter/systems/RenderSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
 
     -- Setup Camera (only needed for rendering instances)
     local camera = ECS.createEntity()

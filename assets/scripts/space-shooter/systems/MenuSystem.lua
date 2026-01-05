@@ -98,6 +98,9 @@ function MenuSystem.onMousePressed(msg)
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO") -- Call the new C++ function
         
+        -- Load Level 1
+        dofile("assets/scripts/space-shooter/levels/Level-1.lua")
+
         -- Add Authority to GameState now that we are Solo/Server
         if #gsEntities > 0 then
              ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())

@@ -29,7 +29,7 @@ function InputSystem.update(dt)
         local moveX = 0
         local moveY = 0
         local bounds = config.player.boundaries
-
+        -- check players boundaires
         if input.left and transform.x > bounds.minX then moveX = moveX - 1 end
         if input.right and transform.x < bounds.maxX then moveX = moveX + 1 end
         if input.up and transform.y < bounds.maxY then moveY = moveY + 1 end
