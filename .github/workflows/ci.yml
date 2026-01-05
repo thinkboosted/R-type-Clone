@@ -10,7 +10,6 @@ on:
 
 env:
   MIRROR_URL: "git@github.com:EpitechPGE3-2025/G-CPP-500-NAN-5-2-rtype-5.git"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 permissions:
   contents: read
@@ -29,13 +28,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup vcpkg binary caching
-      - name: Export GitHub Actions Cache Env
-        uses: actions/github-script@v7
+      # Standard GitHub Cache for Vcpkg (Linux)
+      - name: Restore Vcpkg Cache
+        uses: actions/cache@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: /opt/vcpkg/installed
+          key: linux-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            linux-vcpkg-
 
       # Build Project (Vcpkg is pre-installed in /opt/vcpkg and detected by build.py via VCPKG_ROOT)
       - name: Build project
@@ -51,18 +51,18 @@ jobs:
 
   build-and-test-windows:
     runs-on: windows-latest
-    env:
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Export GitHub Actions Cache Env
-        uses: actions/github-script@v7
+      # Standard GitHub Cache for Vcpkg (Windows)
+      - name: Restore Vcpkg Cache
+        uses: actions/cache@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: C:\vcpkg\installed
+          key: windows-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            windows-vcpkg-
 
       - name: Build project
         shell: pwsh
