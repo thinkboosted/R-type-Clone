@@ -36,10 +36,9 @@ find_package(ZeroMQ CONFIG QUIET)
 if(NOT ZeroMQ_FOUND)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(ZeroMQ REQUIRED libzmq)
-    target_include_directories(LuaECSManager PRIVATE ${ZeroMQ_INCLUDE_DIRS})
-    target_link_libraries(LuaECSManager ${ZeroMQ_LIBRARIES})
+    set(ZeroMQ_LINK_LIBS ${ZeroMQ_LINK_LIBRARIES})
 else()
-    target_link_libraries(LuaECSManager libzmq)
+    set(ZeroMQ_LINK_LIBS libzmq)
 endif()
 
 # Find cppzmq (header-only)
@@ -48,12 +47,24 @@ if(NOT cppzmq_FOUND)
     find_path(CPPZMQ_INCLUDE_DIR zmq.hpp
         PATHS /usr/include /usr/local/include /opt/include
     )
-    if(CPPZMQ_INCLUDE_DIR)
-        target_include_directories(LuaECSManager PRIVATE ${CPPZMQ_INCLUDE_DIR})
+    if(NOT CPPZMQ_INCLUDE_DIR)
+        message(WARNING "cppzmq headers not found, hoping they're in standard paths")
     endif()
-else()
-    target_link_libraries(LuaECSManager cppzmq)
 endif()
+
+target_link_libraries(LuaECSManager
+    ${LUA_LIBRARIES}
+    ${ZeroMQ_LINK_LIBS}
+)
+
+if(TARGET sol2::sol2)
+    target_link_libraries(LuaECSManager sol2::sol2)
+endif()
+
+target_include_directories(LuaECSManager PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
+)
 
 set_target_properties(LuaECSManager PROPERTIES
     PREFIX ""
