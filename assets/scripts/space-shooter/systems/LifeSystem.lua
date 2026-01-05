@@ -71,6 +71,10 @@ function LifeSystem.update(dt)
                         finalScore = scoreComp.value
                     end
                     print("GAME OVER: Player died! Final Score: " .. finalScore)
+                    
+                    -- Stop background music and play game over sound
+                    ECS.sendMessage("MusicStop", "bgm")
+                    ECS.sendMessage("SoundPlay", "gameover:effects/gameover.wav:100")
 
                     local netId = ECS.getComponent(id, "NetworkId")
                     if netId then

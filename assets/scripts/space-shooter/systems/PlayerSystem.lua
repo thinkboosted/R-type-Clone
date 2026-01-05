@@ -23,6 +23,9 @@ function PlayerSystem.update(dt)
             Spawns.spawnBullet(transform.x + 1.5, transform.y, transform.z, false)
             weapon.timeSinceLastShot = 0
             
+            -- Play laser sound effect
+            ECS.sendMessage("SoundPlay", "laser_" .. id .. "_" .. os.time() .. ":effects/laser.wav:80")
+            
             print("[PlayerSystem] Player " .. id .. " shot a bullet!")
         end
     end

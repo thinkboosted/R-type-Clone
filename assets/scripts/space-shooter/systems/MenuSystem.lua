@@ -109,6 +109,9 @@ function MenuSystem.onMousePressed(msg)
         local gameCam = ECS.createEntity()
         ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
         ECS.addComponent(gameCam, "Camera", Camera(true))
+        
+        -- Start background music when game begins
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
 
     elseif choice == "MULTI" then
         MenuSystem.hideMenu()
