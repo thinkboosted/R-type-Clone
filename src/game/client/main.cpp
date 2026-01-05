@@ -29,6 +29,7 @@ int main(int argc, char **argv) {
     app.loadModule("LuaECSManager");
     app.loadModule("GLEWSFMLRenderer");
     app.loadModule("SFMLWindowManager");
+    app.loadModule("SFMLSoundManager");
     app.loadModule("BulletPhysicEngine");
     app.loadModule("ECSSavesManager");
     app.loadModule("NetworkManager");
