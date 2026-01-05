@@ -91,23 +91,29 @@ void SFMLSoundManager::cleanup() {
 
 SFMLSoundManager::ParsedSoundMessage SFMLSoundManager::parseMessage(const std::string& message) {
     ParsedSoundMessage result;
-    std::stringstream ss(message);
-    std::string token;
-    std::vector<std::string> tokens;
-
-    while (std::getline(ss, token, ':')) {
-        tokens.push_back(token);
+    
+    // Parse format: "id:path:volume"
+    // Split only on first two colons to handle paths with colons (e.g., C:/path/file.wav)
+    size_t firstColon = message.find(':');
+    if (firstColon == std::string::npos) {
+        result.id = message;
+        return result;
     }
-
-    if (tokens.size() >= 1) {
-        result.id = tokens[0];
+    
+    result.id = message.substr(0, firstColon);
+    
+    size_t secondColon = message.find(':', firstColon + 1);
+    if (secondColon == std::string::npos) {
+        result.path = message.substr(firstColon + 1);
+        return result;
     }
-    if (tokens.size() >= 2) {
-        result.path = tokens[1];
-    }
-    if (tokens.size() >= 3) {
+    
+    result.path = message.substr(firstColon + 1, secondColon - firstColon - 1);
+    
+    std::string volumeStr = message.substr(secondColon + 1);
+    if (!volumeStr.empty()) {
         try {
-            result.volume = std::stof(tokens[2]);
+            result.volume = std::stof(volumeStr);
             result.volume = std::clamp(result.volume, 0.0f, 100.0f);
         } catch (...) {
             result.volume = 100.0f;
