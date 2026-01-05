@@ -17,17 +17,18 @@ def main():
         os.makedirs(build_dir)
 
     # 1. Try Vcpkg Configuration
-    vcpkg_path = os.path.join(source_dir, "vcpkg", "vcpkg")
+    vcpkg_root = os.environ.get("VCPKG_ROOT", os.path.join(source_dir, "vcpkg"))
+    vcpkg_path = os.path.join(vcpkg_root, "vcpkg")
     if platform.system() == "Windows":
         vcpkg_path += ".exe"
 
-    vcpkg_toolchain = os.path.join(source_dir, "vcpkg", "scripts", "buildsystems", "vcpkg.cmake")
+    vcpkg_toolchain = os.path.join(vcpkg_root, "scripts", "buildsystems", "vcpkg.cmake")
     has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
 
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
-    
+
     if has_vcpkg:
-        print("--- Vcpkg detected, attempting to use it ---")
+        print(f"--- Vcpkg detected at {vcpkg_root}, attempting to use it ---")
         # Attempt to install deps first
         vcpkg_install_cmd = [vcpkg_path, "install"]
         if platform.system() == "Windows":
@@ -50,7 +51,7 @@ def main():
     # 3. Build
     print("--- Building project ---")
     build_cmd = ["cmake", "--build", build_dir, "-j"]
-    
+
     if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)

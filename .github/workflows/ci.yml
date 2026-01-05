@@ -20,7 +20,10 @@ jobs:
   build-and-test-linux:
     runs-on: ubuntu-latest
     container:
-      image: epitechcontent/epitest-docker
+      image: ghcr.io/thinkboosted/r-type-clone:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,26 +36,7 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      # Install system dependencies required by Vcpkg ports (SFML, etc.)
-      - name: Install system dependencies
-        run: |
-          apt-get update && apt-get install -y \
-            curl zip unzip tar git pkg-config \
-            libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev \
-            libgl1-mesa-dev libglu1-mesa-dev \
-            libflac-dev libogg-dev libvorbis-dev libopenal-dev libfreetype6-dev \
-            libzmq3-dev
-
-      # Setup Vcpkg
-      - name: Setup Vcpkg
-        working-directory: ${{ github.workspace }}
-        run: |
-          if [ ! -d "vcpkg" ]; then
-            git clone https://github.com/Microsoft/vcpkg.git
-          fi
-          ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
-      # Build Project
+      # Build Project (Vcpkg is pre-installed in /opt/vcpkg and detected by build.py via VCPKG_ROOT)
       - name: Build project
         working-directory: ${{ github.workspace }}
         run: |
