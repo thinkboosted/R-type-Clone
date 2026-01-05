@@ -15,7 +15,6 @@ SFMLSoundManager::SFMLSoundManager(const char* pubEndpoint, const char* subEndpo
     : ISoundManager(pubEndpoint, subEndpoint) {}
 
 void SFMLSoundManager::init() {
-    // Subscribe to sound-related messages
     subscribe("SoundPlay", [this](const std::string& message) {
         this->handleSoundPlay(message);
     });
@@ -29,7 +28,6 @@ void SFMLSoundManager::init() {
         this->stopAllSounds();
     });
 
-    // Subscribe to music-related messages
     subscribe("MusicPlay", [this](const std::string& message) {
         this->handleMusicPlay(message);
     });
