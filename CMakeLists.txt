@@ -13,6 +13,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # --- Dependencies Management ---
 include(cmake/Dependencies.cmake)
 
+# Lua is needed globally because ecs.hpp includes sol2, which requires Lua headers
+find_package(Lua REQUIRED)
+include_directories(${LUA_INCLUDE_DIR})
+
 # --- Compatibility Aliases (FetchContent vs Vcpkg) ---
 if (NOT TARGET SFML::Graphics AND TARGET sfml-graphics)
     add_library(SFML::Graphics ALIAS sfml-graphics)

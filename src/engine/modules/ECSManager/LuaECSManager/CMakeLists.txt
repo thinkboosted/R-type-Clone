@@ -18,6 +18,16 @@ find_package(cppzmq CONFIG REQUIRED)
 target_link_libraries(LuaECSManager
     cppzmq-static
     ${LUA_LIBRARIES}
+    ${ZeroMQ_LINK_LIBS}
+)
+
+if(TARGET sol2::sol2)
+    target_link_libraries(LuaECSManager sol2::sol2)
+endif()
+
+target_include_directories(LuaECSManager PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
 )
 
 set_target_properties(LuaECSManager PROPERTIES
