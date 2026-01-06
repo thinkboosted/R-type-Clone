@@ -13,24 +13,7 @@ target_include_directories(NetworkManager PUBLIC
 
 find_package(asio CONFIG REQUIRED)
 find_package(msgpack-cxx CONFIG REQUIRED)
-
-# Try find_package with CONFIG first (for vcpkg), fall back to pkg-config
-find_package(ZeroMQ CONFIG QUIET)
-if(NOT ZeroMQ_FOUND)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(ZeroMQ REQUIRED libzmq)
-    set(ZeroMQ_LINK_LIBS ${ZeroMQ_LINK_LIBRARIES})
-else()
-    set(ZeroMQ_LINK_LIBS libzmq)
-endif()
-
-find_package(cppzmq CONFIG QUIET)
-if(NOT cppzmq_FOUND)
-    # cppzmq is header-only
-    find_path(CPPZMQ_INCLUDE_DIR zmq.hpp
-        PATHS /usr/include /usr/local/include
-    )
-endif()
+find_package(cppzmq CONFIG REQUIRED)
 
 set(ASIO_TARGET "")
 if(TARGET asio::asio)
@@ -59,12 +42,7 @@ if(MSGPACK_TARGET)
 endif()
 
 target_link_libraries(NetworkManager PRIVATE
-    ${ZeroMQ_LINK_LIBS}
-)
-
-target_include_directories(NetworkManager PRIVATE
-    ${ZeroMQ_INCLUDE_DIRS}
-    ${CPPZMQ_INCLUDE_DIR}
+    cppzmq-static
 )
 
 if(WIN32)

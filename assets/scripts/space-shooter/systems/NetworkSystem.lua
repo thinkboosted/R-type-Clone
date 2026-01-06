@@ -255,6 +255,17 @@ function NetworkSystem.init()
     elseif not ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
         print("[NetworkSystem] Client Mode - Receiving Network Sync")
 
+        -- Handle sound events broadcast from server
+        ECS.subscribe("PLAY_SOUND", function(msg)
+            -- msg format: "soundId:path:volume"
+            ECS.sendMessage("SoundPlay", msg)
+        end)
+
+        -- Handle music stop events from server
+        ECS.subscribe("STOP_MUSIC", function(msg)
+            ECS.sendMessage("MusicStop", msg)
+        end)
+
         ECS.subscribe("PLAYER_ASSIGN", function(msg)
             local id = string.match(msg, "([^%s]+)")
             if id then

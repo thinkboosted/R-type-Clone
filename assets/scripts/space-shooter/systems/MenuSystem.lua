@@ -109,10 +109,16 @@ function MenuSystem.onMousePressed(msg)
         local gameCam = ECS.createEntity()
         ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
         ECS.addComponent(gameCam, "Camera", Camera(true))
+        
+        -- Start background music when game begins
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
 
     elseif choice == "MULTI" then
         MenuSystem.hideMenu()
         ECS.setGameMode("MULTI_CLIENT") -- Call the new C++ function, assuming menu choice leads to client
+        
+        -- Start background music when game begins (client side)
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
         
         -- Signal server to start the game (payload must not be empty for topic parsing)
         print("[MenuSystem] Sending REQUEST_GAME_START to server...")
