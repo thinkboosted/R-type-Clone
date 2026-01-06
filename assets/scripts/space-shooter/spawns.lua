@@ -187,13 +187,13 @@ function Spawns.createBackground(texturePath)
     ECS.addComponent(bg1, "Transform", Transform(0, 0, -10, 3.14, 0, 0, -60, 40, 1))
     ECS.addComponent(bg1, "Mesh", Mesh("assets/models/quad.obj", tex))
     ECS.addComponent(bg1, "Color", Color(1.0, 1.0, 1.0))
-    ECS.addComponent(bg1, "Background", Background(-2.0, 58.0, -60.0))
+    ECS.addComponent(bg1, "Background", Background(-2.0, 60.0, -60.0))
 
     local bg2 = ECS.createEntity()
-    ECS.addComponent(bg2, "Transform", Transform(59.0, 0, -10.01, 3.14, 0, 0, 60, 40, 1))
+    ECS.addComponent(bg2, "Transform", Transform(60.0, 0, -10.01, 3.14, 0, 0, 60, 40, 1))
     ECS.addComponent(bg2, "Mesh", Mesh("assets/models/quad.obj", tex))
     ECS.addComponent(bg2, "Color", Color(1.0, 1.0, 1.0))
-    ECS.addComponent(bg2, "Background", Background(-2.0, 58.0, -60.0))
+    ECS.addComponent(bg2, "Background", Background(-2.0, 60.0, -60.0))
 
     print("[Spawns] Background entities created: " .. bg1 .. ", " .. bg2)
 end
