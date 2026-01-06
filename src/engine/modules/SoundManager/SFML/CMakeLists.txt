@@ -37,9 +37,6 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:SFML::System>
             $<TARGET_FILE_DIR:SFMLSoundManager>
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-mingw-dynamic/$<IF:$<CONFIG:Debug>,debug/bin,bin>
-            $<TARGET_FILE_DIR:SFMLSoundManager>
         COMMENT "Copying SFML Audio and dependency DLLs to module directory"
     )
 endif()
