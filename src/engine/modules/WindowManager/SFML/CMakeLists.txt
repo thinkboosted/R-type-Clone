@@ -14,14 +14,12 @@ target_include_directories(SFMLWindowManager PUBLIC
     ${CMAKE_SOURCE_DIR}/src/engine/types
 )
 
-find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(SFMLWindowManager
     SFML::Window
     SFML::Graphics
-    cppzmq
-    libzmq
+    cppzmq-static
 )
 
 # Set output name without lib prefix

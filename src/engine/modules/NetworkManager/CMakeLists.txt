@@ -13,7 +13,6 @@ target_include_directories(NetworkManager PUBLIC
 
 find_package(asio CONFIG REQUIRED)
 find_package(msgpack-cxx CONFIG REQUIRED)
-find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
 set(ASIO_TARGET "")
@@ -43,8 +42,7 @@ if(MSGPACK_TARGET)
 endif()
 
 target_link_libraries(NetworkManager PRIVATE
-    cppzmq
-    libzmq
+    cppzmq-static
 )
 
 if(WIN32)

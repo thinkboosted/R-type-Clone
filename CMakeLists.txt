@@ -13,6 +13,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # --- Dependencies Management ---
 include(cmake/Dependencies.cmake)
 
+# Lua is needed globally because ecs.hpp includes sol2, which requires Lua headers
+find_package(Lua REQUIRED)
+include_directories(${LUA_INCLUDE_DIR})
+
 # --- Compatibility Aliases (FetchContent vs Vcpkg) ---
 if (NOT TARGET SFML::Graphics AND TARGET sfml-graphics)
     add_library(SFML::Graphics ALIAS sfml-graphics)
@@ -54,8 +58,10 @@ include_directories(
 # Add subdirectories for modules
 if(SFML_FOUND OR TARGET sfml-system)
     add_subdirectory(src/engine/modules/WindowManager/SFML)
+    add_subdirectory(src/engine/modules/SoundManager/SFML)
 else()
     message(WARNING "Skipping SFML Window Manager module (SFML not found)")
+    message(WARNING "Skipping SFML Sound Manager module")
 endif()
 
 if(GLEW_FOUND AND OpenGL_FOUND)
@@ -78,3 +84,6 @@ add_subdirectory(src/engine/modules/NetworkManager)
 
 # Add subdirectory for game executable
 add_subdirectory(src/game)
+
+# Add subdirectory for sound test executable
+add_subdirectory(src/test_sound)

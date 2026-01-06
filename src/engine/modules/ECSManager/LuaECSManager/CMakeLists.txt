@@ -13,13 +13,21 @@ target_include_directories(LuaECSManager PUBLIC
 
 find_package(Lua REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
-find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(LuaECSManager
-    cppzmq
-    libzmq
+    cppzmq-static
     ${LUA_LIBRARIES}
+    ${ZeroMQ_LINK_LIBS}
+)
+
+if(TARGET sol2::sol2)
+    target_link_libraries(LuaECSManager sol2::sol2)
+endif()
+
+target_include_directories(LuaECSManager PRIVATE
+    ${ZeroMQ_INCLUDE_DIRS}
+    ${CPPZMQ_INCLUDE_DIR}
 )
 
 set_target_properties(LuaECSManager PROPERTIES

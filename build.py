@@ -13,33 +13,51 @@ def run_command(command, cwd=None):
 def main():
     source_dir = os.path.dirname(os.path.abspath(__file__))
     build_dir = os.path.join(source_dir, "build")
-    
+
     if not os.path.exists(build_dir):
         os.makedirs(build_dir)
 
     # 1. Try Vcpkg Configuration
-    vcpkg_path = os.path.join(source_dir, "vcpkg", "vcpkg")
-    if platform.system() == "Windows":
-        vcpkg_path += ".exe"
+    vcpkg_candidates = []
+    if "VCPKG_ROOT" in os.environ:
+        vcpkg_candidates.append(os.environ["VCPKG_ROOT"])
+    vcpkg_candidates.append(os.path.join(source_dir, "vcpkg"))
+
+    vcpkg_root = None
+    vcpkg_path = None
+    vcpkg_toolchain = None
+
+    for candidate in vcpkg_candidates:
+        candidate_exe = os.path.join(candidate, "vcpkg")
+        if platform.system() == "Windows":
+            candidate_exe += ".exe"
+        
+        candidate_toolchain = os.path.join(candidate, "scripts", "buildsystems", "vcpkg.cmake")
+
+        if os.path.exists(candidate_exe) and os.path.exists(candidate_toolchain):
+            vcpkg_root = candidate
+            vcpkg_path = candidate_exe
+            vcpkg_toolchain = candidate_toolchain
+            break
     
-    vcpkg_toolchain = os.path.join(source_dir, "vcpkg", "scripts", "buildsystems", "vcpkg.cmake")
-    has_vcpkg = os.path.exists(vcpkg_path) and os.path.exists(vcpkg_toolchain)
-    
+    has_vcpkg = vcpkg_root is not None
+
     cmake_args = ["cmake", "-S", source_dir, "-B", build_dir]
 
     if has_vcpkg:
-        print("--- Vcpkg detected, attempting to use it ---")
+        print(f"--- Vcpkg detected at {vcpkg_root}, attempting to use it ---")
         # Attempt to install deps first
         vcpkg_install_cmd = [vcpkg_path, "install"]
         if platform.system() == "Windows":
-             vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
-        
+            vcpkg_install_cmd.extend(["--triplet", "x64-windows"])
+
         if run_command(vcpkg_install_cmd, cwd=source_dir):
             cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={vcpkg_toolchain}")
         else:
-            print("--- Vcpkg install failed. Falling back to FetchContent (CMake internal) ---")
+            print("--- Vcpkg install failed. Exiting. ---")
+            sys.exit(1)
     else:
-        print("--- Vcpkg not found. Using FetchContent (CMake internal) for dependencies ---")
+        print("--- Vcpkg not found. Using FetchContent (CMake internal) if configured ---")
 
     # 2. Configure CMake
     print("--- Configuring CMake ---")
@@ -49,7 +67,9 @@ def main():
 
     # 3. Build
     print("--- Building project ---")
-    if not run_command(["cmake", "--build", build_dir, "-j", "4"]): # Parallel build
+    build_cmd = ["cmake", "--build", build_dir, "-j"]
+
+    if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)
     

@@ -128,6 +128,9 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
         end
         -- DAMAGE APPLICATION: Kill player instantly on collision with enemy
         life.amount = 0
+        
+        -- Broadcast hit sound to all clients
+        ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100")
     end
 end
 
@@ -137,6 +140,9 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
     if life then
         -- DAMAGE APPLICATION: Kill enemy on bullet hit
         life.amount = 0
+        
+        -- Broadcast explosion sound to all clients
+        ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
     end
 
     -- Increase score (authority guaranteed)
@@ -158,6 +164,9 @@ function CollisionSystem.handlePlayerBonus(playerId, bonusId)
     local bonus = ECS.getComponent(bonusId, "Bonus")
     if bonus then
         ECS.addComponent(playerId, "PowerUp", PowerUp(bonus.duration, 0.2))
+        
+        -- Broadcast powerup sound to all clients
+        ECS.broadcastNetworkMessage("PLAY_SOUND", "powerup:effects/powerup.wav:100")
 
         -- Destroy bonus after collection
         local bonusLife = ECS.getComponent(bonusId, "Life")

@@ -12,15 +12,13 @@ target_include_directories(BulletPhysicEngine PUBLIC
 )
 
 find_package(Bullet CONFIG REQUIRED)
-find_package(ZeroMQ CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(BulletPhysicEngine
     BulletDynamics
     BulletCollision
     LinearMath
-    libzmq
-    cppzmq
+    cppzmq-static
 )
 
 # Set output name without lib prefix
