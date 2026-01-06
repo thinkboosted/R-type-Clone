@@ -98,8 +98,25 @@ function MenuSystem.onMousePressed(msg)
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO") -- Call the new C++ function
         
-        -- Load Level 1
-        dofile("assets/scripts/space-shooter/levels/Level-1.lua")
+        -- Load Level based on save
+        local levelToLoad = "assets/scripts/space-shooter/levels/Level-1.lua"
+        local file = io.open("current_level.txt", "r")
+        if file then
+            local level = file:read("*n") -- Read number
+            file:close()
+            if level then
+                local path = "assets/scripts/space-shooter/levels/Level-" .. level .. ".lua"
+                local f = io.open(path, "r")
+                if f then
+                    f:close()
+                    levelToLoad = path
+                end
+            end
+            print("[MenuSystem] Loading saved level: " .. levelToLoad)
+        else
+            print("[MenuSystem] No save found, loading Level 1")
+        end
+        dofile(levelToLoad)
 
         -- Add Authority to GameState now that we are Solo/Server
         if #gsEntities > 0 then
