@@ -2,16 +2,40 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "windows",
+      "name": "windows-base",
+      "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/windows",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-mingw",
+      "inherits": "windows-base",
+      "displayName": "Windows (MinGW)",
+      "description": "Target Windows with GCC/MinGW compiler",
+      "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-mingw-dynamic",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic"
       }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows (MSVC)",
+      "description": "Target Windows with MSVC compiler",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/windows",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg_installed/x64-windows",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "windows",
+      "inherits": "windows-msvc"
     },
     {
       "name": "linux",
@@ -27,6 +51,14 @@
     {
       "name": "windows",
       "configurePreset": "windows"
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc"
+    },
+    {
+      "name": "windows-mingw",
+      "configurePreset": "windows-mingw"
     },
     {
       "name": "linux",
