@@ -10,12 +10,18 @@ function FollowSystem.update(dt)
         local follow = ECS.getComponent(id, "Follow")
         local transform = ECS.getComponent(id, "Transform")
 
-        local targetTransform = ECS.getComponent(follow.targetId, "Transform")
+        local targetId = follow.targetId
+        if targetId == "PLAYER" then
+            targetId = NetworkSystem.myServerId
+        end
 
-        if targetTransform then
-            transform.x = targetTransform.x + follow.offsetX
-            transform.y = targetTransform.y + follow.offsetY
-            transform.z = targetTransform.z + follow.offsetZ
+        if targetId then
+            local targetTransform = ECS.getComponent(targetId, "Transform")
+            if targetTransform then
+                transform.x = targetTransform.x + follow.offsetX
+                transform.y = targetTransform.y + follow.offsetY
+                transform.z = targetTransform.z + follow.offsetZ
+            end
         end
     end
 end
