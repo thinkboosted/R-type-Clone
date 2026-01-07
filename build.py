@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import platform
+import shutil
 
 def run_command(command, cwd=None):
     print(f"Running: {' '.join(command)}")
@@ -71,6 +72,19 @@ def main():
     if not run_command(build_cmd):
         print("Build failed.")
         sys.exit(1)
+    
+    # 4. Update Assets
+    print("--- Updating Assets ---")
+    assets_src = os.path.join(source_dir, "assets")
+    assets_dst = os.path.join(build_dir, "assets")
+    
+    # Remove old assets in build folder to ensure clean state
+    if os.path.exists(assets_dst):
+        shutil.rmtree(assets_dst)
+    
+    # Copy fresh assets
+    shutil.copytree(assets_src, assets_dst)
+    print(f"Assets copied to {assets_dst}")
 
     print("Build successful!")
 

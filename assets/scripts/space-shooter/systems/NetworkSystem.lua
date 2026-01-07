@@ -79,7 +79,7 @@ function NetworkSystem.init()
     -- ========================================================================
     -- UNIFIED NETWORK SYSTEM: Uses ECS.capabilities instead of direct checks
     -- ========================================================================
-    
+
     if ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
         print("[NetworkSystem] Server Mode - Authoritative Network Sync")
 
@@ -92,7 +92,7 @@ function NetworkSystem.init()
             if not clientId then return end
             clientId = tonumber(clientId)
             print("Client Connected: " .. clientId)
-            
+
             -- Check if game is already running
             local gameStateEntities = ECS.getEntitiesWith({"GameState"})
             if #gameStateEntities == 0 then
@@ -100,7 +100,7 @@ function NetworkSystem.init()
                 return
             end
             local gameState = ECS.getComponent(gameStateEntities[1], "GameState")
-            
+
             if gameState.state == "PLAYING" then
                 print("  -> Spawning player (GameState: PLAYING)")
                 if not hasActiveClients() then
@@ -112,7 +112,7 @@ function NetworkSystem.init()
                 ECS.isGameRunning = true
             else
                 print("  -> Game not started yet (GameState: " .. gameState.state .. ")")
-                
+
                 -- For dedicated server: Wait for explicit start request
                 -- Store pending client to spawn later when game starts
                 if not NetworkSystem.pendingClients then NetworkSystem.pendingClients = {} end
@@ -157,7 +157,7 @@ function NetworkSystem.init()
             NetworkSystem.pendingClients = {}
             ECS.isGameRunning = false
         end)
-        
+
         -- When game starts (MENU -> PLAYING), spawn pending clients
         ECS.subscribe("GAME_STARTED", function(msg)
             print("[NetworkSystem] Game started - spawning pending clients")
@@ -230,10 +230,10 @@ function NetworkSystem.init()
                     local input = ECS.getComponent(entityId, "InputState")
                     if input then
                         local pressed = (state == "1")
-                        if key == "UP" or key == "Z" or key == "W" then input.up = pressed end
-                        if key == "DOWN" or key == "S" then input.down = pressed end
-                        if key == "LEFT" or key == "Q" or key == "A" then input.left = pressed end
-                        if key == "RIGHT" or key == "D" then input.right = pressed end
+                        if key == "UP" then input.up = pressed end
+                        if key == "DOWN" then input.down = pressed end
+                        if key == "LEFT" then input.left = pressed end
+                        if key == "RIGHT" then input.right = pressed end
                         if key == "SPACE" then input.shoot = pressed end
                     end
                 end
@@ -309,10 +309,10 @@ function NetworkSystem.init()
 
         ECS.subscribe("ENEMY_DEAD", function(msg)
                 if not ECS.isGameRunning then return end
-                
+
                 -- Parse: ID X Y Z VX VY VZ
                 local id, x, y, z = string.match(msg, "([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+)")
-                
+
                 if id then
                     if x and y and z then
                         Spawns.createExplosion(tonumber(x), tonumber(y), tonumber(z))
@@ -357,11 +357,12 @@ function NetworkSystem.init()
 end
 
 function NetworkSystem.spawnPlayerForClient(clientId)
-    print("DEBUG: Spawning Player for Client " .. clientId)
-    local player = Spawns.createPlayer(-8, 0, 0, clientId)
+    -- Offset Y based on Client ID to prevent stacking
+    local offsetY = (tonumber(clientId) % 4) * 2.0 - 3.0
+    local player = Spawns.createPlayer(-8, offsetY, 0, clientId)
 
     NetworkSystem.clientEntities[clientId] = player
-    ECS.sendToClient(tonumber(clientId), "PLAYER_ASSIGN", player)
+    ECS.sendToClient(tonumber(clientId), "PLAYER_ASSIGN", tostring(player))
 end
 
 function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, vz, typeStr)
@@ -381,8 +382,40 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
         t.netAge = 0
 
         if nType == 1 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/aircraft.obj"))
-             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 0.0))
+             -- Try to use numeric ID first, otherwise hash the string
+             local pid = tonumber(serverId)
+             if not pid then
+                 local s = tostring(serverId)
+                 pid = 0
+                 for i = 1, #s do pid = pid + string.byte(s, i) end
+             end
+
+             -- Unique Mesh per Player
+             local meshes = {
+                "assets/models/aircraft.obj",
+                "assets/models/delta_wing.obj",
+                "assets/models/fighter.obj",
+                "assets/models/bomber.obj"
+             }
+             -- Use a different modulus for mesh to mix it up
+             -- Add a prime number offset to desync mesh and color cycles
+             local meshIndex = ((pid * 3) % #meshes) + 1
+             ECS.addComponent(localId, "Mesh", Mesh(meshes[meshIndex]))
+             -- Unique Color per Player
+             local colors = {
+                {1.0, 0.0, 0.0}, -- Red
+                {0.0, 1.0, 0.0}, -- Green
+                {0.0, 0.0, 1.0}, -- Blue
+                {1.0, 1.0, 0.0}, -- Yellow
+                {1.0, 0.0, 1.0}, -- Magenta
+                {0.0, 1.0, 1.0}, -- Cyan
+                {1.0, 0.5, 0.0}, -- Orange
+                {0.5, 0.0, 1.0}, -- Purple
+             }
+             local colorIndex = ((pid * 7) % #colors) + 1
+             local col = colors[colorIndex]
+
+             ECS.addComponent(localId, "Color", Color(col[1], col[2], col[3]))
 
              -- Reactor Particles (Blue Trail) for ALL players (Local and Remote)
              ECS.addComponent(localId, "ParticleGenerator", ParticleGenerator(
@@ -398,11 +431,10 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
 
              -- If this is ME, add prediction components so InputSystem can drive it locally
              if serverId == NetworkSystem.myServerId then
-                 print("DEBUG: Adding Prediction Components to Local Player " .. serverId)
                  ECS.addComponent(localId, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
                  ECS.addComponent(localId, "Player", Player(config.player.speed))
                  ECS.addComponent(localId, "Weapon", Weapon(config.player.weaponCooldown))
-                 ECS.addComponent(localId, "Physic", Physic(1.0, 0.0, true, false))
+                 ECS.addComponent(localId, "Physic", Physic(1.0, 0.0, false, false))
                  -- We do NOT add Collider yet, to avoid local collision resolution conflicts.
                  -- We trust the server for collisions.
              end
@@ -432,11 +464,10 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
     -- ENSURE LOCAL PREDICTION COMPONENTS ARE PRESENT
     -- This handles the case where ENTITY_POS arrives before PLAYER_ASSIGN.
     if serverId == NetworkSystem.myServerId and localId then
-         local c = ECS.getComponent(localId, "Color")
-         if c then c.r = 0.0; c.g = 0.5; c.b = 1.0 end
+         -- local c = ECS.getComponent(localId, "Color")
+         -- if c then c.r = 0.0; c.g = 0.5; c.b = 1.0 end
 
          if not ECS.hasComponent(localId, "InputState") then
-             print("DEBUG: Late-Adding Prediction Components to Local Player " .. serverId)
              ECS.addComponent(localId, "InputState", { up=false, down=false, left=false, right=false, shoot=false })
              ECS.addComponent(localId, "Player", Player(config.player.speed))
              ECS.addComponent(localId, "Weapon", Weapon(config.player.weaponCooldown))
@@ -485,10 +516,9 @@ function NetworkSystem.update(dt)
                     local dx = t.x - t.targetX
                     local dy = t.y - t.targetY
                     local distSq = dx*dx + dy*dy
-                    
                     -- Threshold: 2.0 units (approx 200ms lag at speed 10)
                     -- If we are farther than that, something is wrong (packet loss/drift).
-                    if distSq > 4.0 then 
+                    if distSq > 4.0 then
                         local correctionSpeed = 5.0 * dt
                         t.x = t.x + (t.targetX - t.x) * correctionSpeed
                         t.y = t.y + (t.targetY - t.y) * correctionSpeed

@@ -5,6 +5,12 @@ local config = {
         weaponCooldown = 0.2,
         collider = { type = "Box", size = {1, 1, 1} },
         color = { r = 0.0, g = 1.0, b = 0.0 },
+        boundaries = {
+            minX = -15.0,
+            maxX = 15.0,
+            minY = -10.0,
+            maxY = 10.0
+        }
     },
     bullet = {
         damage = 10,

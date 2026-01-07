@@ -241,3 +241,12 @@ function GameState(state, lastScore)
         nextState = nil
     }
 end
+
+-- For Paralax effect
+function Background(scrollSpeed, resetX, endX)
+    return {
+        scrollSpeed = scrollSpeed or -2.0,
+        resetX = resetX or 60.0,
+        endX = endX or -60.0
+    }
+end
