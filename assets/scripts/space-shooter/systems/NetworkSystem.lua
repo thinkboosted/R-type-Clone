@@ -92,8 +92,9 @@ function NetworkSystem.init()
     -- UNIFIED NETWORK SYSTEM: Uses ECS.capabilities instead of direct checks
     -- ========================================================================
 
-    if ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
-        print("[NetworkSystem] Server Mode - Authoritative Network Sync")
+    -- SERVER Logic (Running on Dedicated Server OR Solo Mode)
+    if ECS.capabilities.hasAuthority then
+        print("[NetworkSystem] Server Logic Active (Authority: true)")
 
         -- Create Logic Score Entity (only on authority)
         local scoreEnt = ECS.createEntity()
@@ -176,7 +177,17 @@ function NetworkSystem.init()
 
         -- When game starts (MENU -> PLAYING), spawn pending clients
         ECS.subscribe("GAME_STARTED", function(msg)
-            print("[NetworkSystem] Game started - spawning pending clients")
+            print("[NetworkSystem] Game started")
+            
+            -- Solo Mode: Spawn local player automatically
+            if ECS.capabilities.isLocalMode then
+                print("  -> Solo Mode: Spawning local player")
+                if not NetworkSystem.clientEntities[0] then
+                    NetworkSystem.spawnPlayerForClient(0)
+                end
+            end
+
+            -- Multi Server: Spawn pending clients who connected before start
             if NetworkSystem.pendingClients then
                 for clientId, _ in pairs(NetworkSystem.pendingClients) do
                     print("  -> Spawning pending client " .. clientId)

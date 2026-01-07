@@ -97,24 +97,18 @@ function MenuSystem.onMousePressed(msg)
     -- end
 
     if choice == "SOLO" then
-        print("[MenuSystem] Choice SOLO detected. Hiding menu.")
         MenuSystem.hideMenu()
-        print("[MenuSystem] Setting Game Mode to SOLO...")
         ECS.setGameMode("SOLO") -- Call the new C++ function
         
-        print("[MenuSystem] Adding ServerAuthority to GameState...")
         -- Add Authority to GameState now that we are Solo/Server
         if #gsEntities > 0 then
              ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
-        else
-             print("[MenuSystem] ERROR: No GameState entity found!")
         end
         
         print("[MenuSystem] Starting Solo Game via State Manager...")
         ECS.sendMessage("REQUEST_GAME_STATE_CHANGE", "PLAYING")
 
         local gameCam = ECS.createEntity()
-        print("[MenuSystem] Creating Game Camera: " .. gameCam)
         ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
         ECS.addComponent(gameCam, "Camera", Camera(true))
         
