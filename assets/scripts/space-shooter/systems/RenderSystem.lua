@@ -20,21 +20,34 @@ function RenderSystem.update(dt)
     if not ECS.capabilities.hasRendering then
         return
     end
-    -- Handle Camera
-    local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
-    for _, id in ipairs(cameras) do
-        local cam = ECS.getComponent(id, "Camera")
-        -- If this camera is active and it's different from current, activate it
-        if cam.isActive and RenderSystem.activeCameraId ~= id then
-            print("RenderSystem: Activating Camera " .. id)
-            ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
-            RenderSystem.activeCameraId = id
 
-            local t = ECS.getComponent(id, "Transform")
-            if t then
-                ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
-                ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
+    -- Handle Camera (Sticky selection)
+    local currentCam = RenderSystem.activeCameraId and ECS.getComponent(RenderSystem.activeCameraId, "Camera")
+    if not (currentCam and currentCam.isActive) then
+        local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
+        for _, id in ipairs(cameras) do
+            local cam = ECS.getComponent(id, "Camera")
+            if cam.isActive then
+                print("RenderSystem: Activating Camera " .. id)
+                ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
+                RenderSystem.activeCameraId = id
+                
+                local t = ECS.getComponent(id, "Transform")
+                if t then
+                    ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
+                    ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
+                end
+                break
             end
+        end
+    end
+
+    -- Update current camera position/rotation every frame if it moves
+    if RenderSystem.activeCameraId then
+        local t = ECS.getComponent(RenderSystem.activeCameraId, "Transform")
+        if t then
+            ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. RenderSystem.activeCameraId .. "," .. t.x .. "," .. t.y .. "," .. t.z)
+            ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. RenderSystem.activeCameraId .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
         end
     end
 
