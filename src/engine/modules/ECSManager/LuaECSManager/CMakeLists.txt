@@ -14,11 +14,13 @@ target_include_directories(LuaECSManager PUBLIC
 find_package(Lua REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
+find_package(msgpack-cxx CONFIG REQUIRED)
 
 target_link_libraries(LuaECSManager
     cppzmq-static
     ${LUA_LIBRARIES}
     ${ZeroMQ_LINK_LIBS}
+    msgpack-cxx
 )
 
 if(TARGET sol2::sol2)

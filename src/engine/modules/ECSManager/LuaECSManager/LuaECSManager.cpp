@@ -422,16 +422,21 @@ void LuaECSManager::setupLuaBindings() {
   ecs.set_function("addComponent", [this](const std::string &entityId,
                                           const std::string &componentName,
                                           sol::table componentData) {
+    // std::cout << "[LuaECSManager] Adding component " << componentName << " to " << entityId << std::endl;
     if (_pools.find(componentName) == _pools.end()) {
       _pools[componentName] = ComponentPool();
     }
     ComponentPool &pool = _pools[componentName];
-    if (pool.sparse.count(entityId)) {
-      pool.dense[pool.sparse[entityId]] = componentData;
-    } else {
-      pool.dense.push_back(componentData);
-      pool.entities.push_back(entityId);
-      pool.sparse[entityId] = pool.dense.size() - 1;
+    try {
+        if (pool.sparse.count(entityId)) {
+          pool.dense[pool.sparse[entityId]] = componentData;
+        } else {
+          pool.dense.push_back(componentData);
+          pool.entities.push_back(entityId);
+          pool.sparse[entityId] = pool.dense.size() - 1;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[LuaECSManager] CRASH AVERTED in addComponent (" << componentName << "): " << e.what() << std::endl;
     }
   });
 
