@@ -12,12 +12,16 @@ function PhysicSystem.update(dt)
     if not ECS.capabilities.hasAuthority then return end
 
     local entities = ECS.getEntitiesWith({"Physic"})
+    local CollisionSystem = _G.CollisionSystem -- Access global reference
 
     for _, id in ipairs(entities) do
-        local physic = ECS.getComponent(id, "Physic")
-        -- Always send velocity to ensure we can stop the ship (send 0,0,0)
-        local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
-        ECS.sendMessage("PhysicCommand", msg)
+        -- CRITICAL: Only send velocity if the body has been created by CollisionSystem
+        if CollisionSystem and CollisionSystem.initializedEntities[id] then
+            local physic = ECS.getComponent(id, "Physic")
+            -- Always send velocity to ensure we can stop the ship (send 0,0,0)
+            local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
+            ECS.sendMessage("PhysicCommand", msg)
+        end
     end
 end
 

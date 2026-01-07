@@ -4,6 +4,7 @@
 
 local config = dofile("assets/scripts/space-shooter/config.lua")
 local CollisionSystem = {}
+_G.CollisionSystem = CollisionSystem
 
 -- Mémoire persistante pour ne pas recréer les corps à l'infini
 CollisionSystem.initializedEntities = {}
