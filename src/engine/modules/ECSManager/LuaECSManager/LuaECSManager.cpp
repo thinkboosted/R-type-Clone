@@ -330,7 +330,7 @@ void LuaECSManager::setupLuaBindings() {
 
   _capabilities = _lua.create_named_table("capabilities");
   ecs["capabilities"] = _capabilities;
-  
+
   _capabilities["hasAuthority"] = false;
   _capabilities["hasRendering"] = false;
   _capabilities["hasLocalInput"] = false;
@@ -550,18 +550,6 @@ void LuaECSManager::setupLuaBindings() {
         _luaListeners[topic].push_back(callback);
       });
 
-  ecs.set_function("sendNetworkMessage", [this](const std::string &topic, const std::string &payload) {
-    sendMessage("RequestNetworkSend", topic + " " + payload);
-  });
-
-  ecs.set_function("broadcastNetworkMessage", [this](const std::string &topic, const std::string &payload) {
-        sendMessage("RequestNetworkBroadcast", topic + " " + payload);
-  });
-
-  ecs.set_function("sendToClient", [this](int clientId, const std::string &topic, const std::string &payload) {
-    sendMessage("RequestNetworkSendTo", std::to_string(clientId) + " " + topic + " " + payload);
-  });
-
   // Binary Protocol Bindings
   auto buildBinaryPayload = [](const std::string &topic, const msgpack::sbuffer &sbuf) {
       if (topic.size() > 1024) {
@@ -583,14 +571,24 @@ void LuaECSManager::setupLuaBindings() {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-      sendMessage("RequestNetworkSendBinary", buildBinaryPayload(topic, sbuf));
+
+      if (_capabilities["isLocalMode"]) {
+          sendMessage(topic, std::string(sbuf.data(), sbuf.size()));
+      } else {
+          sendMessage("RequestNetworkSendBinary", buildBinaryPayload(topic, sbuf));
+      }
   });
 
   ecs.set_function("broadcastBinary", [this, buildBinaryPayload](const std::string &topic, sol::object data) {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-      sendMessage("RequestNetworkBroadcastBinary", buildBinaryPayload(topic, sbuf));
+
+      if (_capabilities["isLocalMode"]) {
+          sendMessage(topic, std::string(sbuf.data(), sbuf.size()));
+      } else {
+          sendMessage("RequestNetworkBroadcastBinary", buildBinaryPayload(topic, sbuf));
+      }
   });
 
   ecs.set_function("sendToClientBinary", [this](int clientId, const std::string &topic, sol::object data) {
@@ -598,19 +596,31 @@ void LuaECSManager::setupLuaBindings() {
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
 
-      if (topic.size() > 1024) throw std::runtime_error("Topic size too large");
-      uint32_t cid = static_cast<uint32_t>(clientId);
-      uint32_t topicLen = static_cast<uint32_t>(topic.size());
-      size_t totalSize = 4 + 4 + topicLen + sbuf.size();
-      std::string internalPayload(totalSize, '\0');
+      if (_capabilities["isLocalMode"]) {
+          sendMessage(topic, std::string(sbuf.data(), sbuf.size()));
+      } else {
+          if (topic.size() > 1024) throw std::runtime_error("Topic size too large");
+          uint32_t cid = static_cast<uint32_t>(clientId);
+          uint32_t topicLen = static_cast<uint32_t>(topic.size());
+          size_t totalSize = 4 + 4 + topicLen + sbuf.size();
+          std::string internalPayload(totalSize, '\0');
 
-      char* ptr = internalPayload.data();
-      std::memcpy(ptr, &cid, 4);
-      std::memcpy(ptr + 4, &topicLen, 4);
-      std::memcpy(ptr + 8, topic.data(), topicLen);
-      std::memcpy(ptr + 8 + topicLen, sbuf.data(), sbuf.size());
+          char* ptr = internalPayload.data();
+          std::memcpy(ptr, &cid, 4);
+          std::memcpy(ptr + 4, &topicLen, 4);
+          std::memcpy(ptr + 8, topic.data(), topicLen);
+          std::memcpy(ptr + 8 + topicLen, sbuf.data(), sbuf.size());
 
-      sendMessage("RequestNetworkSendToBinary", internalPayload);
+          sendMessage("RequestNetworkSendToBinary", internalPayload);
+      }
+  });
+
+  ecs.set_function("sendNetworkMessage", [this](const std::string &topic, const std::string &payload) {
+    if (_capabilities["isLocalMode"]) {
+        sendMessage(topic, payload);
+    } else {
+        sendMessage("RequestNetworkSend", topic + " " + payload);
+    }
   });
 
   ecs.set_function("unpackMsgPack", [this](const std::string &data) -> sol::object {
