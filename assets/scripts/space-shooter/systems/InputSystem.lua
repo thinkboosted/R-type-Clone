@@ -57,7 +57,11 @@ function InputSystem.onKeyPressed(key)
 
     -- Network Sync: Send Input to Server
     if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
-        ECS.sendNetworkMessage("INPUT", key .. " 1")
+        if ECS.sendBinary then
+            ECS.sendBinary("INPUT", {k=key, s=1})
+        else
+            ECS.sendNetworkMessage("INPUT", key .. " 1")
+        end
     end
 
     local entities = ECS.getEntitiesWith({"InputState"})
@@ -77,7 +81,11 @@ function InputSystem.onKeyReleased(key)
 
     -- Network Sync: Send Input to Server
     if ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
-        ECS.sendNetworkMessage("INPUT", key .. " 0")
+        if ECS.sendBinary then
+            ECS.sendBinary("INPUT", {k=key, s=0})
+        else
+            ECS.sendNetworkMessage("INPUT", key .. " 0")
+        end
     end
 
     local entities = ECS.getEntitiesWith({"InputState"})
