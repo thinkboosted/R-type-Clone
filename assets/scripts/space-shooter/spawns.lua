@@ -20,33 +20,22 @@ function Spawns.createPlayer(x, y, z, clientId)
     print("[Spawns] Creating Player Entity ID: " .. e)
 
     -- 1. Core Components
-    print("[Spawns] Adding Transform...")
     ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, 1, 1, 1))
-    print("[Spawns] Adding Tag...")
     ECS.addComponent(e, "Tag", Tag({"Player"}))
     -- Physic(mass, friction, fixedRotation, useGravity)
-    print("[Spawns] Adding Physic...")
     ECS.addComponent(e, "Physic", Physic(1.0, 0.0, true, false))
-    print("[Spawns] Adding Collider...")
     ECS.addComponent(e, "Collider", Collider("BOX", {1, 1, 1}))
-    print("[Spawns] Adding Player...")
     ECS.addComponent(e, "Player", Player(config.player.speed))
-    print("[Spawns] Adding Weapon...")
     ECS.addComponent(e, "Weapon", Weapon(0.2))
-    print("[Spawns] Adding Life...")
     ECS.addComponent(e, "Life", Life(100))
-    print("[Spawns] Adding Score...")
     ECS.addComponent(e, "Score", Score(0))
 
     -- 2. Input & Logic
-    print("[Spawns] Adding InputState...")
     ECS.addComponent(e, "InputState", InputState())
 
     -- 3. Visuals (Only if rendering is enabled)
     if hasRendering() then
-        print("[Spawns] Adding Mesh...")
         ECS.addComponent(e, "Mesh", Mesh("assets/models/simple_plane.obj", "assets/textures/plane_texture.png"))
-        print("[Spawns] Adding Color...")
         ECS.addComponent(e, "Color", Color(1.0, 1.0, 1.0)) -- White (removes default orange)
     end
 
@@ -58,23 +47,18 @@ function Spawns.createPlayer(x, y, z, clientId)
     -- In Solo, we are the owner (0). In Multi Client, we receive our ID.
     -- For now, if called from MenuSystem in Solo, clientId is nil.
 
-    print("[Spawns] Adding NetworkIdentity...")
     ECS.addComponent(e, "NetworkIdentity", NetworkIdentity(e, ownerId, isLocal))
 
     if hasAuthority() then
-        print("[Spawns] Adding ServerAuthority...")
         ECS.addComponent(e, "ServerAuthority", ServerAuthority())
     end
 
     if isLocal or hasRendering() then
-        print("[Spawns] Adding ClientPredicted...")
         ECS.addComponent(e, "ClientPredicted", ClientPredicted())
-        print("[Spawns] Adding InputBuffer...")
         ECS.addComponent(e, "InputBuffer", InputBuffer(60))
         
         -- Reactor Particles (Blue Trail)
         -- ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
-        print("[Spawns] Adding ParticleGenerator...")
         ECS.addComponent(e, "ParticleGenerator", ParticleGenerator(
             -1.0, 0, 0,   -- Offset (Behind)
             -1, 0, 0,     -- Direction (Backwards)
@@ -87,7 +71,6 @@ function Spawns.createPlayer(x, y, z, clientId)
         ))
     end
 
-    print("[Spawns] Player creation complete!")
     return e
 end
 

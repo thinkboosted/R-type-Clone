@@ -239,7 +239,7 @@ function NetworkSystem.init()
 
         ECS.subscribe("INPUT", function(msg)
             local clientId, payload = ECS.splitClientIdAndMessage(msg)
-            local data = ECS.unpack(payload)
+            local data = ECS.unpackMsgPack(payload)
             
             local key, state = nil, nil
             if data then
@@ -328,7 +328,7 @@ function NetworkSystem.init()
             -- msg can be binary (table) or text (string)
             if not ECS.isGameRunning then return end
             
-            local data = ECS.unpack(msg)
+            local data = ECS.unpackMsgPack(msg)
             if data then
                 -- Binary table: {id=..., x=..., ...}
                 NetworkSystem.updateLocalEntity(data.id, data.x, data.y, data.z, data.rx, data.ry, data.rz, data.vx, data.vy, data.vz, tostring(data.t))

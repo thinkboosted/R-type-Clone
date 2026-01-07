@@ -26,7 +26,15 @@ namespace {
                 break;
             case sol::type::number:
                 // Check if integer or float
-                if (obj.is<int64_t>()) {
+                if (obj.is<double>()) {
+                    double val = obj.as<double>();
+                    // Robust check: is it effectively an integer?
+                    if (std::floor(val) == val && val >= static_cast<double>(std::numeric_limits<int64_t>::min()) && val <= static_cast<double>(std::numeric_limits<int64_t>::max())) {
+                        pk.pack(static_cast<int64_t>(val));
+                    } else {
+                        pk.pack(val);
+                    }
+                } else if (obj.is<int64_t>()) {
                      pk.pack(obj.as<int64_t>());
                 } else {
                      pk.pack(obj.as<double>());
@@ -555,40 +563,34 @@ void LuaECSManager::setupLuaBindings() {
   });
 
   // Binary Protocol Bindings
-  ecs.set_function("sendBinary", [this](const std::string &topic, sol::object data) {
+  auto buildBinaryPayload = [](const std::string &topic, const msgpack::sbuffer &sbuf) {
+      if (topic.size() > 1024) {
+          throw std::runtime_error("Topic size too large (>1024)");
+      }
+      uint32_t topicLen = static_cast<uint32_t>(topic.size());
+      const std::size_t totalSize = sizeof(topicLen) + topicLen + sbuf.size();
+      std::string internalPayload(totalSize, '\0');
+
+      char *ptr = internalPayload.data();
+      std::memcpy(ptr, &topicLen, sizeof(topicLen));
+      std::memcpy(ptr + sizeof(topicLen), topic.data(), topicLen);
+      std::memcpy(ptr + sizeof(topicLen) + topicLen, sbuf.data(), sbuf.size());
+
+      return internalPayload;
+  };
+
+  ecs.set_function("sendBinary", [this, buildBinaryPayload](const std::string &topic, sol::object data) {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-
-      uint32_t topicLen = static_cast<uint32_t>(topic.size());
-      size_t totalSize = 4 + topicLen + sbuf.size();
-      std::string internalPayload;
-      internalPayload.resize(totalSize);
-
-      char* ptr = internalPayload.data();
-      std::memcpy(ptr, &topicLen, 4);
-      std::memcpy(ptr + 4, topic.data(), topicLen);
-      std::memcpy(ptr + 4 + topicLen, sbuf.data(), sbuf.size());
-
-      sendMessage("RequestNetworkSendBinary", internalPayload);
+      sendMessage("RequestNetworkSendBinary", buildBinaryPayload(topic, sbuf));
   });
 
-  ecs.set_function("broadcastBinary", [this](const std::string &topic, sol::object data) {
+  ecs.set_function("broadcastBinary", [this, buildBinaryPayload](const std::string &topic, sol::object data) {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-
-      uint32_t topicLen = static_cast<uint32_t>(topic.size());
-      size_t totalSize = 4 + topicLen + sbuf.size();
-      std::string internalPayload;
-      internalPayload.resize(totalSize);
-
-      char* ptr = internalPayload.data();
-      std::memcpy(ptr, &topicLen, 4);
-      std::memcpy(ptr + 4, topic.data(), topicLen);
-      std::memcpy(ptr + 4 + topicLen, sbuf.data(), sbuf.size());
-
-      sendMessage("RequestNetworkBroadcastBinary", internalPayload);
+      sendMessage("RequestNetworkBroadcastBinary", buildBinaryPayload(topic, sbuf));
   });
 
   ecs.set_function("sendToClientBinary", [this](int clientId, const std::string &topic, sol::object data) {
@@ -596,11 +598,11 @@ void LuaECSManager::setupLuaBindings() {
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
 
+      if (topic.size() > 1024) throw std::runtime_error("Topic size too large");
       uint32_t cid = static_cast<uint32_t>(clientId);
       uint32_t topicLen = static_cast<uint32_t>(topic.size());
       size_t totalSize = 4 + 4 + topicLen + sbuf.size();
-      std::string internalPayload;
-      internalPayload.resize(totalSize);
+      std::string internalPayload(totalSize, '\0');
 
       char* ptr = internalPayload.data();
       std::memcpy(ptr, &cid, 4);
@@ -611,7 +613,7 @@ void LuaECSManager::setupLuaBindings() {
       sendMessage("RequestNetworkSendToBinary", internalPayload);
   });
 
-  ecs.set_function("unpack", [this](const std::string &data) -> sol::object {
+  ecs.set_function("unpackMsgPack", [this](const std::string &data) -> sol::object {
       try {
           msgpack::object_handle oh = msgpack::unpack(data.data(), data.size());
           return msgpackToLua(_lua, oh.get());
@@ -635,7 +637,8 @@ void LuaECSManager::setupLuaBindings() {
           } else {
               return std::make_tuple(id, std::string(""));
           }
-      } catch (...) {
+      } catch (const std::exception &e) {
+          std::cerr << "[LuaECSManager] Error parsing client id from message: " << e.what() << std::endl;
           return std::make_tuple(0, data);
       }
   });

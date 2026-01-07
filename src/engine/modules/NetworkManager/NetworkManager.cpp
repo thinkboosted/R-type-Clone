@@ -339,6 +339,11 @@ void NetworkManager::handleSendBinaryRequest(const std::string &payload) {
   uint32_t topicLen;
   std::memcpy(&topicLen, payload.data(), 4);
 
+  if (topicLen > 1024) {
+    publishError("SendBinaryTopicTooLarge");
+    return;
+  }
+
   if (payload.size() < 4 + topicLen) {
     publishError("SendBinaryTruncated");
     return;
@@ -358,6 +363,11 @@ void NetworkManager::handleBroadcastBinaryRequest(const std::string &payload) {
 
   uint32_t topicLen;
   std::memcpy(&topicLen, payload.data(), 4);
+
+  if (topicLen > 1024) {
+    publishError("BroadcastBinaryTopicTooLarge");
+    return;
+  }
 
   if (payload.size() < 4 + topicLen) {
     publishError("BroadcastBinaryTruncated");
@@ -380,6 +390,11 @@ void NetworkManager::handleSendToBinaryRequest(const std::string &payload) {
   uint32_t topicLen;
   std::memcpy(&clientId, payload.data(), 4);
   std::memcpy(&topicLen, payload.data() + 4, 4);
+
+  if (topicLen > 1024) {
+    publishError("SendToBinaryTopicTooLarge");
+    return;
+  }
 
   if (payload.size() < 8 + topicLen) {
     publishError("SendToBinaryTruncated");
