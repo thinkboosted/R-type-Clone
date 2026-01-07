@@ -30,10 +30,13 @@ class INetworkManager {
     virtual void connect(const std::string& host, uint16_t port) = 0;
     virtual void disconnect() = 0;
     virtual void sendNetworkMessage(const std::string& topic, const std::string& payload) = 0;
+    virtual void sendNetworkMessageBinary(const std::string& topic, const std::vector<char>& payload) = 0;
 
     // Multi-client support
     virtual void sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) = 0;
+    virtual void sendToClientBinary(uint32_t clientId, const std::string& topic, const std::vector<char>& payload) = 0;
     virtual void broadcast(const std::string& topic, const std::string& payload) = 0;
+    virtual void broadcastBinary(const std::string& topic, const std::vector<char>& payload) = 0;
     virtual std::vector<ClientInfo> getConnectedClients() = 0;
 
     virtual std::optional<NetworkEnvelope> getFirstMessage() = 0;

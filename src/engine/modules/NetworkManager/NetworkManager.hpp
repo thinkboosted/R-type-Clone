@@ -32,11 +32,17 @@ public:
   void disconnect() override;
   void sendNetworkMessage(const std::string &topic,
                           const std::string &payload) override;
+  void sendNetworkMessageBinary(const std::string &topic,
+                                const std::vector<char> &payload) override;
 
   // Multi-client support
   void sendToClient(uint32_t clientId, const std::string &topic,
                     const std::string &payload) override;
+  void sendToClientBinary(uint32_t clientId, const std::string &topic,
+                          const std::vector<char> &payload) override;
   void broadcast(const std::string &topic, const std::string &payload) override;
+  void broadcastBinary(const std::string &topic,
+                       const std::vector<char> &payload) override;
   std::vector<ClientInfo> getConnectedClients() override;
 
   std::optional<NetworkEnvelope> getFirstMessage() override;
@@ -64,6 +70,12 @@ private:
   void handleSendRequest(const std::string &payload);
   void handleSendToRequest(const std::string &payload);
   void handleBroadcastRequest(const std::string &payload);
+  
+  // Binary handlers
+  void handleSendBinaryRequest(const std::string &payload);
+  void handleSendToBinaryRequest(const std::string &payload);
+  void handleBroadcastBinaryRequest(const std::string &payload);
+
   void startReceive();
   void handleReceive(const std::error_code &ec, std::size_t bytes_transferred);
   void processIncomingBuffer(const std::vector<char> &buffer,
@@ -81,6 +93,9 @@ private:
   void sendHeartbeats();
   void sendToEndpoint(const udp::endpoint &endpoint, const std::string &topic,
                       const std::string &payload);
+  void sendToEndpointBinary(const udp::endpoint &endpoint,
+                            const std::string &topic,
+                            const std::vector<char> &payload);
 
   asio::io_context _ioContext;
   std::unique_ptr<WorkGuard> _workGuard;
