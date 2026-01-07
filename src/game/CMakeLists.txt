@@ -98,109 +98,51 @@ set_target_properties(r-type_server PROPERTIES
 )
 
 # Copy modules to output directory after build
-# The specific modules copied are now determined by what each executable loads in main.cpp.
-# So, we just need to ensure ALL potential modules are considered for copying if they exist.
-# The 'addModule' calls in C++ will find them.
-foreach(EXECUTABLE_TARGET r-type_client r-type_server)
-    if(TARGET SFMLWindowManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+# Create a custom target to handle asset and library copying once to avoid race conditions
+add_custom_target(prepare_game_env
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets
+    COMMENT "Copying assets to runtime directory"
+)
+
+# Collect all potential modules
+set(ALL_MODULES 
+    SFMLWindowManager 
+    SFMLSoundManager 
+    GLEWSFMLRenderer 
+    LuaECSManager 
+    ECSSavesManager 
+    BulletPhysicEngine 
+    NetworkManager
+)
+
+# Add module copy commands to the prepare target
+foreach(MOD ${ALL_MODULES})
+    if(TARGET ${MOD})
+        add_dependencies(prepare_game_env ${MOD})
+        add_custom_command(TARGET prepare_game_env POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SFMLWindowManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying SFML Window Manager to executable directory for ${EXECUTABLE_TARGET}"
+                $<TARGET_FILE:${MOD}>
+                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+            COMMENT "Copying ${MOD} to runtime directory"
         )
     endif()
+endforeach()
 
-    if(TARGET SFMLSoundManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SFMLSoundManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying SFML Sound Manager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET GLEWSFMLRenderer)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:GLEWSFMLRenderer>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying GLEWSFML Renderer to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET LuaECSManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:LuaECSManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying LuaECSManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET ECSSavesManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:ECSSavesManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying ECSSavesManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET BulletPhysicEngine)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:BulletPhysicEngine>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying BulletPhysicEngine to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET NetworkManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:NetworkManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying NetworkManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    # Ensure modules are built before the executable (so their artifacts exist for copying)
-    if(TARGET SFMLWindowManager)
-        add_dependencies(${EXECUTABLE_TARGET} SFMLWindowManager)
-    endif()
-    if(TARGET GLEWSFMLRenderer)
-        add_dependencies(${EXECUTABLE_TARGET} GLEWSFMLRenderer)
-    endif()
-    if(TARGET LuaECSManager)
-        add_dependencies(${EXECUTABLE_TARGET} LuaECSManager)
-    endif()
-    if(TARGET ECSSavesManager)
-        add_dependencies(${EXECUTABLE_TARGET} ECSSavesManager)
-    endif()
-    if(TARGET BulletPhysicEngine)
-        add_dependencies(${EXECUTABLE_TARGET} BulletPhysicEngine)
-    endif()
-    if(TARGET NetworkManager)
-        add_dependencies(${EXECUTABLE_TARGET} NetworkManager)
-    endif()
-
-    # Copy all .so modules from lib/ directory (Linux/Unix only)
-    if(NOT WIN32)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_BINARY_DIR}/lib
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying all module libraries to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+# Bulk copy for non-Windows (legacy support or if other libs are present)
+if(NOT WIN32)
+    add_custom_command(TARGET prepare_game_env POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/assets
-            $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>/assets
-        COMMENT "Copying assets to executable directory for ${EXECUTABLE_TARGET}"
+            ${CMAKE_BINARY_DIR}/lib
+            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+        COMMENT "Copying all libs to runtime directory"
     )
+endif()
+
+# Make executables depend on the preparation target
+foreach(EXECUTABLE_TARGET r-type_client r-type_server)
+    add_dependencies(${EXECUTABLE_TARGET} prepare_game_env)
 endforeach()
 
 # Install rules
