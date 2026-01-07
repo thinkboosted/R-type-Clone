@@ -97,23 +97,41 @@ function MenuSystem.onMousePressed(msg)
     -- end
 
     if choice == "SOLO" then
+        print("DEBUG: Step 1 - Hiding Menu")
         MenuSystem.hideMenu()
+        print("DEBUG: Step 2 - Setting Game Mode")
         ECS.setGameMode("SOLO") -- Call the new C++ function
         
+        print("DEBUG: Step 3 - Getting GameState entities")
+        local gsEntities = ECS.getEntitiesWith({"GameState"})
+        print("DEBUG: Step 4 - GameState count: " .. #gsEntities)
+
         -- Add Authority to GameState now that we are Solo/Server
         if #gsEntities > 0 then
-             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
+             print("DEBUG: Step 5 - Adding ServerAuthority")
+             -- Ensure ServerAuthority function exists
+             if ServerAuthority then
+                 local sa = ServerAuthority()
+                 print("DEBUG: Step 5b - Created ServerAuthority component")
+                 ECS.addComponent(gsEntities[1], "ServerAuthority", sa)
+                 print("DEBUG: Step 5c - Added component")
+             else
+                 print("DEBUG: ERROR - ServerAuthority function is nil!")
+             end
         end
         
+        print("DEBUG: Step 6 - Requesting Game Start")
         print("[MenuSystem] Starting Solo Game via State Manager...")
         ECS.sendMessage("REQUEST_GAME_STATE_CHANGE", "PLAYING")
 
+        print("DEBUG: Step 7 - Creating Camera")
         local gameCam = ECS.createEntity()
         ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
         ECS.addComponent(gameCam, "Camera", Camera(true))
         
         -- Start background music when game begins
         ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
+        print("DEBUG: Step 8 - Finished")
 
     elseif choice == "MULTI" then
         MenuSystem.hideMenu()

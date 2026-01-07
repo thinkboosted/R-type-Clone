@@ -89,18 +89,15 @@ end
 
 function NetworkSystem.init()
     -- ========================================================================
-    -- UNIFIED NETWORK SYSTEM: Uses ECS.capabilities instead of direct checks
+    -- UNIFIED NETWORK SYSTEM: Always subscribe, check caps in callbacks
     -- ========================================================================
+    print("[NetworkSystem] Initializing unified subscriptions...")
 
-    -- SERVER Logic (Running on Dedicated Server OR Solo Mode)
-    if ECS.capabilities.hasAuthority then
-        print("[NetworkSystem] Server Logic Active (Authority: true)")
+    -- Create Logic Score Entity (only on authority - we will check later)
+    -- local scoreEnt = ECS.createEntity()
+    -- ECS.addComponent(scoreEnt, "Score", Score(0))
 
-        -- Create Logic Score Entity (only on authority)
-        local scoreEnt = ECS.createEntity()
-        ECS.addComponent(scoreEnt, "Score", Score(0))
-
-        ECS.subscribe("ClientConnected", function(msg)
+    ECS.subscribe("ClientConnected", function(msg)
             local clientId = string.match(msg, "^(%d+)")
             if not clientId then return end
             clientId = tonumber(clientId)
@@ -297,8 +294,8 @@ function NetworkSystem.init()
             ECS.isGameRunning = false
         end)
 
-    elseif not ECS.capabilities.hasAuthority and ECS.capabilities.hasNetworkSync then
-        print("[NetworkSystem] Client Mode - Receiving Network Sync")
+    -- 2. Client-side logic (Always subscribe, logic checks caps)
+    print("[NetworkSystem] Initializing client subscriptions...")
 
         -- Handle sound events broadcast from server
         ECS.subscribe("PLAY_SOUND", function(msg)
@@ -406,7 +403,6 @@ function NetworkSystem.init()
             -- Entities are destroyed by MenuSystem cleaning tags,
             -- but clearing the map prevents "ghost" updates.
         end)
-    end
 end
 
 function NetworkSystem.spawnPlayerForClient(clientId)

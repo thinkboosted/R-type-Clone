@@ -5,11 +5,14 @@
 -- Server instances skip all rendering to save resources.
 -- ============================================================================
 local RenderSystem = {}
-local CameraInitialized = false
 RenderSystem.initializedEntities = {}
 
 function RenderSystem.init()
     print("[RenderSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
+    -- Reset initialization tracking on game start
+    ECS.subscribe("GAME_STARTED", function()
+        RenderSystem.activeCameraId = nil
+    end)
 end
 
 function RenderSystem.update(dt)
@@ -21,15 +24,17 @@ function RenderSystem.update(dt)
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
     for _, id in ipairs(cameras) do
         local cam = ECS.getComponent(id, "Camera")
-        if cam.isActive and not CameraInitialized then
+        -- If this camera is active and it's different from current, activate it
+        if cam.isActive and RenderSystem.activeCameraId ~= id then
             print("RenderSystem: Activating Camera " .. id)
             ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
-            CameraInitialized = true
+            RenderSystem.activeCameraId = id
 
             local t = ECS.getComponent(id, "Transform")
-            ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
-            ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
-            break
+            if t then
+                ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
+                ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
+            end
         end
     end
 
