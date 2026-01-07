@@ -43,40 +43,33 @@ end
 -- ────────────────────────────────────────────────────────────────────────────
 -- Core Gameplay Systems (Run on Authority: Server + Solo)
 -- ────────────────────────────────────────────────────────────────────────────
-print("[GameLoop] Loading Core Gameplay Systems...")
-
 dofile("assets/scripts/space-shooter/systems/CollisionSystem.lua")
 dofile("assets/scripts/space-shooter/systems/PhysicSystem.lua")
 dofile("assets/scripts/space-shooter/systems/LifeSystem.lua")
 dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/PlayerSystem.lua")
 dofile("assets/scripts/space-shooter/systems/GameStateManager.lua")
+dofile("assets/scripts/space-shooter/systems/LevelManager.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Input & Control Systems (Run everywhere, adapt based on mode)
 -- ────────────────────────────────────────────────────────────────────────────
-print("[GameLoop] Loading Input System...")
 dofile("assets/scripts/space-shooter/systems/InputSystem.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Network Synchronization (Run on Server + Client in Multiplayer)
+-- Network Synchronization (Run on Server + Client in Multiplayer, and loaded in Solo for consistency)
 -- ────────────────────────────────────────────────────────────────────────────
-if ECS.capabilities.hasNetworkSync then
-    print("[GameLoop] Loading Network System...")
-    dofile("assets/scripts/space-shooter/systems/NetworkSystem.lua")
-end
+dofile("assets/scripts/space-shooter/systems/NetworkSystem.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Menu & Game State Management (Run on ALL instances for state tracking)
 -- ────────────────────────────────────────────────────────────────────────────
-print("[GameLoop] Loading Menu & Game State System...")
 dofile("assets/scripts/space-shooter/systems/MenuSystem.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Visual & UI Systems (Run on Client + Solo)
 -- ────────────────────────────────────────────────────────────────────────────
 if ECS.capabilities.hasRendering then
-    print("[GameLoop] Loading Visual & UI Systems...")
     dofile("assets/scripts/space-shooter/systems/RenderSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")

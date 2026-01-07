@@ -88,45 +88,33 @@ function MenuSystem.onMousePressed(msg)
     local choice = (x < 400) and "SOLO" or "MULTI"
 
     -- Update GameState
-    local gsEntities = ECS.getEntitiesWith({"GameState"})
-    if #gsEntities > 0 then
-        local gs = ECS.getComponent(gsEntities[1], "GameState")
-        gs.state = "PLAYING"
-    end
+    -- REMOVED: Do NOT set state directly here. Let GameStateManager handle it via REQUEST_GAME_STATE_CHANGE
+    -- so that it triggers the GAME_STARTED event for LevelManager/NetworkSystem.
+    -- local gsEntities = ECS.getEntitiesWith({"GameState"})
+    -- if #gsEntities > 0 then
+    --    local gs = ECS.getComponent(gsEntities[1], "GameState")
+    --    gs.state = "PLAYING"
+    -- end
 
     if choice == "SOLO" then
+        print("[MenuSystem] Choice SOLO detected. Hiding menu.")
         MenuSystem.hideMenu()
+        print("[MenuSystem] Setting Game Mode to SOLO...")
         ECS.setGameMode("SOLO") -- Call the new C++ function
         
-        -- Load Level based on save
-        local levelToLoad = "assets/scripts/space-shooter/levels/Level-1.lua"
-        local file = io.open("current_level.txt", "r")
-        if file then
-            local level = file:read("*n") -- Read number
-            file:close()
-            if level then
-                local path = "assets/scripts/space-shooter/levels/Level-" .. level .. ".lua"
-                local f = io.open(path, "r")
-                if f then
-                    f:close()
-                    levelToLoad = path
-                end
-            end
-            print("[MenuSystem] Loading saved level: " .. levelToLoad)
-        else
-            print("[MenuSystem] No save found, loading Level 1")
-        end
-        dofile(levelToLoad)
-
+        print("[MenuSystem] Adding ServerAuthority to GameState...")
         -- Add Authority to GameState now that we are Solo/Server
         if #gsEntities > 0 then
              ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
+        else
+             print("[MenuSystem] ERROR: No GameState entity found!")
         end
         
-        ECS.isGameRunning = true
-        Spawns.createPlayer(-8, 0, 0, nil)
+        print("[MenuSystem] Starting Solo Game via State Manager...")
+        ECS.sendMessage("REQUEST_GAME_STATE_CHANGE", "PLAYING")
 
         local gameCam = ECS.createEntity()
+        print("[MenuSystem] Creating Game Camera: " .. gameCam)
         ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
         ECS.addComponent(gameCam, "Camera", Camera(true))
         
