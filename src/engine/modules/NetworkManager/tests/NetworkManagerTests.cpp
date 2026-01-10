@@ -167,6 +167,64 @@ TEST_F(NetworkManagerTest, EndToEndCommunication) {
     client.cleanup();
 }
 
+TEST_F(NetworkManagerTest, BinaryEndToEndCommunication) {
+    rtypeEngine::NetworkManager server("tcp://127.0.0.1:5580", "tcp://127.0.0.1:5581");
+    rtypeEngine::NetworkManager client("tcp://127.0.0.1:5582", "tcp://127.0.0.1:5583");
+
+    server.init();
+    client.init();
+
+    server.bind(4245);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    client.connect("127.0.0.1", 4245);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    std::vector<char> binaryData = {'\x01', '\x00', '\x02', '\xFF', 'A', 'B', 'C'};
+    client.sendNetworkMessageBinary("BinTopic", binaryData);
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    auto serverMessages = server.getAllMessages();
+    bool received = false;
+    uint32_t clientId = 0;
+    
+    for (const auto& msg : serverMessages) {
+        if (msg.topic == "BinTopic") {
+            // Verify payload content matches binary data (msg.payload is std::string)
+            if (msg.payload.size() == binaryData.size() && 
+                std::memcmp(msg.payload.data(), binaryData.data(), binaryData.size()) == 0) {
+                received = true;
+                clientId = msg.clientId;
+                break;
+            }
+        }
+    }
+    EXPECT_TRUE(received);
+    EXPECT_GT(clientId, 0);
+
+    // Send binary response
+    std::vector<char> binaryReply = {'\xDE', '\xAD', '\xBE', '\xEF'};
+    server.sendToClientBinary(clientId, "BinReply", binaryReply);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    auto clientMessages = client.getAllMessages();
+    received = false;
+    for (const auto& msg : clientMessages) {
+        if (msg.topic == "BinReply") {
+            if (msg.payload.size() == binaryReply.size() && 
+                std::memcmp(msg.payload.data(), binaryReply.data(), binaryReply.size()) == 0) {
+                received = true;
+                break;
+            }
+        }
+    }
+    EXPECT_TRUE(received);
+
+    server.cleanup();
+    client.cleanup();
+}
+
 TEST_F(NetworkManagerTest, MultipleClientsBroadcast) {
     rtypeEngine::NetworkManager server("tcp://127.0.0.1:5583", "tcp://127.0.0.1:5584");
     rtypeEngine::NetworkManager client1("tcp://127.0.0.1:5585", "tcp://127.0.0.1:5586");

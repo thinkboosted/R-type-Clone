@@ -39,9 +39,21 @@ local function extractVelocity(phys)
     return phys.vx or 0, phys.vy or 0, phys.vz or 0
 end
 
-local function formatStateMessage(id, transform, phys, typeNum)
+local function buildStateData(id, transform, phys, typeNum)
     local vx, vy, vz = extractVelocity(phys)
-    return string.format("%s %f %f %f %f %f %f %f %f %f %d", id, transform.x, transform.y, transform.z, transform.rx, transform.ry, transform.rz, vx, vy, vz, typeNum)
+    return {
+        id = id,
+        x = transform.x,
+        y = transform.y,
+        z = transform.z,
+        rx = transform.rx,
+        ry = transform.ry,
+        rz = transform.rz,
+        vx = vx,
+        vy = vy,
+        vz = vz,
+        t = typeNum
+    }
 end
 
 local function countTableKeys(tbl)
@@ -136,8 +148,12 @@ function NetworkSystem.init()
             for _, id in ipairs(enemies) do
                 local t = ECS.getComponent(id, "Transform")
                 local phys = ECS.getComponent(id, "Physic")
-                local msgOut = formatStateMessage(id, t, phys, 3)
-                ECS.sendToClient(tonumber(clientId), "ENTITY_POS", msgOut)
+                local data = buildStateData(id, t, phys, 3)
+                if ECS.sendToClientBinary then
+                    ECS.sendToClientBinary(tonumber(clientId), "ENTITY_POS", data)
+                else
+                    -- Fallback impossible if formatStateMessage is gone, but assuming binary is available
+                end
             end
         end)
 
@@ -222,14 +238,32 @@ function NetworkSystem.init()
         end)
 
         ECS.subscribe("INPUT", function(msg)
-            local clientId, key, state = string.match(msg, "(%d+) (%w+) (%d)")
-            if clientId then
-                clientId = tonumber(clientId)
+            local clientId, payload = ECS.splitClientIdAndMessage(msg)
+            local data = ECS.unpackMsgPack(payload)
+            
+            local key, state = nil, nil
+            if data then
+                -- Binary format {k="KEY", s=1/0}
+                key = data.k
+                state = data.s
+            else
+                -- Legacy text format fallback: "UP 1"
+                -- msg contains "clientId key state" if it wasn't stripped? 
+                -- Actually splitClientIdAndMessage returns (id, rest).
+                -- So payload is "key state".
+                local k, s = string.match(payload, "(%w+) (%d)")
+                if k then
+                    key = k
+                    state = tonumber(s)
+                end
+            end
+
+            if clientId and key then
                 if NetworkSystem.clientEntities[clientId] then
                     local entityId = NetworkSystem.clientEntities[clientId]
                     local input = ECS.getComponent(entityId, "InputState")
                     if input then
-                        local pressed = (state == "1")
+                        local pressed = (state == 1 or state == true)
                         if key == "UP" then input.up = pressed end
                         if key == "DOWN" then input.down = pressed end
                         if key == "LEFT" then input.left = pressed end
@@ -291,11 +325,19 @@ function NetworkSystem.init()
         end)
 
         ECS.subscribe("ENTITY_POS", function(msg)
-            -- print("DEBUG CLIENT: Received ENTITY_POS " .. msg)
+            -- msg can be binary (table) or text (string)
             if not ECS.isGameRunning then return end
-            local id, x, y, z, rx, ry, rz, vx, vy, vz, type = string.match(msg, "([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+)")
-            if id then
-                NetworkSystem.updateLocalEntity(id, x, y, z, rx, ry, rz, vx, vy, vz, type)
+            
+            local data = ECS.unpackMsgPack(msg)
+            if data then
+                -- Binary table: {id=..., x=..., ...}
+                NetworkSystem.updateLocalEntity(data.id, data.x, data.y, data.z, data.rx, data.ry, data.rz, data.vx, data.vy, data.vz, tostring(data.t))
+            else
+                -- Legacy text: "id x y z ..."
+                local id, x, y, z, rx, ry, rz, vx, vy, vz, type = string.match(msg, "([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+) ([^%s]+)")
+                if id then
+                    NetworkSystem.updateLocalEntity(id, x, y, z, rx, ry, rz, vx, vy, vz, type)
+                end
             end
         end)
 
@@ -563,7 +605,11 @@ function NetworkSystem.update(dt)
     for _, id in ipairs(players) do
         local t = ECS.getComponent(id, "Transform")
         local phys = ECS.getComponent(id, "Physic")
-        ECS.broadcastNetworkMessage("ENTITY_POS", formatStateMessage(id, t, phys, 1))
+        if ECS.broadcastBinary then
+            ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 1))
+        else
+            -- Should not happen with new engine
+        end
         NetworkSystem.debugSentPlayers = NetworkSystem.debugSentPlayers + 1
     end
 
@@ -572,7 +618,9 @@ function NetworkSystem.update(dt)
         for _, id in ipairs(bullets) do
             local t = ECS.getComponent(id, "Transform")
             local phys = ECS.getComponent(id, "Physic")
-            ECS.broadcastNetworkMessage("ENTITY_POS", formatStateMessage(id, t, phys, 2))
+            if ECS.broadcastBinary then
+                ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 2))
+            end
             NetworkSystem.debugSentBullets = NetworkSystem.debugSentBullets + 1
         end
     end
@@ -582,8 +630,9 @@ function NetworkSystem.update(dt)
         for _, id in ipairs(enemies) do
              local t = ECS.getComponent(id, "Transform")
              local phys = ECS.getComponent(id, "Physic")
-             local msg = formatStateMessage(id, t, phys, 3)
-             ECS.broadcastNetworkMessage("ENTITY_POS", msg)
+             if ECS.broadcastBinary then
+                 ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 3))
+             end
              NetworkSystem.debugSentEnemies = NetworkSystem.debugSentEnemies + 1
         end
     end
