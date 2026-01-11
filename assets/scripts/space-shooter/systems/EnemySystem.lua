@@ -46,10 +46,108 @@ function EnemySystem.update(dt)
         EnemySystem.spawnEnemy()
     end
 
-    -- Clean up enemies that go off screen (left)
+    -- Update Enemies (Movement & Bounds)
     local enemies = ECS.getEntitiesWith({"Enemy", "Transform"})
     for _, id in ipairs(enemies) do
         local t = ECS.getComponent(id, "Transform")
+        
+        -- Handle Movement Patterns
+        local movement = ECS.getComponent(id, "MovementPattern")
+        if movement then
+            movement.time = movement.time + dt
+            
+            if movement.patternType == "sine" then
+                -- Apply Sine Wave logic to vertical velocity
+                -- dy/dt of A*sin(w*t) is A*w*cos(w*t)
+                local phys = ECS.getComponent(id, "Physic")
+                if phys then
+                    -- V_y = Amplitude * Frequency * cos(Frequency * Time)
+                    phys.vy = movement.amplitude * movement.frequency * math.cos(movement.frequency * movement.time)
+                    ECS.addComponent(id, "Physic", phys)
+                end
+
+            elseif movement.patternType == "zigzag" then
+                -- ZigZag: Constant vertical speed, flipping direction
+                local phys = ECS.getComponent(id, "Physic")
+                if phys then
+                    -- Triangle wave derivative is a square wave
+                    -- Frequency f -> Period T = 1/f
+                    -- Slope = 4 * Amplitude * Frequency
+                    local period = 1.0 / movement.frequency
+                    local phase = (movement.time % period) / period -- 0.0 to 1.0
+                    local slope = 4 * movement.amplitude * movement.frequency
+                    
+                    if phase < 0.5 then
+                        phys.vy = slope
+                    else
+                        phys.vy = -slope
+                    end
+                    ECS.addComponent(id, "Physic", phys)
+                end
+
+            elseif movement.patternType == "circle" then
+                -- Circular motion (Loop-the-loop)
+                local phys = ECS.getComponent(id, "Physic")
+                if phys then
+                    local w = movement.frequency
+                    local R = movement.amplitude
+                    
+                    -- vx = -speed + (-R * w * sin(w*t))
+                    -- vy = R * w * cos(w*t)
+                    phys.vx = -movement.speed + (R * w * -math.sin(w * movement.time))
+                    phys.vy = R * w * math.cos(w * movement.time)
+                    
+                    ECS.addComponent(id, "Physic", phys)
+                end
+            
+            elseif movement.patternType == "figure8" then
+                -- Figure-8 (Lissajous: Y=sin(t), X=sin(2t))
+                -- Modulate horizontal speed to Create a '8' shape relative to the moving frame
+                local phys = ECS.getComponent(id, "Physic")
+                if phys then
+                    local w = movement.frequency
+                    local R = movement.amplitude
+                    
+                    -- Y Velocity: Cosine (derivative of sine)
+                    phys.vy = R * w * math.cos(w * movement.time)
+                    
+                    -- X Velocity: -Speed + Derivative of Sin(2t)
+                    -- x(t) = B * sin(2wt) -> v(t) = B * 2w * cos(2wt)
+                    local B = R * 0.5 -- Width of the '8'
+                    phys.vx = -movement.speed + (B * 2 * w * math.cos(2 * w * movement.time))
+                    
+                    ECS.addComponent(id, "Physic", phys)
+                end
+
+            elseif movement.patternType == "step" then
+                -- Step / Staircase: Move Left, then Move Down, repeat
+                local phys = ECS.getComponent(id, "Physic")
+                if phys then
+                    local period = 2.0 / movement.frequency
+                    local phase = movement.time % period
+                    
+                    -- 70% time moving Left, 30% time moving Down/Up
+                    if phase < period * 0.7 then
+                        phys.vx = -movement.speed
+                        phys.vy = 0
+                    else
+                        phys.vx = 0
+                        -- Alternate direction every full cycle? Or just erratic steps?
+                        -- Using math.sin to determine direction (positive or negative step) based on total time
+                        if math.sin(movement.time) > 0 then
+                            phys.vy = movement.speed
+                        else
+                            phys.vy = -movement.speed
+                        end
+                    end
+                    ECS.addComponent(id, "Physic", phys)
+                end
+            end
+            
+            ECS.addComponent(id, "MovementPattern", movement)
+        end
+
+        -- Check Bounds
         if t.x < -20 then
             -- Decrease score when enemy escapes
             local scoreEntities = ECS.getEntitiesWith({"Score"})
@@ -59,6 +157,7 @@ function EnemySystem.update(dt)
                 if scoreComp.value < 0 then
                     scoreComp.value = 0
                 end
+                ECS.addComponent(scoreEntities[1], "Score", scoreComp)
             end
             ECS.destroyEntity(id)
         end
