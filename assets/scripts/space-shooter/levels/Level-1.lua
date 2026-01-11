@@ -12,8 +12,8 @@ end
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
 
--- Create Backgrounds (Parallax)
-Spawns.createBackground("assets/textures/SinglePlay1.png")
+-- Create Backgrounds for this specific level
+Spawns.createBackground("assets/textures/Background/SinglePlay1.png")
 
 -- Create Score Entity
 local scoreEntity = ECS.createEntity()

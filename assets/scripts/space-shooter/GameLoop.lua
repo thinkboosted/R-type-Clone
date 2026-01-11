@@ -78,6 +78,7 @@ dofile("assets/scripts/space-shooter/systems/MenuSystem.lua")
 if ECS.capabilities.hasRendering then
     print("[GameLoop] Loading Visual & UI Systems...")
     dofile("assets/scripts/space-shooter/systems/RenderSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/AnimationSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
     dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
