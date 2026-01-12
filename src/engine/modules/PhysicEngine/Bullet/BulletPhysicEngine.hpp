@@ -14,8 +14,13 @@ class BulletPhysicEngine : public IPhysicEngine {
     ~BulletPhysicEngine() override = default;
 
     void init() override;
-    void loop() override;
+    void loop() override;  // DEPRECATED: Use fixedUpdate() via hard-wired calls
     void cleanup() override;
+
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED GAME LOOP (High Performance)
+    // ═══════════════════════════════════════════════════════════════
+    void fixedUpdate(double /*dt*/) override;
 
   protected:
     void createBody(const std::string& id, const std::string& type, const std::vector<float>& params) override;

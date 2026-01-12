@@ -11,8 +11,14 @@ class SFMLWindowManager : public IWindowManager {
     ~SFMLWindowManager() override = default;
 
     void init() override;
-    void loop() override;
+    void loop() override;  // DEPRECATED: Use fixedUpdate() via hard-wired calls
     void cleanup() override;
+
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED GAME LOOP (High Performance)
+    // ═══════════════════════════════════════════════════════════════
+    void fixedUpdate(double /*dt*/) override;
+    void render(double /*alpha*/) override;
 
     void createWindow(const std::string &title, const Vector2u &size) override;
     bool isOpen() const override;

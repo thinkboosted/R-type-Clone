@@ -36,6 +36,49 @@ void SFMLWindowManager::init() {
     std::cout << "[SFMLWindowManager] Initialized with window 800x600" << std::endl;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// HARD-WIRED FIXED UPDATE (Called by GameEngine at 60Hz)
+// ═══════════════════════════════════════════════════════════════
+void SFMLWindowManager::fixedUpdate(double /*dt*/) {
+    if (!_window || !_window->isOpen()) {
+        return;
+    }
+
+    // Poll all events from SFML
+    while (auto event = _window->pollEvent()) {
+        if (event->is<sf::Event::Closed>()) {
+            std::cout << "[SFMLWindowManager] Window closed by user" << std::endl;
+            _window->close();
+            sendMessage("ExitApplication", "");
+            return;
+        }
+
+        if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+            if (keyPressed->code == sf::Keyboard::Key::Escape) {
+                std::cout << "[SFMLWindowManager] Escape pressed - closing window" << std::endl;
+                _window->close();
+                sendMessage("ExitApplication", "");
+                return;
+            }
+        }
+
+        if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
+            std::stringstream ss;
+            ss << static_cast<int>(mousePressed->button) << ":" << mousePressed->position.x << "," << mousePressed->position.y;
+            sendMessage("MousePressed", ss.str());
+        }
+
+        if (const auto* mouseMoved = event->getIf<sf::Event::MouseMoved>()) {
+            std::stringstream ss;
+            ss << mouseMoved->position.x << "," << mouseMoved->position.y;
+            sendMessage("MouseMoved", ss.str());
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEGACY LOOP (DEPRECATED - kept for backward compatibility)
+// ═══════════════════════════════════════════════════════════════
 void SFMLWindowManager::loop() {
     if (_window && _window->isOpen()) {
         while (auto event = _window->pollEvent()) {
@@ -100,6 +143,15 @@ void SFMLWindowManager::loop() {
     }
 }
 
+void SFMLWindowManager::render(double /*alpha*/) {
+    if (_window && _window->isOpen()) {
+        // Activate context for rendering in this thread
+        _window->setActive(true);
+        _window->display();
+        _window->setActive(false);  // Release for next frame
+    }
+}
+
 void SFMLWindowManager::cleanup() {
     if (_window && _window->isOpen()) {
         _window->close();
@@ -107,8 +159,21 @@ void SFMLWindowManager::cleanup() {
 }
 
 void SFMLWindowManager::createWindow(const std::string &title, const Vector2u &size) {
+    // Configure OpenGL context settings to avoid conflicts
+    sf::ContextSettings settings;
+    settings.depthBits = 24;
+    settings.stencilBits = 8;
+    settings.antiAliasingLevel = 0;  // Disable antialiasing to reduce conflicts
+    settings.majorVersion = 2;       // Request OpenGL 2.1 (compatible)
+    settings.minorVersion = 1;
+    settings.attributeFlags = sf::ContextSettings::Default;
+
     _window = std::make_unique<sf::RenderWindow>(
-        sf::VideoMode(sf::Vector2u(size.x, size.y)), title);
+        sf::VideoMode(sf::Vector2u(size.x, size.y)), title, sf::Style::Default, sf::State::Windowed, settings);
+
+    // Deactivate context in this thread to allow rendering thread to use it
+    _window->setActive(false);
+
     _texture = sf::Texture(sf::Vector2u(size.x, size.y));
     _sprite = sf::Sprite(_texture);
 }

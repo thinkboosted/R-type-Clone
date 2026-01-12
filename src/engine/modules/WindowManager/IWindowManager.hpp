@@ -13,9 +13,10 @@ class IWindowManager : public AModule {
     using AModule::AModule;
     virtual ~IWindowManager() = default;
 
-    protected:
-    virtual void createWindow(const std::string &title, const Vector2u &size) = 0;
     virtual bool isOpen() const = 0;
+
+  protected:
+    virtual void createWindow(const std::string &title, const Vector2u &size) = 0;
     virtual void close() = 0;
     virtual void drawPixels(const std::vector<uint32_t> &pixels, const Vector2u &size) = 0;
 };

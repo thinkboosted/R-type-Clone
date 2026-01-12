@@ -67,6 +67,24 @@ void BulletPhysicEngine::cleanup() {
     if (_collisionConfiguration) { delete _collisionConfiguration; _collisionConfiguration = nullptr; }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// HARD-WIRED FIXED UPDATE (Called by GameEngine at 60Hz)
+// ═══════════════════════════════════════════════════════════════
+void BulletPhysicEngine::fixedUpdate(double dt) {
+    if (!_dynamicsWorld) return;
+
+    // Use GameEngine's fixed timestep directly (deterministic)
+    _dynamicsWorld->stepSimulation(static_cast<float>(dt), 0);
+
+    // Post-simulation logic
+    checkCollisions();
+    sendUpdates();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEGACY LOOP (DEPRECATED - kept for backward compatibility)
+// ═══════════════════════════════════════════════════════════════
+// Will be removed once all code paths use hard-wired calls
 void BulletPhysicEngine::loop() {
     static int heartbeat = 0;
     if (++heartbeat % 60 == 0) {

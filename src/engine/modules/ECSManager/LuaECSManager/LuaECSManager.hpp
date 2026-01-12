@@ -16,8 +16,13 @@ public:
   ~LuaECSManager() override;
 
   void init() override;
-  void loop() override;
+  void loop() override;  // DEPRECATED: Use fixedUpdate() via hard-wired calls
   void cleanup() override;
+
+  // ═══════════════════════════════════════════════════════════════
+  // HARD-WIRED GAME LOOP (High Performance)
+  // ═══════════════════════════════════════════════════════════════
+  void fixedUpdate(double /*dt*/) override;
 
         void loadScript(const std::string& path);
         void unloadScript(const std::string& path);

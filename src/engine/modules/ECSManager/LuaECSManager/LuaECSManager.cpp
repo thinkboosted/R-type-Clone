@@ -719,6 +719,26 @@ void LuaECSManager::unloadScript(const std::string& path) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// HARD-WIRED FIXED UPDATE (Called by GameEngine at 60Hz)
+// ═══════════════════════════════════════════════════════════════
+void LuaECSManager::fixedUpdate(double dt) {
+  // Execute all Lua systems with fixed timestep (deterministic)
+  for (auto &system : _systems) {
+    if (system["update"].valid()) {
+      try {
+        system["update"](dt);  // Pass GameEngine's fixed dt directly
+      } catch (const sol::error &e) {
+        std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEGACY LOOP (DEPRECATED - kept for backward compatibility)
+// ═══════════════════════════════════════════════════════════════
+// Will be removed once all code paths use hard-wired calls
 void LuaECSManager::loop() {
   auto currentTime = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> frameTime = currentTime - _lastFrameTime;
