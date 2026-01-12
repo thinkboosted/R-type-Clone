@@ -55,6 +55,9 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/engine
 )
 
+# Add core engine library
+add_subdirectory(src/engine/core)
+
 # Add subdirectories for modules
 if(SFML_FOUND OR TARGET sfml-system)
     add_subdirectory(src/engine/modules/WindowManager/SFML)

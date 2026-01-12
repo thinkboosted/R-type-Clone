@@ -97,6 +97,33 @@ set_target_properties(r-type_server PROPERTIES
     OUTPUT_NAME "r-type_server"
 )
 
+# ============================================================================
+# NEW: Client Executable using GameEngine (Data-Driven Architecture)
+# ============================================================================
+add_executable(r-type_client_engine
+    client/main_engine.cpp
+)
+
+target_include_directories(r-type_client_engine PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src/engine/core
+    ${CMAKE_SOURCE_DIR}/src/engine/modules
+    ${CMAKE_SOURCE_DIR}/src/engine/types
+)
+
+# Link with GameEngine core library
+target_link_libraries(r-type_client_engine PRIVATE
+    GameEngine
+)
+
+# Link with SFML Window (for client rendering)
+find_package(SFML COMPONENTS Window REQUIRED)
+target_link_libraries(r-type_client_engine PRIVATE SFML::Window)
+
+set_target_properties(r-type_client_engine PROPERTIES
+    OUTPUT_NAME "r-type_client_engine"
+)
+
 # Copy modules to output directory after build
 # Create a custom target to handle asset and library copying once to avoid race conditions
 add_custom_target(prepare_game_env
@@ -141,11 +168,11 @@ if(NOT WIN32)
 endif()
 
 # Make executables depend on the preparation target
-foreach(EXECUTABLE_TARGET r-type_client r-type_server)
+foreach(EXECUTABLE_TARGET r-type_client r-type_server r-type_client_engine)
     add_dependencies(${EXECUTABLE_TARGET} prepare_game_env)
 endforeach()
 
 # Install rules
-install(TARGETS r-type_client r-type_server
+install(TARGETS r-type_client r-type_server r-type_client_engine
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
