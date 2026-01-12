@@ -75,9 +75,7 @@ function InputSystem.onKeyReleased(key)
         if key == "SPACE" then input.shoot = false end
     end
     
-    if key == "ESCAPE" then
-        ECS.sendMessage("ExitApplication", "")
-    end
+    -- ESCAPE is now handled by MenuSystem for pause functionality
 end
 
 ECS.registerSystem(InputSystem)

@@ -279,6 +279,313 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     }
                 }
             }
+            else if (command == "CreateRect")
+            {
+                // Format: CreateRect:id:x,y,width,height:r,g,b,a:isScreenSpace
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string posSize, colorStr, isScreenSpaceStr;
+                    std::getline(ss2, posSize, ':');
+                    std::getline(ss2, colorStr, ':');
+                    std::getline(ss2, isScreenSpaceStr);
+                    
+                    std::stringstream pss(posSize);
+                    std::string val;
+                    std::vector<float> pos;
+                    while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
+                    
+                    std::stringstream css(colorStr);
+                    std::vector<float> col;
+                    while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
+                    
+                    if (pos.size() >= 4 && col.size() >= 3)
+                    {
+                        RenderObject obj;
+                        obj.id = id;
+                        obj.isRect = true;
+                        obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                        obj.position = {pos[0], pos[1], 0};
+                        obj.scale = {pos[2], pos[3], 1};  // width, height stored in scale
+                        obj.color = {col[0], col[1], col[2]};
+                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        _renderObjects[id] = obj;
+                    }
+                }
+            }
+            else if (command == "SetRect")
+            {
+                // Format: SetRect:id:x,y,width,height
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string params = data.substr(split + 1);
+                    
+                    std::stringstream pss(params);
+                    std::string val;
+                    std::vector<float> v;
+                    while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
+                    
+                    if (v.size() >= 4 && _renderObjects.find(id) != _renderObjects.end())
+                    {
+                        auto& obj = _renderObjects[id];
+                        obj.position = {v[0], v[1], 0};
+                        obj.scale = {v[2], v[3], 1};
+                    }
+                }
+            }
+            else if (command == "SetAlpha")
+            {
+                // Format: SetAlpha:id:alpha
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    float alpha = safeParseFloat(data.substr(split + 1), 1.0f);
+                    
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        _renderObjects[id].alpha = alpha;
+                    }
+                }
+            }
+            else if (command == "SetZOrder")
+            {
+                // Format: SetZOrder:id:zorder
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    int zorder = safeParseInt(data.substr(split + 1), 0);
+                    
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        _renderObjects[id].zOrder = zorder;
+                    }
+                }
+            }
+            else if (command == "CreateCircle")
+            {
+                // Format: CreateCircle:id:x,y,radius:r,g,b,a:isScreenSpace:segments
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string posRadius, colorStr, isScreenSpaceStr, segmentsStr;
+                    std::getline(ss2, posRadius, ':');
+                    std::getline(ss2, colorStr, ':');
+                    std::getline(ss2, isScreenSpaceStr, ':');
+                    std::getline(ss2, segmentsStr);
+                    
+                    std::stringstream pss(posRadius);
+                    std::string val;
+                    std::vector<float> pos;
+                    while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
+                    
+                    std::stringstream css(colorStr);
+                    std::vector<float> col;
+                    while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
+                    
+                    if (pos.size() >= 3 && col.size() >= 3)
+                    {
+                        RenderObject obj;
+                        obj.id = id;
+                        obj.isCircle = true;
+                        obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                        obj.position = {pos[0], pos[1], 0};
+                        obj.radius = pos[2];
+                        obj.color = {col[0], col[1], col[2]};
+                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        obj.segments = segmentsStr.empty() ? 32 : safeParseInt(segmentsStr, 32);
+                        _renderObjects[id] = obj;
+                    }
+                }
+            }
+            else if (command == "CreateRoundedRect")
+            {
+                // Format: CreateRoundedRect:id:x,y,width,height,cornerRadius:r,g,b,a:isScreenSpace
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string posSize, colorStr, isScreenSpaceStr;
+                    std::getline(ss2, posSize, ':');
+                    std::getline(ss2, colorStr, ':');
+                    std::getline(ss2, isScreenSpaceStr);
+                    
+                    std::stringstream pss(posSize);
+                    std::string val;
+                    std::vector<float> pos;
+                    while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
+                    
+                    std::stringstream css(colorStr);
+                    std::vector<float> col;
+                    while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
+                    
+                    if (pos.size() >= 5 && col.size() >= 3)
+                    {
+                        RenderObject obj;
+                        obj.id = id;
+                        obj.isRoundedRect = true;
+                        obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                        obj.position = {pos[0], pos[1], 0};
+                        obj.scale = {pos[2], pos[3], 1};  // width, height
+                        obj.cornerRadius = pos[4];
+                        obj.color = {col[0], col[1], col[2]};
+                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        _renderObjects[id] = obj;
+                    }
+                }
+            }
+            else if (command == "CreateLine")
+            {
+                // Format: CreateLine:id:x1,y1,x2,y2,width:r,g,b,a:isScreenSpace
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string posStr, colorStr, isScreenSpaceStr;
+                    std::getline(ss2, posStr, ':');
+                    std::getline(ss2, colorStr, ':');
+                    std::getline(ss2, isScreenSpaceStr);
+                    
+                    std::stringstream pss(posStr);
+                    std::string val;
+                    std::vector<float> pos;
+                    while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
+                    
+                    std::stringstream css(colorStr);
+                    std::vector<float> col;
+                    while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
+                    
+                    if (pos.size() >= 5 && col.size() >= 3)
+                    {
+                        RenderObject obj;
+                        obj.id = id;
+                        obj.isLine = true;
+                        obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                        obj.position = {pos[0], pos[1], 0};
+                        obj.endPosition = {pos[2], pos[3], 0};
+                        obj.lineWidth = pos[4];
+                        obj.color = {col[0], col[1], col[2]};
+                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        _renderObjects[id] = obj;
+                    }
+                }
+            }
+            else if (command == "CreateUISprite")
+            {
+                // Format: CreateUISprite:id:texturePath:x,y,width,height:isScreenSpace:zOrder
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string texturePath, posSize, isScreenSpaceStr, zOrderStr;
+                    std::getline(ss2, texturePath, ':');
+                    std::getline(ss2, posSize, ':');
+                    std::getline(ss2, isScreenSpaceStr, ':');
+                    std::getline(ss2, zOrderStr);
+                    
+                    std::stringstream pss(posSize);
+                    std::string val;
+                    std::vector<float> pos;
+                    while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
+                    
+                    if (pos.size() >= 4)
+                    {
+                        RenderObject obj;
+                        obj.id = id;
+                        obj.isSprite = true;
+                        obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
+                        obj.texturePath = texturePath;
+                        obj.position = {pos[0], pos[1], 0};
+                        obj.scale = {pos[2], pos[3], 1};  // Store explicit width/height
+                        obj.color = {1.0f, 1.0f, 1.0f};
+                        obj.alpha = 1.0f;
+                        obj.zOrder = zOrderStr.empty() ? 0 : safeParseInt(zOrderStr, 0);
+                        _renderObjects[id] = obj;
+                    }
+                }
+            }
+            else if (command == "SetOutline")
+            {
+                // Format: SetOutline:id:enabled:width:r,g,b
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    std::string rest = data.substr(split + 1);
+                    
+                    std::stringstream ss2(rest);
+                    std::string enabledStr, widthStr, colorStr;
+                    std::getline(ss2, enabledStr, ':');
+                    std::getline(ss2, widthStr, ':');
+                    std::getline(ss2, colorStr);
+                    
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        auto& obj = _renderObjects[id];
+                        obj.outlined = (enabledStr == "1" || enabledStr == "true");
+                        obj.outlineWidth = safeParseFloat(widthStr, 2.0f);
+                        
+                        std::stringstream css(colorStr);
+                        std::string val;
+                        std::vector<float> col;
+                        while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
+                        if (col.size() >= 3)
+                        {
+                            obj.outlineColor = {col[0], col[1], col[2]};
+                        }
+                    }
+                }
+            }
+            else if (command == "SetRadius")
+            {
+                // Format: SetRadius:id:radius
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    float radius = safeParseFloat(data.substr(split + 1), 10.0f);
+                    
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        _renderObjects[id].radius = radius;
+                    }
+                }
+            }
+            else if (command == "SetCornerRadius")
+            {
+                // Format: SetCornerRadius:id:radius
+                size_t split = data.find(':');
+                if (split != std::string::npos)
+                {
+                    std::string id = data.substr(0, split);
+                    float radius = safeParseFloat(data.substr(split + 1), 5.0f);
+                    
+                    if (_renderObjects.find(id) != _renderObjects.end())
+                    {
+                        _renderObjects[id].cornerRadius = radius;
+                    }
+                }
+            }
             else if (command == "SetText")
             {
                 size_t split = data.find(':');
@@ -646,6 +953,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 #ifdef _WIN32
         HDC oldDC = wglGetCurrentDC();
         HGLRC oldContext = wglGetCurrentContext();
+#else
+        Display* display = (Display*)_hdc;
+        GLXContext oldContext = glXGetCurrentContext();
+        GLXDrawable oldDrawable = glXGetCurrentDrawable();
 #endif
 
         sf::Image textImage;
@@ -700,6 +1011,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         {
             wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
         }
+#else
+        // On Linux, make our GL context current for texture creation
+        if (_hdc && _hwnd && _hglrc)
+        {
+            glXMakeCurrent(display, (Window)_hwnd, (GLXContext)_hglrc);
+        }
 #endif
 
         if (!success)
@@ -710,6 +1027,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 wglMakeCurrent(oldDC, oldContext);
             else
                 wglMakeCurrent(NULL, NULL);
+#else
+            if (oldContext)
+                glXMakeCurrent(display, oldDrawable, oldContext);
+            else
+                glXMakeCurrent(display, None, NULL);
 #endif
             return 0;
         }
@@ -735,6 +1057,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         {
             wglMakeCurrent(NULL, NULL);
         }
+#else
+        // Restore context on Linux - release it so loop() can acquire it
+        glXMakeCurrent(display, None, NULL);
 #endif
 
         return textureID;
@@ -1093,14 +1418,188 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glLoadIdentity();
         glDisable(GL_LIGHTING);
         glDisable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+        // Sort HUD objects by zOrder
+        std::vector<std::pair<int, const RenderObject*>> sortedHUD;
         for (const auto &pair : _renderObjects)
         {
-            const auto &obj = pair.second;
-            if (!obj.isScreenSpace)
-                continue;
+            if (pair.second.isScreenSpace)
+            {
+                sortedHUD.push_back({pair.second.zOrder, &pair.second});
+            }
+        }
+        std::sort(sortedHUD.begin(), sortedHUD.end(), 
+            [](const auto& a, const auto& b) { return a.first < b.first; });
 
-            if (obj.isSprite)
+        for (const auto &sortedPair : sortedHUD)
+        {
+            const auto &obj = *sortedPair.second;
+            
+            // Render rectangles (button backgrounds, panels, etc.)
+            if (obj.isRect)
+            {
+                glDisable(GL_TEXTURE_2D);
+                glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
+                
+                float x = obj.position.x;
+                float y = obj.position.y;
+                float w = obj.scale.x;  // width
+                float h = obj.scale.y;  // height
+                
+                glBegin(GL_QUADS);
+                glVertex2f(x, y);
+                glVertex2f(x + w, y);
+                glVertex2f(x + w, y + h);
+                glVertex2f(x, y + h);
+                glEnd();
+                
+                // Draw outline if enabled
+                if (obj.outlined)
+                {
+                    glLineWidth(obj.outlineWidth);
+                    glColor4f(obj.outlineColor.x, obj.outlineColor.y, obj.outlineColor.z, obj.alpha);
+                    glBegin(GL_LINE_LOOP);
+                    glVertex2f(x, y);
+                    glVertex2f(x + w, y);
+                    glVertex2f(x + w, y + h);
+                    glVertex2f(x, y + h);
+                    glEnd();
+                    glLineWidth(1.0f);
+                }
+            }
+            // Render circles
+            else if (obj.isCircle)
+            {
+                glDisable(GL_TEXTURE_2D);
+                glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
+                
+                float cx = obj.position.x;
+                float cy = obj.position.y;
+                float r = obj.radius;
+                int segments = obj.segments;
+                
+                glBegin(GL_TRIANGLE_FAN);
+                glVertex2f(cx, cy);  // Center
+                for (int i = 0; i <= segments; i++)
+                {
+                    float angle = 2.0f * 3.14159265f * (float)i / (float)segments;
+                    glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
+                }
+                glEnd();
+                
+                // Draw outline if enabled
+                if (obj.outlined)
+                {
+                    glLineWidth(obj.outlineWidth);
+                    glColor4f(obj.outlineColor.x, obj.outlineColor.y, obj.outlineColor.z, obj.alpha);
+                    glBegin(GL_LINE_LOOP);
+                    for (int i = 0; i < segments; i++)
+                    {
+                        float angle = 2.0f * 3.14159265f * (float)i / (float)segments;
+                        glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
+                    }
+                    glEnd();
+                    glLineWidth(1.0f);
+                }
+            }
+            // Render rounded rectangles
+            else if (obj.isRoundedRect)
+            {
+                glDisable(GL_TEXTURE_2D);
+                glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
+                
+                float x = obj.position.x;
+                float y = obj.position.y;
+                float w = obj.scale.x;
+                float h = obj.scale.y;
+                float r = obj.cornerRadius;
+                int cornerSegments = 8;  // segments per corner
+                
+                // Clamp radius to half of smallest dimension
+                if (r > w / 2.0f) r = w / 2.0f;
+                if (r > h / 2.0f) r = h / 2.0f;
+                
+                glBegin(GL_TRIANGLE_FAN);
+                // Center point
+                glVertex2f(x + w / 2.0f, y + h / 2.0f);
+                
+                // Bottom-left corner
+                for (int i = 0; i <= cornerSegments; i++)
+                {
+                    float angle = 3.14159265f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    glVertex2f(x + r + r * cos(angle), y + r + r * sin(angle));
+                }
+                // Bottom-right corner
+                for (int i = 0; i <= cornerSegments; i++)
+                {
+                    float angle = 3.14159265f * 1.5f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    glVertex2f(x + w - r + r * cos(angle), y + r + r * sin(angle));
+                }
+                // Top-right corner
+                for (int i = 0; i <= cornerSegments; i++)
+                {
+                    float angle = 0.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    glVertex2f(x + w - r + r * cos(angle), y + h - r + r * sin(angle));
+                }
+                // Top-left corner
+                for (int i = 0; i <= cornerSegments; i++)
+                {
+                    float angle = 3.14159265f / 2.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
+                }
+                // Close the shape
+                glVertex2f(x, y + r);
+                glEnd();
+                
+                // Draw outline if enabled
+                if (obj.outlined)
+                {
+                    glLineWidth(obj.outlineWidth);
+                    glColor4f(obj.outlineColor.x, obj.outlineColor.y, obj.outlineColor.z, obj.alpha);
+                    glBegin(GL_LINE_LOOP);
+                    // Same corners but as line loop
+                    for (int i = 0; i <= cornerSegments; i++)
+                    {
+                        float angle = 3.14159265f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        glVertex2f(x + r + r * cos(angle), y + r + r * sin(angle));
+                    }
+                    for (int i = 0; i <= cornerSegments; i++)
+                    {
+                        float angle = 3.14159265f * 1.5f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        glVertex2f(x + w - r + r * cos(angle), y + r + r * sin(angle));
+                    }
+                    for (int i = 0; i <= cornerSegments; i++)
+                    {
+                        float angle = 0.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        glVertex2f(x + w - r + r * cos(angle), y + h - r + r * sin(angle));
+                    }
+                    for (int i = 0; i <= cornerSegments; i++)
+                    {
+                        float angle = 3.14159265f / 2.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
+                    }
+                    glEnd();
+                    glLineWidth(1.0f);
+                }
+            }
+            // Render lines
+            else if (obj.isLine)
+            {
+                glDisable(GL_TEXTURE_2D);
+                glLineWidth(obj.lineWidth);
+                glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
+                
+                glBegin(GL_LINES);
+                glVertex2f(obj.position.x, obj.position.y);
+                glVertex2f(obj.endPosition.x, obj.endPosition.y);
+                glEnd();
+                
+                glLineWidth(1.0f);
+            }
+            // Render sprites and text
+            else if (obj.isSprite)
             {
                 GLuint tex = 0;
                 if (obj.isText)
@@ -1116,15 +1615,23 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     glEnable(GL_TEXTURE_2D);
                     glBindTexture(GL_TEXTURE_2D, tex);
-                    glColor3f(obj.color.x, obj.color.y, obj.color.z);
+                    glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
 
                     int texW = 0, texH = 0;
                     glBindTexture(GL_TEXTURE_2D, tex);
                     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texW);
                     glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texH);
 
-                    float w = (float)texW * obj.scale.x;
-                    float h = (float)texH * obj.scale.y;
+                    // Use explicit scale if provided, otherwise use texture size
+                    float w = (obj.scale.x > 0) ? obj.scale.x : (float)texW;
+                    float h = (obj.scale.y > 0) ? obj.scale.y : (float)texH;
+                    
+                    // For text, scale is typically 1.0, so use texture size
+                    if (obj.isText)
+                    {
+                        w = (float)texW * obj.scale.x;
+                        h = (float)texH * obj.scale.y;
+                    }
 
                     float x = obj.position.x;
                     float y = obj.position.y;

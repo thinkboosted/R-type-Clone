@@ -80,7 +80,19 @@ function Button(action, width, height)
         action = action or "",
         width = width or 100,
         height = height or 50,
-        hovered = false
+        hovered = false,
+        selected = false
+    }
+end
+
+-- MenuItem - Enhanced menu item component for navigation
+function MenuItem(action, order, isSelected)
+    return {
+        action = action or "",
+        order = order or 0,           -- Order in menu (for keyboard navigation)
+        isSelected = isSelected or false,
+        isHovered = false,
+        isDisabled = false
     }
 end
 
