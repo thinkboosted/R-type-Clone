@@ -20,43 +20,67 @@
 #include <exception>
 
 namespace {
-    /**
-     * @brief Parse command line arguments
-     */
-    std::string parseConfigPath(int argc, char** argv) {
-        // Default configuration
-        std::string configPath = "assets/config/client.json";
+    void printHelp() {
+        std::cout << "R-Type Engine - Usage:\n"
+                  << "  ./r-type_client_engine [mode]\n"
+                  << "\nModes (aliases):\n"
+                  << "  local  | --local  | -l   -> assets/config/local.json\n"
+                  << "  server | --server | -s   -> assets/config/server.json\n"
+                  << "  client | --client | -c   -> assets/config/client.json (default)\n"
+                  << "\nAdvanced:\n"
+                  << "  --config <path>          -> custom config file\n"
+                  << "  --help   | -h            -> show this help\n"
+                  << "\nEnvironment Variables:\n"
+                  << "  RTYPE_DEBUG=1            Enable debug logging\n";
+    }
+
+    struct ParsedArgs {
+        std::string configPath;
+        std::string modeLabel; // HUMAN readable mode (CLIENT/LOCAL/SERVER/custom)
+        bool ok = true;
+    };
+
+    ParsedArgs parseConfigPath(int argc, char** argv) {
+        ParsedArgs parsed;
+        parsed.configPath = "assets/config/client.json";
+        parsed.modeLabel = "CLIENT";
+
+        auto setMode = [&](const std::string& mode, const std::string& path) {
+            parsed.modeLabel = mode;
+            parsed.configPath = path;
+        };
 
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
 
             if (arg == "--config" || arg == "-c") {
                 if (i + 1 < argc) {
-                    configPath = argv[i + 1];
-                    i++; // Skip next argument
+                    parsed.configPath = argv[++i];
+                    parsed.modeLabel = "CUSTOM";
                 } else {
                     std::cerr << "ERROR: --config requires a path argument" << std::endl;
-                    std::exit(1);
+                    parsed.ok = false;
+                    return parsed;
                 }
-            } else if (arg == "--server" || arg == "-s") {
-                configPath = "assets/config/server.json";
-            } else if (arg == "--local" || arg == "-l") {
-                configPath = "assets/config/local.json";
-            } else if (arg == "--help" || arg == "-h") {
-                std::cout << "R-Type Engine - Usage:\n"
-                          << "  --config <path>  Specify config file (default: client.json)\n"
-                          << "  --server, -s     Use server.json\n"
-                          << "  --local, -l      Use local.json\n"
-                          << "  --help, -h       Show this message\n"
-                          << "\nEnvironment Variables:\n"
-                          << "  RTYPE_DEBUG=1    Enable debug logging\n";
-                std::exit(0);
+            } else if (arg == "--server" || arg == "-s" || arg == "server") {
+                setMode("SERVER", "assets/config/server.json");
+            } else if (arg == "--local" || arg == "-l" || arg == "local") {
+                setMode("LOCAL", "assets/config/local.json");
+            } else if (arg == "--client" || arg == "client") {
+                setMode("CLIENT", "assets/config/client.json");
+            } else if (arg == "--help" || arg == "-h" || arg == "help") {
+                printHelp();
+                parsed.ok = false; // Signal caller to exit gracefully
+                return parsed;
             } else {
-                std::cerr << "WARNING: Unknown argument: " << arg << std::endl;
+                std::cerr << "ERROR: Unknown argument: " << arg << "\n\n";
+                printHelp();
+                parsed.ok = false;
+                return parsed;
             }
         }
 
-        return configPath;
+        return parsed;
     }
 
     /**
@@ -79,13 +103,18 @@ int main(int argc, char** argv) {
 
     try {
         // Phase 1: Parse configuration path from command line
-        std::string configPath = parseConfigPath(argc, argv);
+        ParsedArgs parsed = parseConfigPath(argc, argv);
+        if (!parsed.ok) {
+            return 1; // Help displayed or error encountered
+        }
 
+        std::cout << "[Main] Mode selected: " << parsed.modeLabel
+                  << " (config: " << parsed.configPath << ")" << std::endl;
         std::cout << "[Main] Starting R-Type Engine..." << std::endl;
-        std::cout << "[Main] Configuration: " << configPath << std::endl;
+        std::cout << "[Main] Configuration: " << parsed.configPath << std::endl;
 
         // Phase 2: Create and initialize engine
-        rtypeEngine::GameEngine engine(configPath);
+        rtypeEngine::GameEngine engine(parsed.configPath);
 
         // Phase 3: Run the game loop
         // This call blocks until engine.exit() is called or window is closed

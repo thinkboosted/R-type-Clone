@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 project(RTypePOC VERSION 1.0.0 LANGUAGES CXX)
 
+# Centralize all build outputs
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # Support Conan fallback - REMOVED (Replaced by FetchContent in cmake/Dependencies.cmake)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -44,11 +49,6 @@ find_package(OpenGL QUIET)
 if(NOT OpenGL_FOUND)
     message(WARNING "OpenGL not found. On Linux, try: sudo apt install libgl1-mesa-dev")
 endif()
-
-# Set output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Include directories for engine
 include_directories(

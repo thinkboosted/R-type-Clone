@@ -1,10 +1,22 @@
-#!/bin/bash
-# Build and test GameEngine (Phase 1.1 validation)
+#!/usr/bin/env bash
+# Build and verify GameEngine with unified bin/lib outputs
 
-set -e  # Exit on error
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD_DIR="${ROOT_DIR}/build"
+BIN_DIR="${BUILD_DIR}/bin"
+LIB_DIR="${BUILD_DIR}/lib"
+ASSETS_SRC="${ROOT_DIR}/assets"
+ASSETS_DST="${BIN_DIR}/assets"
+
+RUN_AFTER_BUILD=false
+if [[ "${1-}" == "--run" ]]; then
+    RUN_AFTER_BUILD=true
+fi
 
 echo "========================================="
-echo "  R-Type GameEngine - Build & Test"
+echo "  R-Type GameEngine - Build & Verify"
 echo "========================================="
 
 # Colors for output
@@ -13,51 +25,62 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Step 1: Configure CMake
+mkdir -p "${BUILD_DIR}"
+cd "${BUILD_DIR}"
+
 echo -e "${YELLOW}[1/4] Configuring CMake...${NC}"
-if [ -d "build" ]; then
-    cd build
-else
-    mkdir -p build
-    cd build
+# Detect vcpkg toolchain file
+VCPKG_TOOLCHAIN=""
+if [[ -n "${VCPKG_ROOT-}" && -f "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" ]]; then
+    VCPKG_TOOLCHAIN="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+elif [[ -f "${ROOT_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" ]]; then
+    VCPKG_TOOLCHAIN="${ROOT_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
 fi
 
-cmake -DCMAKE_BUILD_TYPE=Release .. || {
-    echo -e "${RED}ERROR: CMake configuration failed${NC}"
-    exit 1
-}
+if [[ -n "${VCPKG_TOOLCHAIN}" ]]; then
+    echo "Using vcpkg toolchain: ${VCPKG_TOOLCHAIN}"
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_TOOLCHAIN}" ..
+else
+    echo "Warning: vcpkg toolchain not found, proceeding without -DCMAKE_TOOLCHAIN_FILE"
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+fi
 
-# Step 2: Build GameEngine
-echo -e "${YELLOW}[2/4] Building GameEngine core library...${NC}"
-cmake --build . --target GameEngine -j$(nproc) || {
-    echo -e "${RED}ERROR: GameEngine build failed${NC}"
-    exit 1
-}
+echo -e "${YELLOW}[2/4] Building GameEngine static lib...${NC}"
+cmake --build . --target GameEngine -j"$(nproc)"
 
-echo -e "${GREEN}✓ GameEngine core library built successfully${NC}"
-
-# Step 3: Build client executable
 echo -e "${YELLOW}[3/4] Building r-type_client_engine...${NC}"
-cmake --build . --target r-type_client_engine -j$(nproc) || {
-    echo -e "${RED}ERROR: Client executable build failed${NC}"
-    exit 1
-}
+cmake --build . --target r-type_client_engine -j"$(nproc)"
 
-echo -e "${GREEN}✓ r-type_client_engine built successfully${NC}"
-
-# Step 4: Verify outputs
 echo -e "${YELLOW}[4/4] Verifying build artifacts...${NC}"
 
 ARTIFACTS=(
-    "r-type_client_engine"
-    "assets/config/client.json"
-    "assets/config/server.json"
-    "assets/config/local.json"
+    "${BIN_DIR}/r-type_client_engine"
+    "${LIB_DIR}"                  # lib dir must exist
+    "${BIN_DIR}"                  # bin dir must exist
 )
+
+# Module expectations with aliases (config names vs actual built names)
+MODULE_CANDIDATES=(
+    "${LIB_DIR}/WindowModule.so|${LIB_DIR}/SFMLWindowManager.so"
+    "${LIB_DIR}/RenderModule.so|${LIB_DIR}/GLEWSFMLRenderer.so"
+    "${LIB_DIR}/SoundModule.so|${LIB_DIR}/SFMLSoundManager.so"
+    "${LIB_DIR}/NetworkModule.so|${LIB_DIR}/NetworkManager.so"
+    "${LIB_DIR}/LuaECSManager.so"
+    "${LIB_DIR}/ECSSavesManager.so"
+    "${LIB_DIR}/BulletPhysicEngine.so"
+)
+
+has_any() {
+    IFS='|' read -ra paths <<< "$1"
+    for p in "${paths[@]}"; do
+        [[ -f "$p" ]] && return 0
+    done
+    return 1
+}
 
 ALL_OK=true
 for artifact in "${ARTIFACTS[@]}"; do
-    if [ -f "$artifact" ] || [ -d "$artifact" ]; then
+    if [[ -f "$artifact" || -d "$artifact" ]]; then
         echo -e "${GREEN}  ✓ $artifact${NC}"
     else
         echo -e "${RED}  ✗ $artifact (NOT FOUND)${NC}"
@@ -65,28 +88,39 @@ for artifact in "${ARTIFACTS[@]}"; do
     fi
 done
 
-if [ "$ALL_OK" = true ]; then
-    echo ""
-    echo -e "${GREEN}========================================="
-    echo "  BUILD SUCCESSFUL!"
-    echo "=========================================${NC}"
-    echo ""
-    echo "Run the engine with:"
-    echo "  ./r-type_client_engine --help"
-    echo "  RTYPE_DEBUG=1 ./r-type_client_engine"
-    echo ""
+for group in "${MODULE_CANDIDATES[@]}"; do
+    if has_any "$group"; then
+        echo -e "${GREEN}  ✓ $(echo "$group" | tr '|' ' / ')${NC}"
+    else
+        echo -e "${RED}  ✗ $(echo "$group" | tr '|' ' / ') (NOT FOUND)${NC}"
+        ALL_OK=false
+    fi
+done
+
+# Sync assets into bin (symlink preferred, fallback to copy)
+echo -e "${YELLOW}Syncing assets to bin/...${NC}"
+mkdir -p "${BIN_DIR}"
+if [[ -L "${ASSETS_DST}" || -d "${ASSETS_DST}" ]]; then
+    rm -rf "${ASSETS_DST}"
+fi
+if ln -s "${ASSETS_SRC}" "${ASSETS_DST}" 2>/dev/null; then
+    echo -e "${GREEN}  ✓ Assets symlinked: ${ASSETS_DST} -> ${ASSETS_SRC}${NC}"
 else
-    echo -e "${RED}========================================="
-    echo "  BUILD INCOMPLETE - Missing artifacts"
-    echo "=========================================${NC}"
+    cp -r "${ASSETS_SRC}" "${ASSETS_DST}"
+    echo -e "${GREEN}  ✓ Assets copied to ${ASSETS_DST}${NC}"
+fi
+
+if [[ "${ALL_OK}" == true ]]; then
+    echo -e "\n${GREEN}BUILD SUCCESSFUL${NC}"
+else
+    echo -e "\n${RED}BUILD INCOMPLETE - Missing artifacts${NC}"
     exit 1
 fi
 
-# Optional: Display binary info
-echo "Binary information:"
-file r-type_client_engine
-ls -lh r-type_client_engine
-
-echo ""
-echo "Configuration files:"
-ls -lh assets/config/*.json
+# Optional run
+if [[ "${RUN_AFTER_BUILD}" == true ]]; then
+    echo -e "${YELLOW}Running r-type_client_engine (local mode)...${NC}"
+    pushd "${BIN_DIR}" >/dev/null
+    ./r-type_client_engine local
+    popd >/dev/null
+fi

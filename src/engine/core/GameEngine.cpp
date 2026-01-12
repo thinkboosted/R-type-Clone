@@ -389,14 +389,27 @@ void GameEngine::loadModules() {
         std::unique_lock<std::shared_mutex> lock(_moduleMutex);
 
         for (const auto& moduleName : _config.modules) {
-            std::string modulePath = "lib/" + moduleName;
+            std::string modulePath;
 
-            // Add platform-specific extension
-            #ifdef _WIN32
-                modulePath += ".dll";
-            #else
-                modulePath += ".so";
-            #endif
+            // If moduleName already contains a path (/ or \ or ends with .so/.dll), use it as-is
+            // Otherwise prepend lib/
+            if (moduleName.find('/') != std::string::npos ||
+                moduleName.find('\\') != std::string::npos ||
+                moduleName.find(".so") != std::string::npos ||
+                moduleName.find(".dll") != std::string::npos) {
+                // Path already fully specified
+                modulePath = moduleName;
+            } else {
+                // Legacy: just module name, prepend lib/
+                modulePath = "lib/" + moduleName;
+
+                // Add platform-specific extension
+                #ifdef _WIN32
+                    modulePath += ".dll";
+                #else
+                    modulePath += ".so";
+                #endif
+            }
 
             try {
                 if (isDebugEnabled()) {

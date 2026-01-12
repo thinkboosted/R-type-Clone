@@ -58,16 +58,16 @@ if (NOT cppzmq_FOUND)
 endif()
 
 # --- Lua (Required for Sol2) ---
-find_package(Lua QUIET)
+find_package(Lua QUIET)  # prefer vcpkg/system
 if (NOT LUA_FOUND)
-    message(STATUS "Lua not found. Fetching from GitHub (lua-cmake mirror)...")
+    message(STATUS "Lua not found via package manager. Fetching official Lua...")
     FetchContent_Declare(
         lua
-        GIT_REPOSITORY https://github.com/waltersugar/lua.git
-        GIT_TAG master 
+        GIT_REPOSITORY https://github.com/lua/lua.git
+        GIT_TAG v5.4.6
     )
     FetchContent_MakeAvailable(lua)
-    # Create the 'lua' alias target that FindLua usually provides or expects linked
+    # Create the 'lua' alias target that FindLua usually provides
     if (TARGET liblua AND NOT TARGET lua)
         add_library(lua ALIAS liblua)
     endif()
