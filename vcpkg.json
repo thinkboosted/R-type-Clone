@@ -13,7 +13,8 @@
     "bullet3",
     "asio",
     "msgpack",
-    "gtest"
+    "gtest",
+    "nlohmann-json"
   ],
   "overrides": [
     {
