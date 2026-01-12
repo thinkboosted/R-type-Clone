@@ -19,14 +19,21 @@ SFMLWindowManager::SFMLWindowManager(const char* pubEndpoint, const char* subEnd
     : IWindowManager(pubEndpoint, subEndpoint), _window(nullptr), _texture(sf::Vector2u(1, 1)), _sprite(_texture) {}
 
 void SFMLWindowManager::init() {
-    createWindow("SFML Window", Vector2u{800, 600});
+    createWindow("R-Type Engine - SFML Window", Vector2u{800, 600});
     subscribe("ImageRendered", [this](const std::string& message) {
         this->handleImageRendered(message);
     });
     subscribe("CloseWindow", [this](const std::string&) {
         this->close();
     });
-    std::cout << "[SFMLWindowManager] Initialized" << std::endl;
+    subscribe("PipelinePhase", [this](const std::string& phase) {
+        if (phase == "RENDER" && _window && _window->isOpen()) {
+            _window->clear(sf::Color::Black);
+            _window->draw(_sprite);
+            _window->display();
+        }
+    });
+    std::cout << "[SFMLWindowManager] Initialized with window 800x600" << std::endl;
 }
 
 void SFMLWindowManager::loop() {
@@ -35,7 +42,18 @@ void SFMLWindowManager::loop() {
             if (event->is<sf::Event::Closed>()) {
                 _window->close();
                 sendMessage("ExitApplication", "");
+                return;
             }
+
+            if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+                if (keyPressed->code == sf::Keyboard::Key::Escape) {
+                    _window->close();
+                    std::cout << "[SFMLWindowManager] closing window." << std::endl;
+                    sendMessage("ExitApplication", "");
+                    return;
+                }
+            }
+
             if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
                 std::stringstream ss;
                 ss << static_cast<int>(mousePressed->button) << ":" << mousePressed->position.x << "," << mousePressed->position.y;
@@ -74,7 +92,10 @@ void SFMLWindowManager::loop() {
     for (int k = 0; k < sf::Keyboard::KeyCount; ++k) {
         auto key = static_cast<sf::Keyboard::Key>(k);
         if (sf::Keyboard::isKeyPressed(key)) {
-            sendMessage("KeyPressed", keyMappings.at(key));
+            auto it = keyMappings.find(key);
+            if (it != keyMappings.end()) {
+                sendMessage("KeyPressed", it->second);
+            }
         }
     }
 }
@@ -107,12 +128,13 @@ void SFMLWindowManager::drawPixels(const std::vector<uint32_t> &pixels, const Ve
         return;
     }
 
-    _texture.update(reinterpret_cast<const std::uint8_t*>(pixels.data()));
+    if (!pixels.empty()) {
+        _texture.update(reinterpret_cast<const std::uint8_t*>(pixels.data()));
+    }
 
-    _window->clear();
+    _window->clear(sf::Color::Black);
     _window->draw(_sprite);
     _window->display();
-
 }
 
 void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
