@@ -7,11 +7,11 @@
     "enable_lua_debug": true
   },
   "modules": [
-    "lib/NetworkManager.so",
-    "lib/LuaECSManager.so",
-    "lib/BulletPhysicEngine.so",
-    "lib/GLEWSFMLRenderer.so",
-    "lib/SFMLWindowManager.so"
+    "../lib/NetworkManager.so",
+    "../lib/LuaECSManager.so",
+    "../lib/BulletPhysicEngine.so",
+    "../lib/GLEWSFMLRenderer.so",
+    "../lib/SFMLWindowManager.so"
   ],
   "module_order": [
     "INPUT",

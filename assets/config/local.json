@@ -5,10 +5,10 @@
     "max_frame_time": 0.25
   },
   "modules": [
-    "WindowModule",
-    "RenderModule",
-    "PhysicModule",
-    "LuaECSManager"
+    "../lib/SFMLWindowManager.so",
+    "../lib/GLEWSFMLRenderer.so",
+    "../lib/BulletPhysicEngine.so",
+    "../lib/LuaECSManager.so"
   ],
   "module_order": [
     "PhysicModule",

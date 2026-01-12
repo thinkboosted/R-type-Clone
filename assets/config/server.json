@@ -5,9 +5,9 @@
     "max_frame_time": 0.1
   },
   "modules": [
-    "NetworkModule",
-    "PhysicModule",
-    "LuaECSManager"
+    "../lib/NetworkManager.so",
+    "../lib/BulletPhysicEngine.so",
+    "../lib/LuaECSManager.so"
   ],
   "module_order": [
     "NetworkModule",
