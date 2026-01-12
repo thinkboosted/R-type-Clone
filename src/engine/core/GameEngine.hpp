@@ -80,6 +80,7 @@ public:
      * 6. Subscribe to critical events
      */
     void init() override;
+    void run() override;
 
     /**
      * @brief Single frame update (called by run() loop)
@@ -128,8 +129,20 @@ private:
     // ZeroMQ Context (OWNER - shared with all modules for inproc://)
     zmq::context_t _sharedZmqContext;
 
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED MODULE POINTERS (Performance Cache)
+    // ═══════════════════════════════════════════════════════════════
+    // Cached pointers to critical modules for direct virtual calls
+    // Set during loadModules() to avoid lookups every frame
+    // ═══════════════════════════════════════════════════════════════
+    std::shared_ptr<IModule> _physicsModule;   // BulletPhysicEngine
+    std::shared_ptr<IModule> _ecsModule;       // LuaECSManager
+    std::shared_ptr<IModule> _renderModule;    // GLEWSFMLRenderer
+    std::shared_ptr<IModule> _windowModule;    // SFMLWindowManager
+    std::shared_ptr<IModule> _networkModule;   // NetworkManager
+
     /**
-     * @brief Thread-safe module access
+     * @brief Thread-safe module access (LEGACY - prefer direct calls)
      * @param topic Module topic name
      * @return true if module responded
      */

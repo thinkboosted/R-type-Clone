@@ -40,6 +40,32 @@ class IModule {
      */
     virtual void setZmqContext(void* context) = 0;
 
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED PIPELINE (High Performance Direct Calls)
+    // ═══════════════════════════════════════════════════════════════
+    // These methods are called directly by GameEngine for critical
+    // per-frame updates instead of using ZeroMQ messages.
+    // Default empty implementations allow modules to opt-in.
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Variable timestep update (called every frame)
+     * @param dt Delta time since last frame (seconds)
+     */
+    virtual void update(double /*dt*/) {}
+
+    /**
+     * @brief Fixed timestep update (deterministic physics/network)
+     * @param dt Fixed delta time (typically 1/60 = 0.0167s)
+     */
+    virtual void fixedUpdate(double /*dt*/) {}
+
+    /**
+     * @brief Rendering update (variable timestep with interpolation)
+     * @param alpha Interpolation factor [0.0-1.0] between physics states
+     */
+    virtual void render(double /*alpha*/) {}
+
   protected:
     std::string _pubEndpoint;
     std::string _subEndpoint;

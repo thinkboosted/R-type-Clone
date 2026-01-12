@@ -1,7 +1,7 @@
 /**
  * @file test_local_mode.cpp
  * @brief Test du mode local (inproc://) sans modules externes
- * 
+ *
  * Objectif: Vérifier que le GameEngine peut fonctionner en mode local
  * sans crasher au niveau du broker ZeroMQ.
  */
@@ -50,7 +50,7 @@ int main() {
 
         // Test message passing
         std::cout << "\n[Test] Testing message bus...\n";
-        
+
         bool messageReceived = false;
         engine.subscribe("TestTopic", [&messageReceived](const std::string& msg) {
             std::cout << "   ✅ Message received: " << msg << "\n";
@@ -58,7 +58,7 @@ int main() {
         });
 
         engine.sendMessage("TestTopic", "Hello from local mode!");
-        
+
         // Process messages
         for (int i = 0; i < 5 && !messageReceived; ++i) {
             engine.processMessages();
