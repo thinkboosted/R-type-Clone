@@ -224,7 +224,7 @@ end
 function Spawns.createBackground(texturePath)
     if not hasRendering() then return end
 
-    local tex = texturePath or "assets/textures/StarSky.jpg"
+    local tex = texturePath or "assets/textures/Background/StartSky.jpg"
     print("[Spawns] Creating Parallax Background with texture: " .. tex)
 
     -- Layer 1 (Far Stars)
