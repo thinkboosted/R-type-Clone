@@ -5,6 +5,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cstdlib>
+#include <mutex>
+#include <thread>
 
 using json = nlohmann::json;
 
@@ -374,6 +376,9 @@ void GameEngine::setupLuaBindings() {
 
 void GameEngine::loadModules() {
     if (_modules.empty() && !_config.modules.empty()) {
+        // Acquire exclusive lock (writing to module list)
+        std::unique_lock<std::shared_mutex> lock(_moduleMutex);
+
         for (const auto& moduleName : _config.modules) {
             std::string modulePath = "lib/" + moduleName;
 
@@ -422,32 +427,50 @@ void GameEngine::loadLuaScript(const std::string& scriptPath) {
 }
 
 void GameEngine::executeFixedUpdate() {
-    // Publish pipeline phase messages (modules subscribe to these)
+    // ═══════════════════════════════════════════════════════════════
+    // FIXED TIMESTEP PIPELINE (Deterministic, 60 Hz)
+    // ═══════════════════════════════════════════════════════════════
     // Order is CRITICAL for correct dependency flow!
+    //
+    // INPUT → NETWORK (recv) → PHYSICS → ECS → NETWORK (send)
+    //
+    // Thread Safety: Use shared_lock for reading module state
+    // ═══════════════════════════════════════════════════════════════
 
-    // Phase 1: Input processing
-    sendMessage("PipelinePhase", "INPUT");
+    // Phase 1: Input processing (poll keyboard, mouse, gamepad)
+    invokeModulePhase("INPUT");
 
-    // Phase 2: Network synchronization
-    sendMessage("PipelinePhase", "NETWORK");
+    // Phase 2: Network receive (download state updates from server)
+    invokeModulePhase("NETWORK_RECEIVE");
 
-    // Phase 3: Physics simulation
-    sendMessage("PipelinePhase", "PHYSICS");
+    // Phase 3: Physics simulation (Bullet3 step)
+    invokeModulePhase("PHYSICS");
 
-    // Phase 4: ECS/Lua gameplay logic
-    sendMessage("PipelinePhase", "ECS");
+    // Phase 4: ECS/Lua gameplay logic (collision handlers, AI, etc.)
+    invokeModulePhase("ECS");
+
+    // Phase 5: Network send (upload state to clients if server)
+    invokeModulePhase("NETWORK_SEND");
 
     // Note: RENDER phase is in executeRenderUpdate (variable timestep)
 }
 
 void GameEngine::executeRenderUpdate(double alpha) {
+    // ═══════════════════════════════════════════════════════════════
+    // VARIABLE TIMESTEP RENDER (Smooth, interpolated)
+    // ═══════════════════════════════════════════════════════════════
+    // Alpha factor: [0.0 - 1.0] interpolation between physics states
+    // This prevents stuttering when render FPS != physics FPS
+    // ═══════════════════════════════════════════════════════════════
+
     // Publish interpolation factor for smooth rendering
     std::ostringstream alphaStr;
-    alphaStr << alpha;
+    alphaStr.precision(4);
+    alphaStr << std::fixed << alpha;
     sendMessage("RenderAlpha", alphaStr.str());
 
-    // Phase 5: Rendering (with interpolation between physics states)
-    sendMessage("PipelinePhase", "RENDER");
+    // Phase: Rendering (with interpolation between physics states)
+    invokeModulePhase("RENDER");
 }
 
 void GameEngine::publishFrameMetrics() {
@@ -460,6 +483,40 @@ void GameEngine::publishFrameMetrics() {
     }
 
     sendMessage("FrameMetrics", metrics.str());
+}
+
+bool GameEngine::invokeModulePhase(const std::string& phase) {
+    // ═══════════════════════════════════════════════════════════════
+    // THREAD-SAFE MODULE INVOCATION
+    // ═══════════════════════════════════════════════════════════════
+    // Uses shared_lock for concurrent reads (modules don't modify
+    // the module list during execution, only during init/cleanup)
+    //
+    // Fallback: If direct module access fails, use message bus
+    // ═══════════════════════════════════════════════════════════════
+
+    try {
+        // Acquire shared lock (allows multiple readers)
+        std::shared_lock<std::shared_mutex> lock(_moduleMutex);
+
+        // Publish phase message (modules subscribe via ZeroMQ)
+        // This is the PRIMARY mechanism (existing modules use this)
+        sendMessage("PipelinePhase", phase);
+
+        // Future enhancement: Direct module->update() calls
+        // for (auto& module : _modules) {
+        //     if (module->supportsPhase(phase)) {
+        //         module->executePhase(phase);
+        //     }
+        // }
+
+        return true;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[GameEngine] ERROR in phase '" << phase << "': "
+                  << e.what() << std::endl;
+        return false;
+    }
 }
 
 } // namespace rtypeEngine

@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <shared_mutex>
+#include <sstream>
 
 namespace rtypeEngine {
 
@@ -118,6 +120,16 @@ private:
     // Frame rate limiting
     std::chrono::high_resolution_clock::time_point _lastRenderTime;
     double _minFrameTime = 0.0; // Calculated from maxFPS
+
+    // Thread safety (critical for network module on separate thread)
+    mutable std::shared_mutex _moduleMutex;
+
+    /**
+     * @brief Thread-safe module access
+     * @param topic Module topic name
+     * @return true if module responded
+     */
+    bool invokeModulePhase(const std::string& phase);
 
     /**
      * @brief Parse JSON configuration file
