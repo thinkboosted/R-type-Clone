@@ -433,16 +433,9 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              end
 
              -- Unique Mesh per Player
-             local meshes = {
-                "assets/models/aircraft.obj",
-                "assets/models/delta_wing.obj",
-                "assets/models/fighter.obj",
-                "assets/models/bomber.obj"
-             }
-             -- Use a different modulus for mesh to mix it up
-             -- Add a prime number offset to desync mesh and color cycles
-             local meshIndex = ((pid * 3) % #meshes) + 1
-             ECS.addComponent(localId, "Mesh", Mesh(meshes[meshIndex]))
+             local meshe = "assets/models/simple_plane.obj"
+
+             ECS.addComponent(localId, "Mesh", Mesh(meshe))
              -- Unique Color per Player
              local colors = {
                 {1.0, 0.0, 0.0}, -- Red
