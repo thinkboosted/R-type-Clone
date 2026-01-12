@@ -1,0 +1,29 @@
+{
+  "engine": {
+    "max_fps": 144,
+    "fixed_step": 0.016666666,
+    "max_frame_time": 0.25
+  },
+  "modules": [
+    "WindowModule",
+    "RenderModule",
+    "PhysicModule",
+    "LuaECSManager"
+  ],
+  "module_order": [
+    "PhysicModule",
+    "LuaECSManager",
+    "RenderModule",
+    "WindowModule"
+  ],
+  "startup_scripts": [
+    "assets/scripts/space-shooter/GameLoop.lua"
+  ],
+  "network": {
+    "mode": "local",
+    "server_address": ""
+  },
+  "lua": {
+    "debug": true
+  }
+}

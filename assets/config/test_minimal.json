@@ -1,0 +1,17 @@
+{
+  "engine": {
+    "max_fps": 60,
+    "fixed_timestep": 0.016666667,
+    "max_frame_time": 0.25,
+    "enable_vsync": false,
+    "enable_lua_debug": true
+  },
+  "modules": [],
+  "module_order": [
+    "ECS"
+  ],
+  "network": {
+    "mode": "local"
+  },
+  "startup_scripts": []
+}
