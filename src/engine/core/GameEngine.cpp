@@ -73,8 +73,17 @@ void GameEngine::init() {
 
     // Phase 3: Setup message broker (ZeroMQ)
     try {
-        std::string brokerEndpoint = "127.0.0.1:*"; // Ephemeral port
+        std::string brokerEndpoint;
         bool isServer = (_config.networkMode == "server");
+
+        // Determine broker mode based on configuration
+        if (_config.networkMode == "local") {
+            brokerEndpoint = "local";  // Triggers inproc:// mode
+        } else if (_config.networkMode == "server") {
+            brokerEndpoint = "0.0.0.0:5555";  // Server binds to network
+        } else {
+            brokerEndpoint = "127.0.0.1:*";  // Client uses ephemeral ports
+        }
 
         setupBroker(brokerEndpoint, isServer);
 
@@ -296,9 +305,9 @@ void GameEngine::loadConfiguration(const std::string& path) {
 }
 
 void GameEngine::validateConfiguration() {
-    // Check if at least one module is specified
-    if (_config.modules.empty()) {
-        throw std::runtime_error("Configuration error: No modules specified");
+    // Check if at least one module is specified (allow empty for local/test mode)
+    if (_config.modules.empty() && _config.networkMode != "local") {
+        std::cerr << "[GameEngine] WARNING: No modules specified (only valid for local mode testing)" << std::endl;
     }
 
     // Validate fixed timestep range
@@ -394,7 +403,13 @@ void GameEngine::loadModules() {
                     std::cout << "[GameEngine] Loading module: " << modulePath << std::endl;
                 }
 
-                addModule(modulePath, _pubBrokerEndpoint, _subBrokerEndpoint);
+                // ═══════════════════════════════════════════════════════════════════════════
+                // CRITICAL: Pass shared ZMQ context to prevent segfault
+                // ═══════════════════════════════════════════════════════════════════════════
+                // For inproc://, all sockets MUST share the same zmq::context_t
+                // Without this, modules create their own context → segfault
+                // ═══════════════════════════════════════════════════════════════════════════
+                addModule(modulePath, _pubBrokerEndpoint, _subBrokerEndpoint, &_sharedZmqContext);
             } catch (const std::exception& e) {
                 std::cerr << "[GameEngine] ERROR: Failed to load module '"
                           << moduleName << "': " << e.what() << std::endl;

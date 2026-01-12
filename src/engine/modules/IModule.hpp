@@ -31,6 +31,15 @@ class IModule {
     virtual void unsubscribe(const std::string& topic) = 0;
     virtual void processMessages() = 0;
 
+    /**
+     * @brief Inject shared ZeroMQ context (CRITICAL for inproc://)
+     * @param context Pointer to shared zmq::context_t owned by GameEngine
+     *
+     * MUST be called before init() to prevent modules from creating
+     * their own context (which breaks inproc:// communication)
+     */
+    virtual void setZmqContext(void* context) = 0;
+
   protected:
     std::string _pubEndpoint;
     std::string _subEndpoint;

@@ -18,7 +18,11 @@ typedef IModule* (*createModule_t)(const char*, const char*);
 class AModulesManager : public IModulesManager {
   public:
     ~AModulesManager() override;
-    std::shared_ptr<IModule> loadModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) override;
+    std::shared_ptr<IModule> loadModule(
+        const std::string &modulePath,
+        const std::string &pubEndpoint,
+        const std::string &subEndpoint,
+        void* sharedZmqContext = nullptr) override;
 
   protected:
     std::vector<ModuleHandle> _handles;

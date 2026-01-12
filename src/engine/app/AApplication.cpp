@@ -6,6 +6,8 @@
 #include <stdexcept> // For std::stoi
 #include <string>
 
+#include "../modulesManager/ModulesManager.hpp"
+
 namespace {
 bool debugEnabled() {
   static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
@@ -29,7 +31,10 @@ AApplication::AApplication()
       _publisher(nullptr),
       _subscriber(nullptr),
       _isBrokerActive(false),
-      _isServerMode(false) {}
+      _isServerMode(false) {
+  // Ensure modules manager is ready before any module load
+  _modulesManager = std::make_shared<rtypeGame::ModulesManager>();
+}
 
 AApplication::~AApplication() {
   cleanupMessageBroker();
@@ -38,7 +43,28 @@ AApplication::~AApplication() {
 void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
     _isServerMode = isServer;
 
-    if (baseEndpoint.find(":*") != std::string::npos) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DETECT LOCAL MODE (inproc:// - In-Process, No Network)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Local mode is triggered by:
+    // 1. Explicit "inproc://" in baseEndpoint
+    // 2. Empty baseEndpoint (defaults to local)
+    // 3. baseEndpoint == "local"
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    if (baseEndpoint.empty() ||
+        baseEndpoint == "local" ||
+        baseEndpoint.find("inproc://") == 0) {
+        _isLocalMode = true;
+        _pubBrokerEndpoint = "inproc://game_bus_pub";
+        _subBrokerEndpoint = "inproc://game_bus_sub";
+
+        if (debugEnabled()) {
+            std::cout << "[App] LOCAL MODE detected (inproc://)" << std::endl;
+        }
+    }
+    // Network mode (tcp:// or ipc://)
+    else if (baseEndpoint.find(":*") != std::string::npos) {
         // Wildcard mode (likely client with ephemeral ports)
         // We can't calculate port+1, so we just use wildcard for both.
         // ZeroMQ will assign two different random ports.
@@ -64,15 +90,46 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
         }
     }
 
-
-    if (_pubBrokerEndpoint.find("tcp://") != 0 && _pubBrokerEndpoint.find("ipc://") != 0 && _pubBrokerEndpoint.find("inproc://") != 0) {
-        _pubBrokerEndpoint = "tcp://" + _pubBrokerEndpoint;
+    // Add protocol prefix if not already present (skip for local mode)
+    if (!_isLocalMode) {
+        if (_pubBrokerEndpoint.find("tcp://") != 0 && _pubBrokerEndpoint.find("ipc://") != 0 && _pubBrokerEndpoint.find("inproc://") != 0) {
+            _pubBrokerEndpoint = "tcp://" + _pubBrokerEndpoint;
+        }
+        if (_subBrokerEndpoint.find("tcp://") != 0 && _subBrokerEndpoint.find("ipc://") != 0 && _subBrokerEndpoint.find("inproc://") != 0) {
+            _subBrokerEndpoint = "tcp://" + _subBrokerEndpoint;
+        }
     }
-    if (_subBrokerEndpoint.find("tcp://") != 0 && _subBrokerEndpoint.find("ipc://") != 0 && _subBrokerEndpoint.find("inproc://") != 0) {
-        _subBrokerEndpoint = "tcp://" + _subBrokerEndpoint;
-    }
 
-    if (_isServerMode) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LOCAL MODE BROKER (Simplified - No Proxy Thread Needed)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (_isLocalMode) {
+        try {
+            _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
+            _subscriber = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::sub);
+
+            // In local mode, we directly bind/connect without XPUB/XSUB proxy
+            // All modules share the same zmq::context_t (critical for inproc://)
+            _publisher->bind(_pubBrokerEndpoint);
+            _subscriber->bind(_subBrokerEndpoint);
+            _subscriber->set(zmq::sockopt::subscribe, "");
+
+            _isBrokerActive = true;
+
+            if (debugEnabled()) {
+                std::cout << "[App] Local broker started (no network):" << std::endl;
+                std::cout << "  - Pub: " << _pubBrokerEndpoint << std::endl;
+                std::cout << "  - Sub: " << _subBrokerEndpoint << std::endl;
+            }
+        } catch (const zmq::error_t& e) {
+            std::cerr << "Failed to setup local message broker: " << e.what() << std::endl;
+            throw;
+        }
+    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SERVER MODE BROKER (Network - Requires Proxy Thread)
+    // ═══════════════════════════════════════════════════════════════════════════
+    else if (_isServerMode) {
         try {
             _xpubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xpub);
             _xsubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xsub);
@@ -116,7 +173,11 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
                       << " (Bind endpoints: " << _pubBrokerEndpoint << ", " << _subBrokerEndpoint << ")" << std::endl;
             throw;
         }
-    } else {
+    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CLIENT MODE BROKER (Connect to Remote Server)
+    // ═══════════════════════════════════════════════════════════════════════════
+    else {
         try {
             _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
             _subscriber = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::sub);
@@ -164,11 +225,14 @@ void AApplication::cleanupMessageBroker() {
   }
 }
 
-void AApplication::addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) {
+void AApplication::addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint, void* sharedZmqContext) {
+  if (!_modulesManager) {
+    throw std::runtime_error("[App] ModulesManager not initialized!");
+  }
   if (debugEnabled()) {
     std::cout << "[App] Loading module: " << modulePath << " pub=" << pubEndpoint << " sub=" << subEndpoint << std::endl;
   }
-  _modules.push_back(_modulesManager->loadModule(modulePath, pubEndpoint, subEndpoint));
+  _modules.push_back(_modulesManager->loadModule(modulePath, pubEndpoint, subEndpoint, sharedZmqContext));
 }
 
 void AApplication::run() {
@@ -316,6 +380,29 @@ void AApplication::processMessages() {
       }
     }
   }
+}
+
+std::string AApplication::getEndpoint(const std::string& type, bool useLocal) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ENDPOINT FACTORY - Returns appropriate endpoint based on mode
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Local mode:  inproc://game_bus_{type}
+    // Remote mode: tcp://0.0.0.0:PORT or current endpoints
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    if (_isLocalMode || useLocal) {
+        return "inproc://game_bus_" + type;
+    }
+
+    // Return configured endpoints
+    if (type == "pub") {
+        return _pubBrokerEndpoint;
+    } else if (type == "sub") {
+        return _subBrokerEndpoint;
+    }
+
+    // Fallback (should never happen)
+    return "tcp://127.0.0.1:5555";
 }
 
 }  // namespace rtypeEngine

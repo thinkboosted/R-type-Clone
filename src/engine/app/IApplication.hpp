@@ -17,7 +17,7 @@ class IApplication {
     using TopicSubscription = std::pair<std::string, MessageHandler>;
 
     virtual ~IApplication() = default;
-    virtual void addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) = 0;
+    virtual void addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint, void* sharedZmqContext = nullptr) = 0;
     virtual void run() = 0;
     virtual void init() = 0;
     virtual void loop() = 0;

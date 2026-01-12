@@ -25,12 +25,16 @@ class AModule : public IModule {
     void subscribe(const std::string& topic, MessageHandler handler) override;
     void unsubscribe(const std::string& topic) override;
     void processMessages() override;
+  // ZMQ context dependency injection
+  void setZmqContext(void* context) override;
+
 
   protected:
     void setPublisherBufferLength(int length) override;
     void setSubscriberBufferLength(int length) override;
 
-    zmq::context_t _context;
+    zmq::context_t* _zmqContext;  // Pointer to potentially shared context
+    bool _ownsContext;  // True if we created the context, false if injected
     std::unique_ptr<zmq::socket_t> _publisher;
     std::unique_ptr<zmq::socket_t> _subscriber;
 

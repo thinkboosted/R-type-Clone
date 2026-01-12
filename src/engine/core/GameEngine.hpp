@@ -3,6 +3,7 @@
 #include "../app/AApplication.hpp"
 #include "../modulesManager/IModulesManager.hpp"
 #include <sol/sol.hpp>
+#include <zmq.hpp>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -123,6 +124,9 @@ private:
 
     // Thread safety (critical for network module on separate thread)
     mutable std::shared_mutex _moduleMutex;
+
+    // ZeroMQ Context (OWNER - shared with all modules for inproc://)
+    zmq::context_t _sharedZmqContext;
 
     /**
      * @brief Thread-safe module access

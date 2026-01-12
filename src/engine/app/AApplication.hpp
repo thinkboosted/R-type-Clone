@@ -12,7 +12,7 @@ public:
   AApplication();
   ~AApplication() override;
   void addModule(const std::string &modulePath, const std::string &pubEndpoint,
-                 const std::string &subEndpoint) override;
+                 const std::string &subEndpoint, void* sharedZmqContext = nullptr) override;
   void run() override;
   void loop() override {};
   void init() override {};
@@ -42,8 +42,17 @@ protected:                        // Changed from private to protected
   std::string _subBrokerEndpoint;
   bool _isServerMode; // To indicate if this AApplication instance is running as
                       // a server
+  bool _isLocalMode = false;  // True if using inproc:// (no network)
 
   // New method to configure and initialize the ZMQ broker/connections
   void setupBroker(const std::string &baseEndpoint, bool isServer);
+
+  /**
+   * @brief Factory method to generate ZMQ endpoint based on mode
+   * @param type "pub" or "sub"
+   * @param useLocal Force local mode (inproc://)
+   * @return Endpoint string (tcp://... or inproc://...)
+   */
+  std::string getEndpoint(const std::string& type, bool useLocal = false);
 };
 } // namespace rtypeEngine

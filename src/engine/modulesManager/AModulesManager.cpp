@@ -11,7 +11,11 @@ bool debugEnabled() {
 }
 
 namespace rtypeEngine {
-std::shared_ptr<IModule> AModulesManager::loadModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) {
+std::shared_ptr<IModule> AModulesManager::loadModule(
+    const std::string &modulePath,
+    const std::string &pubEndpoint,
+    const std::string &subEndpoint,
+    void* sharedZmqContext) {
     ModuleHandle handle;
     #ifdef _WIN32
         handle = LoadLibrary(modulePath.c_str());
@@ -47,6 +51,20 @@ std::shared_ptr<IModule> AModulesManager::loadModule(const std::string &modulePa
     }
 
     std::shared_ptr<IModule> module(rawModule);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Inject shared ZMQ context BEFORE init()
+    // ═══════════════════════════════════════════════════════════════════════
+    // This prevents modules from creating their own zmq::context_t,
+    // which would break inproc:// communication (different memory spaces)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (sharedZmqContext != nullptr) {
+        module->setZmqContext(sharedZmqContext);
+        if (debugEnabled()) {
+            std::cout << "[ModulesManager] Injected shared ZMQ context into " << modulePath << std::endl;
+        }
+    }
+
     _modules.push_back(module);
     _handles.push_back(handle);
 

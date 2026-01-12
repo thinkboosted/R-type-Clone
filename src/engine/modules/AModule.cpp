@@ -18,7 +18,6 @@ bool sniperDebugEnabled() {
     static bool enabled = (std::getenv("RTYPE_SNIPER_DEBUG") != nullptr);
     return enabled;
 }
-
 std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
     if (msg.size() <= limit) {
         return msg;
@@ -34,7 +33,14 @@ std::string moduleName(const rtypeEngine::AModule* module) {
 namespace rtypeEngine {
 
 AModule::~AModule() {
+    // Stop worker thread before tearing down sockets/context
     stop();
+    _publisher.reset();
+    _subscriber.reset();
+    if (_ownsContext && _zmqContext) {
+        delete _zmqContext;
+        _zmqContext = nullptr;
+    }
 }
 
 void AModule::start() {
@@ -92,11 +98,56 @@ void AModule::release() {
     // As of now, the destructor handles all cleanup.
 }
 
+void AModule::setZmqContext(void* context) {
+    if (!context) {
+        throw std::runtime_error("[AModule] setZmqContext: NULL context pointer");
+    }
+
+    // If we own our current context, clean it up
+    if (_ownsContext && _zmqContext) {
+        // Close existing sockets before deleting context
+        _publisher.reset();
+        _subscriber.reset();
+        delete _zmqContext;
+    }
+
+    // Use the injected context
+    _zmqContext = static_cast<zmq::context_t*>(context);
+    _ownsContext = false;  // We don't own this context
+
+    // Recreate sockets with the new context
+    _publisher = std::make_unique<zmq::socket_t>(*_zmqContext, zmq::socket_type::pub);
+    _subscriber = std::make_unique<zmq::socket_t>(*_zmqContext, zmq::socket_type::sub);
+
+    // Reconnect sockets if needed
+    std::string zmqPubEndpoint = _pubEndpoint;
+    if (zmqPubEndpoint.find("tcp://") != 0 && zmqPubEndpoint.find("ipc://") != 0 && zmqPubEndpoint.find("inproc://") != 0) {
+        zmqPubEndpoint = "tcp://" + zmqPubEndpoint;
+    }
+
+    std::string zmqSubEndpoint = _subEndpoint;
+    if (zmqSubEndpoint.find("tcp://") != 0 && zmqSubEndpoint.find("ipc://") != 0 && zmqSubEndpoint.find("inproc://") != 0) {
+        zmqSubEndpoint = "tcp://" + zmqSubEndpoint;
+    }
+
+    try {
+        _publisher->connect(zmqSubEndpoint);
+        _subscriber->connect(zmqPubEndpoint);
+        if (debugEnabled()) {
+            std::cout << "[AModule] Successfully injected shared ZMQ context and reconnected sockets" << std::endl;
+        }
+    } catch (const zmq::error_t& e) {
+        std::cerr << "[AModule] setZmqContext connection error: " << e.what() << std::endl;
+        throw;
+    }
+}
+
 AModule::AModule(const char* pubEndpoint, const char* subEndpoint)
     : IModule(pubEndpoint, subEndpoint),
-      _context(1),
-      _publisher(std::make_unique<zmq::socket_t>(_context, zmq::socket_type::pub)),
-      _subscriber(std::make_unique<zmq::socket_t>(_context, zmq::socket_type::sub)),
+    _zmqContext(new zmq::context_t(1)),  // Create own context by default
+    _ownsContext(true),                   // We own this context
+    _publisher(std::make_unique<zmq::socket_t>(*_zmqContext, zmq::socket_type::pub)),
+    _subscriber(std::make_unique<zmq::socket_t>(*_zmqContext, zmq::socket_type::sub)),
       _running(false) {
 
     std::string zmqPubEndpoint = _pubEndpoint;

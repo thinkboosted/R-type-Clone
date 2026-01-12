@@ -10,7 +10,11 @@ namespace rtypeEngine {
 class IModulesManager {
   public:
     virtual ~IModulesManager() = default;
-    virtual std::shared_ptr<IModule> loadModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint) = 0;
+    virtual std::shared_ptr<IModule> loadModule(
+        const std::string &modulePath,
+        const std::string &pubEndpoint,
+        const std::string &subEndpoint,
+        void* sharedZmqContext = nullptr) = 0;
 
   protected:
     std::vector<std::shared_ptr<IModule>> _modules;

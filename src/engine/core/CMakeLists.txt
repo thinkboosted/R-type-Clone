@@ -60,3 +60,22 @@ if(MSVC)
 else()
     target_compile_options(GameEngine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# ============================================================================
+# Test Executable: Local Mode (inproc://) Verification
+# ============================================================================
+add_executable(test_local_mode
+    test_local_mode.cpp
+)
+
+target_include_directories(test_local_mode PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+
+target_link_libraries(test_local_mode PRIVATE
+    GameEngine
+)
+
+set_target_properties(test_local_mode PROPERTIES
+    OUTPUT_NAME "test_local_mode"
+)
