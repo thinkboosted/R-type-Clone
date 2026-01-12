@@ -126,7 +126,16 @@ private:
     // Thread safety (critical for network module on separate thread)
     mutable std::shared_mutex _moduleMutex;
 
+    // ═══════════════════════════════════════════════════════════════
+    // CRITICAL ORDERING FOR RAII (ZMQ Context MUST be destroyed LAST)
+    // ═══════════════════════════════════════════════════════════════
+    // In C++, members are destroyed in REVERSE order of declaration.
+    // ZMQ context MUST be declared FIRST so it's destroyed LAST,
+    // after all modules (which may hold ZMQ sockets) are destroyed.
+    // ═══════════════════════════════════════════════════════════════
+
     // ZeroMQ Context (OWNER - shared with all modules for inproc://)
+    // DECLARED FIRST -> DESTROYED LAST (after all modules)
     zmq::context_t _sharedZmqContext;
 
     // ═══════════════════════════════════════════════════════════════
@@ -134,6 +143,7 @@ private:
     // ═══════════════════════════════════════════════════════════════
     // Cached pointers to critical modules for direct virtual calls
     // Set during loadModules() to avoid lookups every frame
+    // DECLARED AFTER context -> DESTROYED BEFORE context
     // ═══════════════════════════════════════════════════════════════
     std::shared_ptr<IModule> _physicsModule;   // BulletPhysicEngine
     std::shared_ptr<IModule> _ecsModule;       // LuaECSManager

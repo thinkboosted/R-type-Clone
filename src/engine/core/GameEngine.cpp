@@ -1,4 +1,5 @@
 #include "GameEngine.hpp"
+#include "../modules/WindowManager/IWindowManager.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <iostream>
@@ -44,8 +45,20 @@ GameEngine::~GameEngine() {
         std::cout << "[GameEngine] Destroying (frames rendered: " << _frameCount << ")" << std::endl;
     }
 
-    // RAII: Lua state and modules are automatically cleaned up
-    // ZeroMQ broker is cleaned by AApplication destructor
+    _networkModule.reset();
+    _windowModule.reset();
+    _renderModule.reset();
+    _ecsModule.reset();
+    _physicsModule.reset();
+
+    if (_modulesManager) {
+        _modulesManager.reset();
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> lock(_moduleMutex);
+        _modules.clear();
+    }
 }
 
 void GameEngine::init() {
@@ -164,21 +177,44 @@ void GameEngine::run() {
         }
     }
 
-    // Main application loop
+    bool windowReady = false;
     while (_running) {
         processMessages();
+
+        if (_windowModule) {
+            bool isOpen = static_cast<IWindowManager*>(_windowModule.get())->isOpen();
+            if (!windowReady && isOpen) {
+                windowReady = true;
+                if (isDebugEnabled()) {
+                    std::cout << "[GameEngine] Window is ready" << std::endl;
+                }
+            }
+            if (windowReady && !isOpen) {
+                std::cout << "[GameEngine] Window closed detected - initiating shutdown" << std::endl;
+                _running = false;
+                break;
+            }
+        }
+
         loop();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    // Stop modules on shutdown
-    for (const auto &module : _modules) {
-        module->stop();
+    std::cout << "[GameEngine] Main loop exited - stopping all modules..." << std::endl;
+
+    auto startShutdown = std::chrono::steady_clock::now();
+    for (size_t i = 0; i < _modules.size(); ++i) {
+        if (isDebugEnabled()) {
+            std::cout << "[GameEngine] Stopping module " << (i+1) << "/" << _modules.size() << "..." << std::endl;
+        }
+        _modules[i]->stop();
     }
 
-    if (isDebugEnabled()) {
-        std::cout << "[App] Shutdown complete" << std::endl;
-    }
+    auto shutdownDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startShutdown);
+
+    std::cout << "[GameEngine] All modules stopped in " << shutdownDuration.count()
+              << "ms - shutdown complete" << std::endl;
 
     cleanupMessageBroker();
 }
