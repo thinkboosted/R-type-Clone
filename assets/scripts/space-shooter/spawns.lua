@@ -30,16 +30,13 @@ function Spawns.createPlayer(x, y, z, clientId)
     ECS.addComponent(e, "Weapon", Weapon(0.2))
     ECS.addComponent(e, "Life", Life(100))
     ECS.addComponent(e, "Score", Score(0))
-
     -- 2. Input & Logic
     ECS.addComponent(e, "InputState", InputState())
-
     -- 3. Visuals (Only if rendering is enabled)
     if hasRendering() then
         ECS.addComponent(e, "Mesh", Mesh("assets/models/simple_plane.obj", "assets/textures/plane_texture.png"))
         ECS.addComponent(e, "Color", Color(1.0, 1.0, 1.0)) -- White (removes default orange)
     end
-
     -- 4. Network & Architecture
     -- Default to local player if clientId is nil (Solo mode)
     local ownerId = clientId or 0
@@ -53,7 +50,6 @@ function Spawns.createPlayer(x, y, z, clientId)
     if hasAuthority() then
         ECS.addComponent(e, "ServerAuthority", ServerAuthority())
     end
-
     if isLocal or hasRendering() then
         ECS.addComponent(e, "ClientPredicted", ClientPredicted())
         ECS.addComponent(e, "InputBuffer", InputBuffer(60))
@@ -71,7 +67,6 @@ function Spawns.createPlayer(x, y, z, clientId)
             0.0, 0.5, 1.0 -- Color (Blue)
         ))
     end
-
     return e
 end
 
@@ -166,8 +161,8 @@ function Spawns.spawnEnemy(x, y, speed, type)
             cfg.frames,    -- per type
             0.1,  -- 10 FPS
             true, -- Loop
-            basePath,
-            texturePath
+            basePath
+            --texturePath
         ))
     end
 
@@ -205,10 +200,11 @@ function Spawns.spawnBullet(x, y, z, isEnemy)
     -- Visuals
     if hasRendering() then
         if isEnemy then
-             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", nil)) -- Orb
+             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", nil))
              ECS.addComponent(e, "Color", Color(1.0, 0.5, 0.0)) -- Orange
         else
-             ECS.addComponent(e, "Mesh", Mesh("assets/models/laser.obj", nil)) -- Laser
+            ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", nil))
+             -- ECS.addComponent(e, "Mesh", Mesh("assets/models/laser.obj", nil)) -- Laser
              ECS.addComponent(e, "Color", Color(0.0, 1.0, 1.0)) -- Cyan
         end
     end
@@ -228,7 +224,7 @@ end
 function Spawns.createBackground(texturePath)
     if not hasRendering() then return end
 
-    local tex = texturePath or "assets/textures/PlutoImage_TutorialLevel.png"
+    local tex = texturePath or "assets/textures/StarSky.jpg"
     print("[Spawns] Creating Parallax Background with texture: " .. tex)
 
     -- Layer 1 (Far Stars)
@@ -245,6 +241,43 @@ function Spawns.createBackground(texturePath)
     ECS.addComponent(bg2, "Background", Background(-2.0, 60.0, -60.0))
 
     print("[Spawns] Background entities created: " .. bg1 .. ", " .. bg2)
+end
+
+-- ============================================================================
+-- SCORE
+-- ============================================================================
+
+function Spawns.createScore(value)
+    print("Score function")
+    local sc = value or 0
+
+    local scoreEntity = ECS.createEntity()
+    ECS.addComponent(scoreEntity, "Score", Score(sc))
+    ECS.addComponent(scoreEntity, "Transform", Transform(650, 550, 10))
+    ECS.addComponent(scoreEntity, "Text", Text("Score: " .. sc, "assets/fonts/arial.ttf", 24, true))
+    ECS.addComponent(scoreEntity, "Color", Color(1.0, 1.0, 1.0))
+end
+
+
+
+-- ==========================================================================
+-- MODULAR: Create Core Entities for a Level Switch
+-- ==========================================================================
+function Spawns.createCoreEntities(level, backgroundTexture)
+    -- Create Camera (if not already present)
+    if ECS.capabilities and ECS.capabilities.hasRendering then
+        local cameraEntities = ECS.getEntitiesWith({"Camera"})
+        if #cameraEntities == 0 then
+            local camera = ECS.createEntity()
+            ECS.addComponent(camera, "Transform", Transform(0, 0, 20))
+            ECS.addComponent(camera, "Camera", Camera(90))
+        end
+    end
+
+    -- Create Background
+    local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
+    Spawns.createBackground(bgTex)
+
 end
 
 return Spawns

@@ -2,7 +2,7 @@ local config = {
     player = {
         speed = 10.0,
         life = 3,
-        scale = 0.7,
+        scale = 0.6,
         weaponCooldown = 0.2,
         collider = { type = "Box", size = {1, 1, 1} },
         color = { r = 0.0, g = 1.0, b = 0.0 },

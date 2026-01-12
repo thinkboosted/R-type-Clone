@@ -4,10 +4,14 @@
 -- Updates score text UI only on instances with rendering capability.
 -- Score logic itself is managed by authority (Server/Solo).
 -- ============================================================================
+
 local ScoreSystem = {}
 
+
 ScoreSystem.lastScore = 0
-ScoreSystem.levelChanged = false
+
+-- Global variable to persist score across levels
+CurrentScore = CurrentScore or 0
 
 function ScoreSystem.init()
     print("[ScoreSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
@@ -27,16 +31,9 @@ function ScoreSystem.update(dt)
     if scoreComp.value ~= ScoreSystem.lastScore then
         ScoreSystem.lastScore = scoreComp.value
         textComp.text = "Score: " .. scoreComp.value
+        CurrentScore = scoreComp.value
     end
 
-    if scoreComp.value >= 100 and not ScoreSystem.levelChanged then
-        ScoreSystem.levelChanged = true
-        print("Level Complete! Switching to Level 2...")
-        ECS.saveState("space-shooter-save-level-1-complete")
-        ECS.removeEntities()
-        ECS.removeSystems()
-        dofile("assets/scripts/space-shooter/levels/Level-2.lua")
-    end
 end
 
 ECS.registerSystem(ScoreSystem)
