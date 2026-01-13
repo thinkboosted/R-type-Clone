@@ -98,72 +98,37 @@ set_target_properties(r-type_server PROPERTIES
 )
 
 # Copy modules to output directory after build
-# The specific modules copied are now determined by what each executable loads in main.cpp.
-# So, we just need to ensure ALL potential modules are considered for copying if they exist.
-# The 'addModule' calls in C++ will find them.
-foreach(EXECUTABLE_TARGET r-type_client r-type_server)
-    if(TARGET SFMLWindowManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SFMLWindowManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying SFML Window Manager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
+# Create a custom target to handle asset and library copying once to avoid race conditions
+add_custom_target(prepare_game_env
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets
+    COMMENT "Copying assets to runtime directory"
+)
 
-    if(TARGET SFMLSoundManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SFMLSoundManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying SFML Sound Manager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
+# Collect all potential modules
+set(ALL_MODULES 
+    SFMLWindowManager 
+    SFMLSoundManager 
+    GLEWSFMLRenderer 
+    LuaECSManager 
+    ECSSavesManager 
+    BulletPhysicEngine 
+    NetworkManager
+)
 
-    if(TARGET GLEWSFMLRenderer)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
+# Add module copy commands to the prepare target
+foreach(MOD ${ALL_MODULES})
+    if(TARGET ${MOD})
+        add_dependencies(prepare_game_env ${MOD})
+        add_custom_command(TARGET prepare_game_env POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:GLEWSFMLRenderer>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying GLEWSFML Renderer to executable directory for ${EXECUTABLE_TARGET}"
+                $<TARGET_FILE:${MOD}>
+                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+            COMMENT "Copying ${MOD} to runtime directory"
         )
     endif()
-
-    if(TARGET LuaECSManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:LuaECSManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying LuaECSManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET ECSSavesManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:ECSSavesManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying ECSSavesManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET BulletPhysicEngine)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:BulletPhysicEngine>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying BulletPhysicEngine to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-    if(TARGET NetworkManager)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:NetworkManager>
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying NetworkManager to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
+endforeach()
 
     # Ensure modules are built before the executable (so their artifacts exist for copying)
     if(TARGET SFMLWindowManager)

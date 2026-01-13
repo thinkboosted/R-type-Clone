@@ -1,4 +1,4 @@
-$env:VCPKG_DEFAULT_TRIPLET = "x64-mingw-dynamic"
+$env:VCPKG_DEFAULT_TRIPLET = "x64-windows"
 vcpkg install
 
 mkdir ./build/

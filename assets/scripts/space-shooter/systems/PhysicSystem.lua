@@ -18,13 +18,9 @@ function PhysicSystem.update(dt)
 
     for _, id in ipairs(entities) do
         local physic = ECS.getComponent(id, "Physic")
-        
-        -- Si une vitesse est demandée, on l'envoie au moteur C++
-        if physic.vx ~= 0 or physic.vy ~= 0 then
-            local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
-            ECS.sendMessage("PhysicCommand", msg)
-            -- print("[PhysicSystem] Sending: " .. msg)
-        end
+        -- Always send velocity to ensure we can stop the ship (send 0,0,0)
+        local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
+        ECS.sendMessage("PhysicCommand", msg)
     end
 end
 

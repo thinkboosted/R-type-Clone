@@ -31,9 +31,39 @@ class INetworkManager {
     virtual void disconnect() = 0;
     virtual void sendNetworkMessage(const std::string& topic, const std::string& payload) = 0;
 
+    /**
+     * @brief Send a network message using the binary protocol.
+     * 
+     * This is the binary counterpart of sendNetworkMessage(). The message is
+     * addressed by the given topic, and the payload contains arbitrary binary
+     * data.
+     * 
+     * @param topic Logical channel for the message.
+     * @param payload Raw binary payload.
+     */
+    virtual void sendNetworkMessageBinary(const std::string& topic, const std::vector<char>& payload) = 0;
+
     // Multi-client support
     virtual void sendToClient(uint32_t clientId, const std::string& topic, const std::string& payload) = 0;
+
+    /**
+     * @brief Send a binary message to a specific connected client.
+     * 
+     * @param clientId Identifier of the target client.
+     * @param topic Logical channel for the message.
+     * @param payload Raw binary payload.
+     */
+    virtual void sendToClientBinary(uint32_t clientId, const std::string& topic, const std::vector<char>& payload) = 0;
+    
     virtual void broadcast(const std::string& topic, const std::string& payload) = 0;
+
+    /**
+     * @brief Broadcast a binary message to all connected clients.
+     * 
+     * @param topic Logical channel for the message.
+     * @param payload Raw binary payload.
+     */
+    virtual void broadcastBinary(const std::string& topic, const std::vector<char>& payload) = 0;
     virtual std::vector<ClientInfo> getConnectedClients() = 0;
 
     virtual std::optional<NetworkEnvelope> getFirstMessage() = 0;

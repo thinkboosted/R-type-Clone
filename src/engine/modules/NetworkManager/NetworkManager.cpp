@@ -185,6 +185,19 @@ void NetworkManager::registerSubscriptions() {
   subscribe("RequestNetworkBroadcast", [this](const std::string &payload) {
     handleBroadcastRequest(payload);
   });
+
+  // Binary commands
+  subscribe("RequestNetworkSendBinary", [this](const std::string &payload) {
+    handleSendBinaryRequest(payload);
+  });
+
+  subscribe("RequestNetworkBroadcastBinary", [this](const std::string &payload) {
+    handleBroadcastBinaryRequest(payload);
+  });
+
+  subscribe("RequestNetworkSendToBinary", [this](const std::string &payload) {
+    handleSendToBinaryRequest(payload);
+  });
 }
 
 void NetworkManager::handleCommandString(const std::string &commandLine) {
@@ -315,6 +328,83 @@ void NetworkManager::handleBroadcastRequest(const std::string &payload) {
   }
 
   broadcast(topic, message);
+}
+
+void NetworkManager::handleSendBinaryRequest(const std::string &payload) {
+  if (payload.size() < 4) {
+    publishError("SendBinaryInvalidFormat");
+    return;
+  }
+
+  uint32_t topicLen;
+  std::memcpy(&topicLen, payload.data(), 4);
+
+  if (topicLen > 1024) {
+    publishError("SendBinaryTopicTooLarge");
+    return;
+  }
+
+  if (payload.size() < 4 + topicLen) {
+    publishError("SendBinaryTruncated");
+    return;
+  }
+
+  std::string topic(payload.data() + 4, topicLen);
+  std::vector<char> binPayload(payload.begin() + 4 + topicLen, payload.end());
+
+  sendNetworkMessageBinary(topic, binPayload);
+}
+
+void NetworkManager::handleBroadcastBinaryRequest(const std::string &payload) {
+  if (payload.size() < 4) {
+    publishError("BroadcastBinaryInvalidFormat");
+    return;
+  }
+
+  uint32_t topicLen;
+  std::memcpy(&topicLen, payload.data(), 4);
+
+  if (topicLen > 1024) {
+    publishError("BroadcastBinaryTopicTooLarge");
+    return;
+  }
+
+  if (payload.size() < 4 + topicLen) {
+    publishError("BroadcastBinaryTruncated");
+    return;
+  }
+
+  std::string topic(payload.data() + 4, topicLen);
+  std::vector<char> binPayload(payload.begin() + 4 + topicLen, payload.end());
+
+  broadcastBinary(topic, binPayload);
+}
+
+void NetworkManager::handleSendToBinaryRequest(const std::string &payload) {
+  if (payload.size() < 8) {
+    publishError("SendToBinaryInvalidFormat");
+    return;
+  }
+
+  uint32_t clientId;
+  uint32_t topicLen;
+  std::memcpy(&clientId, payload.data(), 4);
+  std::memcpy(&topicLen, payload.data() + 4, 4);
+
+  if (topicLen > 1024) {
+    publishError("SendToBinaryTopicTooLarge");
+    return;
+  }
+
+  if (payload.size() < 8 + topicLen) {
+    publishError("SendToBinaryTruncated");
+    return;
+  }
+
+  std::string topic(payload.data() + 8, topicLen);
+  std::vector<char> binPayload(payload.begin() + 8 + topicLen, payload.end());
+
+  sendToClientBinary(clientId, topic, binPayload);
 }
 
 void NetworkManager::bind(uint16_t port) {
@@ -563,6 +653,36 @@ void NetworkManager::sendToEndpoint(const udp::endpoint &endpoint,
   });
 }
 
+void NetworkManager::sendToEndpointBinary(const udp::endpoint &endpoint,
+                                          const std::string &topic,
+                                          const std::vector<char> &payload) {
+  // Convert vector<char> to string for the envelope (which uses string storage)
+  // This is safe for binary data.
+  std::string payloadStr(payload.begin(), payload.end());
+  NetworkEnvelope envelope{topic, payloadStr, 0};
+  
+  msgpack::sbuffer buffer;
+  SerializableEnvelope wireEnvelope(envelope);
+  msgpack::pack(buffer, wireEnvelope);
+
+  auto packet = std::make_shared<std::vector<char>>(buffer.size());
+  std::memcpy(packet->data(), buffer.data(), buffer.size());
+
+  asio::post(_ioContext, [this, packet, endpoint]() {
+    if (!_socket || !_socket->is_open()) {
+      return;
+    }
+
+    _socket->async_send_to(
+        asio::buffer(*packet), endpoint,
+        [this, packet](const std::error_code &ec, std::size_t) {
+          if (ec && ec != asio::error::operation_aborted) {
+            publishError(std::string("SendFailed:") + ec.message());
+          }
+        });
+  });
+}
+
 void NetworkManager::enqueueMessage(const NetworkEnvelope &envelope) {
   std::lock_guard<std::mutex> lock(_queueMutex);
   _enqueuedTotal.fetch_add(1, std::memory_order_relaxed);
@@ -623,6 +743,20 @@ void NetworkManager::sendNetworkMessage(const std::string &topic,
   }
 }
 
+void NetworkManager::sendNetworkMessageBinary(const std::string &topic,
+                                              const std::vector<char> &payload) {
+  if (_isServer) {
+    broadcastBinary(topic, payload);
+  } else {
+    udp::endpoint target;
+    {
+      std::lock_guard<std::mutex> lock(_remoteEndpointMutex);
+      target = _remoteEndpoint;
+    }
+    sendToEndpointBinary(target, topic, payload);
+  }
+}
+
 void NetworkManager::sendToClient(uint32_t clientId, const std::string &topic,
                                   const std::string &payload) {
   std::string errorMsg;
@@ -650,6 +784,34 @@ void NetworkManager::sendToClient(uint32_t clientId, const std::string &topic,
   }
 }
 
+void NetworkManager::sendToClientBinary(uint32_t clientId,
+                                        const std::string &topic,
+                                        const std::vector<char> &payload) {
+  std::string errorMsg;
+  std::optional<udp::endpoint> endpointOpt;
+
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto it = _clients.find(clientId);
+    if (it == _clients.end()) {
+      errorMsg = "SendToClient:UnknownClient:" + std::to_string(clientId);
+    } else if (!it->second.connected) {
+      errorMsg = "SendToClient:ClientDisconnected:" + std::to_string(clientId);
+    } else {
+      endpointOpt = it->second.endpoint;
+    }
+  }
+
+  if (!errorMsg.empty()) {
+    publishError(errorMsg);
+    return;
+  }
+
+  if (endpointOpt.has_value()) {
+    sendToEndpointBinary(endpointOpt.value(), topic, payload);
+  }
+}
+
 void NetworkManager::broadcast(const std::string &topic,
                                const std::string &payload) {
   std::vector<udp::endpoint> endpoints;
@@ -667,6 +829,26 @@ void NetworkManager::broadcast(const std::string &topic,
 
   for (const auto &endpoint : endpoints) {
     sendToEndpoint(endpoint, topic, payload);
+  }
+}
+
+void NetworkManager::broadcastBinary(const std::string &topic,
+                                     const std::vector<char> &payload) {
+  std::vector<udp::endpoint> endpoints;
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    if (_clients.empty()) {
+      return;
+    }
+    for (const auto &[clientId, session] : _clients) {
+      if (session.connected) {
+        endpoints.push_back(session.endpoint);
+      }
+    }
+  }
+
+  for (const auto &endpoint : endpoints) {
+    sendToEndpointBinary(endpoint, topic, payload);
   }
 }
 
