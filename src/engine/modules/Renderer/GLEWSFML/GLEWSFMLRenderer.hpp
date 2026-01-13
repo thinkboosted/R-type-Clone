@@ -13,7 +13,7 @@ namespace rtypeEngine {
 class GLEWSFMLRenderer : public I3DRenderer {
   public:
     explicit GLEWSFMLRenderer(const char* pubEndpoint, const char* subEndpoint);
-    ~GLEWSFMLRenderer() override = default;
+    ~GLEWSFMLRenderer() override;
 
     void init() override;
     void loop() override;

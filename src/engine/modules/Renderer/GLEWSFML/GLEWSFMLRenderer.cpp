@@ -66,6 +66,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         _pixelBuffer.resize(_resolution.x * _resolution.y);
     }
 
+    GLEWSFMLRenderer::~GLEWSFMLRenderer()
+    {
+        GLEWSFMLRenderer::cleanup();
+    }
+
     void GLEWSFMLRenderer::init()
     {
         subscribe("RenderEntityCommand", [this](const std::string &msg)
@@ -741,6 +746,21 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
     }
     void GLEWSFMLRenderer::cleanup()
     {
+        stop();
+
+        auto closeSocket = [](std::unique_ptr<zmq::socket_t>& socket) {
+            if (socket && (void*)*socket != nullptr) {
+                try {
+                    socket->set(zmq::sockopt::linger, 0);
+                    socket->close();
+                } catch (...) {
+                }
+            }
+        };
+
+        closeSocket(_publisher);
+        closeSocket(_subscriber);
+
         destroyFramebuffer();
 #ifdef _WIN32
         if (_hglrc)
