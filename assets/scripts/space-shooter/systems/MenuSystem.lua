@@ -51,6 +51,24 @@ local COLORS = {
 }
 
 -- ============================================================================
+-- HELPER: Estimate text width for centering calculations
+-- ============================================================================
+-- For Arial font, average character width is approximately 0.52 * fontSize
+-- This accounts for variable-width characters in the font
+local CHAR_WIDTH_RATIO = 0.52
+
+local function estimateTextWidth(text, fontSize)
+    return #text * fontSize * CHAR_WIDTH_RATIO
+end
+
+-- Helper to create a centered label at a given Y position
+local function createCenteredLabel(text, y, size, color, zOrder)
+    local textWidth = estimateTextWidth(text, size)
+    local x = (SCREEN_WIDTH - textWidth) / 2
+    return MenuSystem.createLabel(text, x, y, size, color, zOrder)
+end
+
+-- ============================================================================
 -- HELPER: Create a button with background and text
 -- ============================================================================
 function MenuSystem.createButton(action, text, x, y, width, height, color, textSize, zBase)
@@ -65,7 +83,8 @@ function MenuSystem.createButton(action, text, x, y, width, height, color, textS
     ECS.setOutline(bgId, true, 2, 0.3, 0.3, 0.4)
     
     -- Create text label (centered on button)
-    local textX = x + width / 2 - (#text * textSize * 0.3)
+    local textWidth = estimateTextWidth(text, textSize)
+    local textX = x + (width - textWidth) / 2
     local textY = y + height / 2 - textSize / 2
     local textId = ECS.createUIText(text, textX, textY, textSize, 1, 1, 1, zBase + 1)
     table.insert(menuElements, textId)
@@ -168,9 +187,9 @@ function MenuSystem.renderMenu()
     table.insert(menuElements, line1)
     table.insert(menuElements, line2)
     
-    -- Title
-    MenuSystem.createLabel("R-TYPE", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT - 120, 64, COLORS.title, 20)
-    MenuSystem.createLabel("CLONE", SCREEN_WIDTH/2 - 60, SCREEN_HEIGHT - 180, 32, COLORS.title, 20)
+    -- Title (centered)
+    createCenteredLabel("R-TYPE", SCREEN_HEIGHT - 120, 64, COLORS.title, 20)
+    createCenteredLabel("CLONE", SCREEN_HEIGHT - 180, 32, COLORS.title, 20)
     
     -- Button dimensions
     local btnWidth = 200
@@ -198,11 +217,9 @@ function MenuSystem.renderMenu()
         SCREEN_WIDTH/2 - btnWidth/2, startY - (btnHeight + btnSpacing) * 2,
         btnWidth, btnHeight, COLORS.quit, 24, 10)
     
-    -- Instructions
-    MenuSystem.createLabel("Use Arrow Keys or Mouse to navigate", 
-        SCREEN_WIDTH/2 - 180, 40, 16, COLORS.textNormal, 15)
-    MenuSystem.createLabel("Press ENTER or Click to select", 
-        SCREEN_WIDTH/2 - 150, 20, 16, COLORS.textNormal, 15)
+    -- Instructions (centered)
+    createCenteredLabel("Use Arrow Keys or Mouse to navigate", 40, 16, COLORS.textNormal, 15)
+    createCenteredLabel("Press ENTER or Click to select", 20, 16, COLORS.textNormal, 15)
     
     MenuSystem.updateSelection()
     print("[MenuSystem] Main menu rendered with " .. #menuButtons .. " buttons")
@@ -390,15 +407,15 @@ function MenuSystem.showSettings()
     table.insert(menuElements, bgId)
     ECS.setOutline(bgId, true, 3, 0.2, 0.4, 0.6)
     
-    -- Title
-    MenuSystem.createLabel("SETTINGS", SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT - 100, 48, COLORS.title, 20)
+    -- Title (centered)
+    createCenteredLabel("SETTINGS", SCREEN_HEIGHT - 100, 48, COLORS.title, 20)
     
     -- Decorative line under title
     local line = ECS.createLine(100, SCREEN_HEIGHT - 130, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 130, 2, 0.3, 0.5, 0.7, 0.6, 2)
     table.insert(menuElements, line)
     
     -- ==================== DISPLAY SECTION ====================
-    MenuSystem.createLabel("DISPLAY", SCREEN_WIDTH/2 - 50, SCREEN_HEIGHT - 165, 24, COLORS.title, 20)
+    createCenteredLabel("DISPLAY", SCREEN_HEIGHT - 165, 24, COLORS.title, 20)
     
     -- Fullscreen toggle button
     local fsLabel = settingsState.isFullscreen and "FULLSCREEN: ON" or "FULLSCREEN: OFF"
@@ -406,8 +423,8 @@ function MenuSystem.showSettings()
     MenuSystem.createButton("TOGGLE_FULLSCREEN", fsLabel,
         SCREEN_WIDTH/2 - 140, SCREEN_HEIGHT - 210, 280, 40, fsColor, 20, 10)
     
-    -- Resolution Section Label
-    MenuSystem.createLabel("Window Size:", SCREEN_WIDTH/2 - 60, SCREEN_HEIGHT - 260, 20, COLORS.textNormal, 15)
+    -- Resolution Section Label (centered)
+    createCenteredLabel("Window Size:", SCREEN_HEIGHT - 260, 20, COLORS.textNormal, 15)
     
     -- Resolution preset buttons - 2x2 grid
     local btnW = 130
@@ -439,10 +456,10 @@ function MenuSystem.showSettings()
     table.insert(menuElements, line2)
     
     -- ==================== AUDIO SECTION ====================
-    MenuSystem.createLabel("AUDIO", SCREEN_WIDTH/2 - 40, SCREEN_HEIGHT - 430, 24, COLORS.title, 20)
+    createCenteredLabel("AUDIO", SCREEN_HEIGHT - 430, 24, COLORS.title, 20)
     
-    MenuSystem.createLabel("Music: 40%  |  SFX: 60%", SCREEN_WIDTH/2 - 95, SCREEN_HEIGHT - 465, 16, COLORS.textNormal, 15)
-    MenuSystem.createLabel("(Volume controls coming soon)", SCREEN_WIDTH/2 - 115, SCREEN_HEIGHT - 490, 14, { r = 0.5, g = 0.5, b = 0.5 }, 15)
+    createCenteredLabel("Music: 40%  |  SFX: 60%", SCREEN_HEIGHT - 465, 16, COLORS.textNormal, 15)
+    createCenteredLabel("(Volume controls coming soon)", SCREEN_HEIGHT - 490, 14, { r = 0.5, g = 0.5, b = 0.5 }, 15)
     
     -- ==================== BACK BUTTON ====================
     MenuSystem.createButton("BACK", "BACK",
