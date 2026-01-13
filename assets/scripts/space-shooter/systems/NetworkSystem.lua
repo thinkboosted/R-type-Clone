@@ -131,7 +131,7 @@ function NetworkSystem.init()
                 NetworkSystem.pendingClients[clientId] = true
             end
         end)
-
+        
         ECS.subscribe("CLIENT_READY", function(msg)
             local clientId = string.match(msg, "^(%d+)")
             if not clientId then return end
@@ -189,6 +189,7 @@ function NetworkSystem.init()
                 end
                 NetworkSystem.pendingClients = {}
                 ECS.isGameRunning = true
+                ECS.broadcastNetworkMessage("LEVEL_CHANGE", "1")
             end
         end)
 
@@ -300,12 +301,17 @@ function NetworkSystem.init()
             ECS.sendMessage("MusicStop", msg)
         end)
 
+        ECS.subscribe("LEVEL_CHANGE", function(level)
+        local levelNum = tonumber(level) or 1
+            dofile("assets/scripts/space-shooter/levels/Level-" .. levelNum .. ".lua")
+        end)
+
         ECS.subscribe("PLAYER_ASSIGN", function(msg)
             local id = string.match(msg, "([^%s]+)")
             if id then
                 print(">> Assigned Player ID: " .. id)
                 NetworkSystem.myServerId = id
-                NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, -90, 0, 0, 0, "1")
+                NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, 0, 0, 0, 0, "1")
                 -- Send a ready ping; network layer will prefix client id.
                 ECS.sendNetworkMessage("CLIENT_READY", "ready")
                 ECS.isGameRunning = true

@@ -248,13 +248,12 @@ end
 -- ============================================================================
 
 function Spawns.createScore(value)
-    print("Score function")
     local sc = value or 0
 
     local scoreEntity = ECS.createEntity()
     ECS.addComponent(scoreEntity, "Score", Score(sc))
-    ECS.addComponent(scoreEntity, "Transform", Transform(650, 550, 10))
-    ECS.addComponent(scoreEntity, "Text", Text("Score: " .. sc, "assets/fonts/arial.ttf", 24, true))
+    ECS.addComponent(scoreEntity, "Transform", Transform(50, 50, 0, 0, 0, 0, 5, 5, 1))
+    ECS.addComponent(scoreEntity, "Text", Text("Score: " .. sc, "assets/fonts/NewakeFont-Demo.otf", 100, true))
     ECS.addComponent(scoreEntity, "Color", Color(1.0, 1.0, 1.0))
 end
 
@@ -277,6 +276,8 @@ function Spawns.createCoreEntities(level, backgroundTexture)
     -- Create Background
     local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
     Spawns.createBackground(bgTex)
+
+    Spawns.createScore(CurrentScore)
 
 end
 
