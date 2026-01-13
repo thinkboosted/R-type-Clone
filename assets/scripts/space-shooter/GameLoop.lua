@@ -1,5 +1,5 @@
 -- ========================================================
--- R-TYPE 3D - FINAL GAME LOOP
+-- R-TYPE 3D - FINAL GAME LOOP (With Vec3 & Sound)
 -- ========================================================
 
 local Game = {
@@ -15,29 +15,32 @@ local Game = {
     enemySpawnTimer = 0,
 
     playerRadius = 30,
-    enemyRadius = 20,
-    bulletRadius = 5,
+    enemyRadius = 25,
+    bulletRadius = 15,
 
     RAD_90 = -math.pi / 2,
     RAD_15 = math.pi / 12
 }
 
 function Game.init()
-    ECS.log("🚀 Lancement de R-Type 3D (Vec3 Edition)...")
+    ECS.log("🚀 Lancement de R-Type 3D (Sound Edition)...")
 
+    -- 1. Camera
     local cam = ECS.createEntity()
     ECS.addComponent(cam, "Transform", { x = 400, y = 300, z = 520 })
     ECS.addComponent(cam, "Camera", {})
 
+    -- 2. Player
     Game.playerID = ECS.createEntity()
     ECS.addComponent(Game.playerID, "Transform", {
         x = 100, y = 300, z = 0,
         rx = 0, ry = Game.RAD_90, rz = 0,
-        scale = 10.0
+        scale = 20.0
     })
     ECS.createMesh(Game.playerID, "assets/models/fighter.obj")
     if ECS.setTexture then ECS.setTexture(Game.playerID, "assets/textures/plane_texture.png") end
 
+    -- 3. HUD
     local txt = ECS.createEntity()
     ECS.addComponent(txt, "Transform", { x = 10, y = 10, scale = 1.0 })
     ECS.createText(txt, "Joueur: ZQSD | Tir: Espace", "assets/fonts/arial.ttf", 24, true)
@@ -58,6 +61,7 @@ function Game.update(dt)
 end
 
 function Game.handleCollisions()
+    -- Bullets vs Enemies
     for i = #Game.bullets, 1, -1 do
         local bID = Game.bullets[i]
         local bT = ECS.getComponent(bID, "Transform")
@@ -74,7 +78,9 @@ function Game.handleCollisions()
                     local dist = (bPos - ePos):length()
 
                     if dist < (Game.bulletRadius + Game.enemyRadius) then
-                        ECS.log("💥 BOOM! Ennemi détruit.")
+                        -- PLAY SOUND: Explosion
+                        ECS.playSound("effects/explosion.wav")
+
                         ECS.destroyEntity(bID)
                         ECS.destroyEntity(eID)
                         table.remove(Game.bullets, i)
@@ -86,6 +92,7 @@ function Game.handleCollisions()
         end
     end
 
+    -- Player vs Enemies
     local pT = ECS.getComponent(Game.playerID, "Transform")
     if pT then
         local pPos = Vec3.new(pT.x, pT.y, pT.z)
@@ -95,6 +102,9 @@ function Game.handleCollisions()
             if eT then
                 local ePos = Vec3.new(eT.x, eT.y, eT.z)
                 if (pPos - ePos):length() < (Game.playerRadius + Game.enemyRadius) then
+                    -- PLAY SOUND: Game Over
+                    ECS.playSound("effects/gameover.wav")
+
                     ECS.log("💀 GAME OVER!")
                     ECS.destroyEntity(Game.playerID)
                     Game.playerID = -1
@@ -128,20 +138,22 @@ function Game.handlePlayer(dt)
     if pos.y < 50 then pos.y = 50 end
     if pos.y > 550 then pos.y = 550 end
 
-    -- Apply back to component table
     t.x = pos.x
     t.y = pos.y
     t.z = pos.z
 
-    -- Roll effect
     if moveDir.y > 0 then t.rx = -Game.RAD_15
     elseif moveDir.y < 0 then t.rx = Game.RAD_15
     else t.rx = 0 end
 
     ECS.updateComponent(Game.playerID, "Transform", t)
 
+    -- Fire
     Game.timeSinceFire = Game.timeSinceFire + dt
     if ECS.isKeyPressed("Space") and Game.timeSinceFire > Game.fireRate then
+        -- PLAY SOUND: Laser
+        ECS.playSound("effects/laser.wav")
+
         Game.spawnBullet(t.x + 40, t.y)
         Game.timeSinceFire = 0
     end
@@ -187,14 +199,7 @@ function Game.updateBullets(dt)
         local t = ECS.getComponent(id, "Transform")
 
         if t then
-            local pos = Vec3.new(t.x, t.y, t.z)
-            local dir = Vec3.new(1, 0, 0)
-            pos = pos + (dir * Game.bulletSpeed * dt)
-
-            t.x = pos.x
-            t.y = pos.y
-            t.z = pos.z
-
+            t.x = t.x + (Game.bulletSpeed * dt)
             if t.x > 850 then
                 ECS.destroyEntity(id)
                 table.remove(Game.bullets, i)
