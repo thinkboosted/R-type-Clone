@@ -189,7 +189,15 @@ function NetworkSystem.init()
                 end
                 NetworkSystem.pendingClients = {}
                 ECS.isGameRunning = true
-                ECS.broadcastNetworkMessage("LEVEL_CHANGE", "1")
+                -- Read current level from file
+                local file = io.open("current_level.txt", "r")
+                local level = 1
+                if file then
+                    local content = file:read("*all")
+                    level = tonumber(content) or 1
+                    file:close()
+                end
+                ECS.broadcastNetworkMessage("LEVEL_CHANGE", tostring(level))
             end
         end)
 
