@@ -67,6 +67,17 @@ void SFMLWindowManager::loop() {
                     sendMessage("ExitApplication", "");
                     return;
                 }
+                auto it = keyMappings.find(keyPressed->code);
+                if (it != keyMappings.end()) {
+                    sendMessage("InputKey", std::string(it->second) + ":1");
+                }
+            }
+
+            if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
+                auto it = keyMappings.find(keyReleased->code);
+                if (it != keyMappings.end()) {
+                    sendMessage("InputKey", std::string(it->second) + ":0");
+                }
             }
 
             if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
@@ -84,12 +95,6 @@ void SFMLWindowManager::loop() {
                 ss << mouseMoved->position.x << "," << mouseMoved->position.y;
                 sendMessage("MouseMoved", ss.str());
             }
-            if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
-                auto it = keyMappings.find(keyReleased->code);
-                if (it != keyMappings.end()) {
-                    sendMessage("KeyReleased", it->second);
-                }
-            }
             if (const auto* resized = event->getIf<sf::Event::Resized>()) {
                 std::stringstream ss;
                 ss << resized->size.x << "," << resized->size.y;
@@ -103,16 +108,7 @@ void SFMLWindowManager::loop() {
             }
         }
     }
-
-    for (int k = 0; k < sf::Keyboard::KeyCount; ++k) {
-        auto key = static_cast<sf::Keyboard::Key>(k);
-        if (sf::Keyboard::isKeyPressed(key)) {
-            auto it = keyMappings.find(key);
-            if (it != keyMappings.end()) {
-                sendMessage("KeyPressed", it->second);
-            }
-        }
-    }
+    // External polling loop removed
 }
 
 void SFMLWindowManager::render(double /*alpha*/) {

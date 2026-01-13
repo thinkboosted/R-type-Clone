@@ -216,6 +216,20 @@ void LuaECSManager::init() {
   subscribe("MouseReleased", [=](const std::string &msg) { forwardEvent("onMouseReleased", msg); });
   subscribe("MouseMoved", [=](const std::string &msg) { forwardEvent("onMouseMoved", msg); });
 
+  // Input Polling Decoupling - Cache key states
+  subscribe("InputKey", [this, queueEvent](const std::string &msg) {
+      queueEvent([this, msg]() {
+          size_t split = msg.find(':');
+          if (split != std::string::npos) {
+              std::string key = msg.substr(0, split);
+              std::string state = msg.substr(split + 1);
+              // Store as uppercase for consistency
+              std::transform(key.begin(), key.end(), key.begin(), ::toupper);
+              _keyboardState[key] = (state == "1");
+          }
+      });
+  });
+
   subscribe("PhysicEvent", [this, queueEvent](const std::string &msg) {
     queueEvent([this, msg]() {
         std::stringstream ss(msg);
@@ -394,6 +408,10 @@ void LuaECSManager::setupLuaBindings() {
   ecs.set_function("isLocalMode", [this]() { return _capabilities["isLocalMode"]; });
   ecs.set_function("isClientMode", [this]() { return _capabilities["isClientMode"]; });
 
+  ecs.set_function("log", [](const std::string &message) {
+      Logger::Info("[Lua] " + message);
+  });
+
   ecs.set_function("createEntity", [this]() -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
@@ -441,6 +459,26 @@ void LuaECSManager::setupLuaBindings() {
         sendMessage("RenderEntityCommand", "SetText:" + id + ":" + text);
   });
 
+  ecs.set_function("setTexture", [this](const std::string &id, const std::string &path) {
+        sendMessage("RenderEntityCommand", "SetTexture:" + id + ":" + path);
+  });
+
+  ecs.set_function("createMesh", [this](const std::string &id, const std::string &path) {
+      sendMessage("RenderEntityCommand", "CreateEntity:MESH:" + path + ":" + id + ":0:0:0:0");
+  });
+
+  ecs.set_function("isKeyPressed", [this](const std::string &keyName) -> bool {
+      // Convert typical Lua keys (Z, Space) to Uppercase to match KeysMap (Z, SPACE)
+      std::string upperKey = keyName;
+      std::transform(upperKey.begin(), upperKey.end(), upperKey.begin(), ::toupper);
+      
+      auto it = _keyboardState.find(upperKey);
+      if (it != _keyboardState.end()) {
+          return it->second;
+      }
+      return false;
+  });
+
   ecs.set_function("addComponent", [this](const std::string &entityId,
                                           const std::string &componentName,
                                           sol::table componentData) {
@@ -477,6 +515,38 @@ void LuaECSManager::setupLuaBindings() {
     } catch (const std::exception& e) {
         Logger::Error(std::string("[LuaECSManager] CRASH AVERTED in addComponent (") + componentName + "): " + e.what());
     }
+  });
+
+  ecs.set_function("updateComponent", [this](const std::string &id, const std::string &component, sol::table data) {
+      if (component == "Transform") {
+          // Update internal storage if needed (optional if pool is reference-based, but safe to do)
+          if (_pools.find(component) != _pools.end()) {
+              ComponentPool &pool = _pools[component];
+              if (pool.sparse.count(id)) {
+                  pool.dense[pool.sparse[id]] = data;
+              }
+          }
+
+          float x = data.get_or("x", 0.0f);
+          float y = data.get_or("y", 0.0f);
+          float z = data.get_or("z", 0.0f);
+          float rx = data.get_or("rx", 0.0f);
+          float ry = data.get_or("ry", 0.0f);
+          float rz = data.get_or("rz", 0.0f);
+          float s = data.get_or("scale", 1.0f);
+
+          std::stringstream posSs;
+          posSs << "SetPosition:" << id << "," << x << "," << y << "," << z;
+          sendMessage("RenderEntityCommand", posSs.str());
+
+          std::stringstream rotSs;
+          rotSs << "SetRotation:" << id << "," << rx << "," << ry << "," << rz;
+          sendMessage("RenderEntityCommand", rotSs.str());
+
+          std::stringstream scaleSs;
+          scaleSs << "SetScale:" << id << "," << s << "," << s << "," << s;
+          sendMessage("RenderEntityCommand", scaleSs.str());
+      }
   });
 
   ecs.set_function("syncToRenderer", [this]() {

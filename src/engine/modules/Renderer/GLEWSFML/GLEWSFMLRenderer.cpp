@@ -284,11 +284,32 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                             _renderObjects[realId] = obj;
                         }
                     }
+                    else if (type == "MESH")
+                    {
+                        // data format: MESH:path:id:0:0:0:0
+                        std::stringstream mss(id);
+                        std::string path, realId;
+                        if (std::getline(mss, path, ':') && std::getline(mss, realId, ':')) {
+                            RenderObject obj;
+                            obj.id = realId;
+                            obj.meshPath = path;
+                            obj.position = {0, 0, 0};
+                            obj.rotation = {0, 0, 0};
+                            obj.scale = {1, 1, 1};
+                            obj.color = {1.0f, 1.0f, 1.0f};
+                            _renderObjects[realId] = obj;
+
+                            if (_meshCache.find(obj.meshPath) == _meshCache.end())
+                            {
+                                loadMesh(obj.meshPath);
+                            }
+                        }
+                    }
                     else
                     {
                         RenderObject obj;
                         obj.id = id;
-                        if (type == "cube" || type == "MESH")
+                        if (type == "cube")
                             obj.meshPath = "assets/models/cube.obj";
                         else
                             obj.meshPath = type;
@@ -990,7 +1011,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         float aspect = (float)_resolution.x / (float)_resolution.y;
         float fov = 60.0f * (3.14159f / 180.0f);
         float zNear = 0.1f;
-        float zFar = 100.0f;
+        float zFar = 2000.0f; // Increased from 100.0f to see objects at z=0 from z=520
         float f = 1.0f / tan(fov / 2.0f);
 
         float m[16] = {0};
@@ -1010,6 +1031,14 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         {
             _cameraPos = _renderObjects[_activeCameraId].position;
             _cameraRot = _renderObjects[_activeCameraId].rotation;
+            
+            // DEBUG: Log camera pos occasionally
+            static auto lastCamLog = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastCamLog).count() >= 2) {
+                std::cout << "[GLEW] Camera Pos: " << _cameraPos.x << ", " << _cameraPos.y << ", " << _cameraPos.z 
+                          << " ActiveID: " << _activeCameraId << std::endl;
+                lastCamLog = now;
+            }
         }
 
         // Apply camera rotation (convert radians to degrees)

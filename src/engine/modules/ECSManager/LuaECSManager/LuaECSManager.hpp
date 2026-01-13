@@ -44,6 +44,7 @@ private:
   std::vector<std::string> _entities;
   std::unordered_map<std::string, ComponentPool> _pools;
   std::map<std::string, std::vector<sol::function>> _luaListeners;
+  std::unordered_map<std::string, bool> _keyboardState; // Input cache
   bool _isServer = false;
   sol::table _capabilities;
 
