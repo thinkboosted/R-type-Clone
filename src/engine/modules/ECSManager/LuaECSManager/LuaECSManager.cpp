@@ -533,12 +533,15 @@ void LuaECSManager::setupLuaBindings() {
   // Create a screen-space text element
   // Returns the entity ID
   ecs.set_function("createUIText", [this](const std::string& text, float x, float y, 
-                                           int fontSize, float r, float g, float b, int zOrder) -> std::string {
+                                           int fontSize, float r, float g, float b, int zOrder, sol::optional<std::string> fontPath) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
     
+    std::string actualFont = fontPath.value_or("assets/fonts/arial.ttf");
+    if (actualFont.empty()) actualFont = "assets/fonts/arial.ttf";
+    
     std::stringstream ss;
-    ss << "CreateText:" << id << ":assets/fonts/arial.ttf:" << fontSize << ":1:" << text;
+    ss << "CreateText:" << id << ":" << actualFont << ":" << fontSize << ":1:" << text;
     sendMessage("RenderEntityCommand", ss.str());
     
     // Set position

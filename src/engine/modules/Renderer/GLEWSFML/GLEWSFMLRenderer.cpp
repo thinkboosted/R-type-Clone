@@ -23,6 +23,9 @@
 #include <random>
 #include <cstdlib>
 #include <cerrno>
+#include <algorithm>
+
+constexpr float PI = 3.14159265f;
 
 namespace rtypeEngine
 {
@@ -448,7 +451,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         float maxRadius = std::min(pos[2], pos[3]) / 2.0f;
                         obj.cornerRadius = std::min(pos[4], maxRadius);
                         obj.color = {col[0], col[1], col[2]};
-                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
+                        obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
                         _renderObjects[id] = obj;
                     }
                 }
@@ -1494,7 +1498,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 glVertex2f(cx, cy);  // Center
                 for (int i = 0; i <= segments; i++)
                 {
-                    float angle = 2.0f * 3.14159265f * (float)i / (float)segments;
+                    float angle = 2.0f * PI * (float)i / (float)segments;
                     glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
                 }
                 glEnd();
@@ -1507,7 +1511,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glBegin(GL_LINE_LOOP);
                     for (int i = 0; i < segments; i++)
                     {
-                        float angle = 2.0f * 3.14159265f * (float)i / (float)segments;
+                        float angle = 2.0f * PI * (float)i / (float)segments;
                         glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
                     }
                     glEnd();
@@ -1534,25 +1538,25 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 // Bottom-left corner
                 for (int i = 0; i <= cornerSegments; i++)
                 {
-                    float angle = 3.14159265f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    float angle = PI + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + r + r * cos(angle), y + r + r * sin(angle));
                 }
                 // Bottom-right corner
                 for (int i = 0; i <= cornerSegments; i++)
                 {
-                    float angle = 3.14159265f * 1.5f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    float angle = PI * 1.5f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + w - r + r * cos(angle), y + r + r * sin(angle));
                 }
                 // Top-right corner
                 for (int i = 0; i <= cornerSegments; i++)
                 {
-                    float angle = 0.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    float angle = 0.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + w - r + r * cos(angle), y + h - r + r * sin(angle));
                 }
                 // Top-left corner
                 for (int i = 0; i <= cornerSegments; i++)
                 {
-                    float angle = 3.14159265f / 2.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                    float angle = PI / 2.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
                 }
                 // Close the shape
@@ -1568,22 +1572,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     // Same corners but as line loop
                     for (int i = 0; i <= cornerSegments; i++)
                     {
-                        float angle = 3.14159265f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        float angle = PI + (PI / 2.0f) * (float)i / (float)cornerSegments;
                         glVertex2f(x + r + r * cos(angle), y + r + r * sin(angle));
                     }
                     for (int i = 0; i <= cornerSegments; i++)
                     {
-                        float angle = 3.14159265f * 1.5f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        float angle = PI * 1.5f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                         glVertex2f(x + w - r + r * cos(angle), y + r + r * sin(angle));
                     }
                     for (int i = 0; i <= cornerSegments; i++)
                     {
-                        float angle = 0.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        float angle = 0.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                         glVertex2f(x + w - r + r * cos(angle), y + h - r + r * sin(angle));
                     }
                     for (int i = 0; i <= cornerSegments; i++)
                     {
-                        float angle = 3.14159265f / 2.0f + (3.14159265f / 2.0f) * (float)i / (float)cornerSegments;
+                        float angle = PI / 2.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                         glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
                     }
                     glEnd();

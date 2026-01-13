@@ -17,6 +17,8 @@ local selectedIndex = 1
 local menuState = "MAIN"    -- MAIN, SETTINGS, PAUSE
 local isPaused = false
 
+ECS.isPaused = false
+
 -- Settings state (must be defined before executeAction uses it)
 local settingsState = {
     isFullscreen = false,
@@ -368,6 +370,7 @@ function MenuSystem.executeAction(action)
         print("[MenuSystem] Returning to main menu...")
         ECS.isGameRunning = false
         isPaused = false
+        ECS.isPaused = false
         
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
@@ -472,10 +475,11 @@ end
 -- SHOW PAUSE MENU
 -- ============================================================================
 function MenuSystem.showPauseMenu()
-    if isPaused or not ECS.isGameRunning then return end
+    if isPaused then return end
     
     print("[MenuSystem] Showing pause menu")
     isPaused = true
+    ECS.isPaused = true -- Global pause flag for other systems
     isMenuRendered = true
     menuElements = {}
     menuButtons = {}
@@ -518,6 +522,7 @@ function MenuSystem.hidePauseMenu()
     
     print("[MenuSystem] Hiding pause menu")
     isPaused = false
+    ECS.isPaused = false -- Global pause flag
     MenuSystem.hideMenu()
     ECS.sendMessage("GAME_RESUMED", "")
 end

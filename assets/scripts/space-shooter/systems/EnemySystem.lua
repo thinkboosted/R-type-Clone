@@ -27,6 +27,8 @@ function EnemySystem.init()
 end
 
 function EnemySystem.update(dt)
+    if ECS.isPaused then return end
+
     -- Only run on authoritative instances (Server or Solo)
     if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end
