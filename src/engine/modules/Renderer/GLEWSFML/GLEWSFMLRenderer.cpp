@@ -491,7 +491,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                         obj.position = {pos[0], pos[1], 0};
                         obj.endPosition = {pos[2], pos[3], 0};
-                        obj.lineWidth = pos[4];
+                        obj.lineWidth = std::max(1.0f, std::min(pos[4], 50.0f));
                         obj.color = {col[0], col[1], col[2]};
                         float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
                         obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
@@ -555,7 +555,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     {
                         auto& obj = _renderObjects[id];
                         obj.outlined = (enabledStr == "1" || enabledStr == "true");
-                        obj.outlineWidth = safeParseFloat(widthStr, 2.0f);
+                        float rawWidth = safeParseFloat(widthStr, 2.0f);
+                        obj.outlineWidth = std::max(1.0f, std::min(rawWidth, 50.0f));
                         
                         std::stringstream css(colorStr);
                         std::string val;
