@@ -7,6 +7,7 @@
   "modules": [
     "../lib/SFMLWindowManager.so",
     "../lib/GLEWSFMLRenderer.so",
+    "../lib/SFMLSoundManager.so",
     "../lib/LuaECSManager.so"
   ],
   "module_order": [

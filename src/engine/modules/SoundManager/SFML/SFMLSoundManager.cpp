@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include "../../../core/Logger.hpp"
 
 namespace rtypeEngine {
 
@@ -15,6 +16,16 @@ SFMLSoundManager::SFMLSoundManager(const char* pubEndpoint, const char* subEndpo
     : ISoundManager(pubEndpoint, subEndpoint) {}
 
 void SFMLSoundManager::init() {
+    // Simple Fire & Forget binding
+    subscribe("PlaySound", [this](const std::string& message) {
+        // Message is just the path, e.g., "assets/sounds/shoot.wav"
+        // We generate a generic ID
+        std::string path = message;
+        if (!path.empty()) {
+            playSound("FX", path, 100.0f);
+        }
+    });
+
     subscribe("SoundPlay", [this](const std::string& message) {
         this->handleSoundPlay(message);
     });
@@ -47,7 +58,7 @@ void SFMLSoundManager::init() {
         this->stopAllMusic();
     });
 
-    std::cout << "[SFMLSoundManager] Initialized" << std::endl;
+    Logger::Info("[SFMLSoundManager] Initialized");
 }
 
 void SFMLSoundManager::loop() {
@@ -85,7 +96,7 @@ void SFMLSoundManager::cleanup() {
     _soundBuffers.clear();
     _activeSounds.clear();
     _activeMusic.clear();
-    std::cout << "[SFMLSoundManager] Cleaned up" << std::endl;
+    Logger::Info("[SFMLSoundManager] Cleaned up");
 }
 
 
@@ -143,15 +154,15 @@ void SFMLSoundManager::handleSoundSetVolume(const std::string& message) {
 
 void SFMLSoundManager::playSound(const std::string& soundId, const std::string& filePath, float volume) {
     std::string fullPath = std::string(ASSETS_PATH) + filePath;
-    std::cout << "[SFMLSoundManager] playSound called: id=" << soundId << " path=" << fullPath << " volume=" << volume << std::endl;
+    // Logger::Debug("[SFMLSoundManager] playSound: " + fullPath);
 
     if (_soundBuffers.find(filePath) == _soundBuffers.end()) {
         auto buffer = std::make_unique<sf::SoundBuffer>();
         if (!buffer->loadFromFile(fullPath)) {
-            std::cerr << "[SFMLSoundManager] Failed to load sound: " << fullPath << std::endl;
+            Logger::Error("[SFMLSoundManager] Failed to load sound: " + fullPath);
             return;
         }
-        std::cout << "[SFMLSoundManager] Sound buffer loaded successfully: " << fullPath << std::endl;
+        Logger::Info("[SFMLSoundManager] Sound buffer loaded: " + fullPath);
         _soundBuffers[filePath] = BufferInfo{std::move(buffer), 0.0f};
     }
 
@@ -160,8 +171,7 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
     auto sound = std::make_unique<sf::Sound>(*_soundBuffers[filePath].buffer);
     sound->setVolume(volume);
     sound->play();
-    std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
-
+    
     static unsigned long long counter = 0;
     std::string uniqueKey = soundId + ":" + std::to_string(counter++);
     _activeSounds[uniqueKey] = std::move(sound);

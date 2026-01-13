@@ -479,6 +479,11 @@ void LuaECSManager::setupLuaBindings() {
         sendMessage("RenderEntityCommand", "SetTexture:" + id + ":" + path);
   });
 
+  ecs.set_function("playSound", [this](const std::string &path) {
+      // Fire & Forget sound
+      sendMessage("PlaySound", path);
+  });
+
   ecs.set_function("createMesh", [this](const std::string &id, const std::string &path) {
       sendMessage("RenderEntityCommand", "CreateEntity:MESH:" + path + ":" + id + ":0:0:0:0");
   });
