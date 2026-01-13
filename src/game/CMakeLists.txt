@@ -195,13 +195,18 @@ foreach(EXECUTABLE_TARGET r-type_client r-type_server)
         )
     endif()
 
-    add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/assets
-            $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>/assets
-        COMMENT "Copying assets to executable directory for ${EXECUTABLE_TARGET}"
-    )
 endforeach()
+
+# Create a shared target for copying assets to avoid race conditions during parallel builds
+add_custom_target(CopyAssets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        ${CMAKE_BINARY_DIR}/assets
+    COMMENT "Copying assets to build directory"
+    VERBATIM
+)
+add_dependencies(r-type_client CopyAssets)
+add_dependencies(r-type_server CopyAssets)
 
 # Install rules
 install(TARGETS r-type_client r-type_server
