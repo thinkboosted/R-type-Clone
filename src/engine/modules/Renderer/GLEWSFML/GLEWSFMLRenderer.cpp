@@ -73,8 +73,18 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::init()
     {
+        // DEBUG: Listen to EVERYTHING to check if messages arrive
+        subscribe("", [this](const std::string &msg) {
+            // Filter out noisy messages
+            if (msg.find("FrameMetrics") == std::string::npos) {
+                std::cout << "[GLEW-ALL] " << msg << std::endl;
+            }
+        });
+
         subscribe("RenderEntityCommand", [this](const std::string &msg)
                   { this->onRenderEntityCommand(msg); });
+        subscribe("CreateText", [this](const std::string &msg)
+                  { this->loadText(msg); });
         subscribe("WindowResized", [this](const std::string &msg)
                   { this->handleWindowResized(msg); });
 
@@ -114,11 +124,57 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glXMakeCurrent((Display *)_hdc, (Window)_hwnd, (GLXContext)_hglrc);
 #endif
         render();
+        // Optimization: Do NOT release context here. Keep it active for the thread.
+        // Releasing it causes unnecessary switches and potential conflicts if other functions try to restore it.
+        /*
 #ifdef _WIN32
         wglMakeCurrent(NULL, NULL); // Release context
 #else
         glXMakeCurrent(NULL, None, NULL); // Release context
 #endif
+        */
+    }
+
+    void GLEWSFMLRenderer::loadText(const std::string &message)
+    {
+        std::cout << "[GLEWSFMLRenderer] loadText: " << message << std::endl;
+        std::stringstream ss(message);
+        std::string id, text, fontPath, sizeStr, screenStr;
+
+        if (std::getline(ss, id, ';') &&
+            std::getline(ss, text, ';') &&
+            std::getline(ss, fontPath, ';') &&
+            std::getline(ss, sizeStr, ';') &&
+            std::getline(ss, screenStr)) // Last one doesn't need delimiter if it's the end
+        {
+            try {
+                RenderObject obj;
+                obj.id = id;
+                obj.isText = true;
+                obj.isSprite = true;
+                obj.text = text;
+                obj.fontPath = fontPath;
+                obj.fontSize = safeParseInt(sizeStr, 24);
+                obj.isScreenSpace = (screenStr == "1");
+                obj.position = {0, 0, 0};
+                obj.rotation = {0, 0, 0};
+                obj.scale = {1, 1, 1};
+                obj.color = {1.0f, 1.0f, 1.0f}; // Default white
+
+                obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
+
+                if (obj.textureID != 0) {
+                    _renderObjects[id] = obj;
+                    std::cout << "[GLEWSFMLRenderer] Created Text Object ID: " << id << " TexID: " << obj.textureID << std::endl;
+                } else {
+                    std::cerr << "[GLEWSFMLRenderer] Failed to create text texture for ID: " << id << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[GLEWSFMLRenderer] Error in loadText: " << e.what() << std::endl;
+            }
+        } else {
+            std::cerr << "[GLEWSFMLRenderer] Invalid CreateText message format: " << message << std::endl;
+        }
     }
 
     void GLEWSFMLRenderer::handleWindowResized(const std::string &message)
@@ -148,6 +204,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::onRenderEntityCommand(const std::string &message)
     {
+        // std::cout << "[GLEW] CMD RAW: " << message << std::endl; // Too verbose for position updates
         std::stringstream ss(message);
         std::string segment;
         while (std::getline(ss, segment, ';'))
@@ -161,6 +218,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
             std::string command = segment.substr(0, colonPos);
             std::string data = segment.substr(colonPos + 1);
+
+            if (command == "CreateText") {
+                 std::cout << "[GLEW] Received CreateText: " << data << std::endl;
+            }
 
         try {
         if (command == "CreateEntity") {
@@ -647,79 +708,104 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     GLuint GLEWSFMLRenderer::createTextTexture(const std::string &text, const std::string &fontPath, unsigned int fontSize, Vector3f color)
     {
-// Save current OpenGL context
+        // 1. Release current OpenGL context to avoid conflicts with SFML
 #ifdef _WIN32
-        HDC oldDC = wglGetCurrentDC();
-        HGLRC oldContext = wglGetCurrentContext();
+        wglMakeCurrent(NULL, NULL);
+#else
+        if (_hdc) {
+            glXMakeCurrent((Display*)_hdc, None, NULL);
+        }
 #endif
 
         sf::Image textImage;
         bool success = false;
 
-        // Scope for SFML rendering to ensure resources are cleaned up before context restore
+        // Scope for SFML rendering
         {
+            // ... (SFML logic unchanged) ...
             if (_fontCache.find(fontPath) == _fontCache.end())
             {
                 sf::Font font;
                 if (!font.openFromFile(fontPath))
                 {
-                    std::cerr << "Failed to load font: " << fontPath << std::endl;
-// Restore context before returning
-#ifdef _WIN32
-                    if (oldDC && oldContext)
-                        wglMakeCurrent(oldDC, oldContext);
-#endif
-                    return 0;
+                    std::cerr << "[GLEWSFMLRenderer] FATAL: Failed to load font: " << fontPath << std::endl;
+                    // Will restore context at end of function
                 }
-                _fontCache[fontPath] = font;
+                else
+                {
+                    // std::cout << "[GLEWSFMLRenderer] Font loaded: " << fontPath << std::endl;
+                    _fontCache[fontPath] = font;
+                }
             }
 
-            sf::Text sfText(_fontCache[fontPath]);
-            sfText.setString(text);
-            sfText.setCharacterSize(fontSize);
-            sfText.setFillColor(sf::Color(color.x * 255, color.y * 255, color.z * 255));
+            // Only proceed if font loaded
+            if (_fontCache.find(fontPath) != _fontCache.end()) {
+                sf::Text sfText(_fontCache[fontPath]);
+                sfText.setString(text);
+                sfText.setCharacterSize(fontSize);
+                sfText.setFillColor(sf::Color(color.x * 255, color.y * 255, color.z * 255));
 
-            sf::FloatRect bounds = sfText.getLocalBounds();
-            unsigned int width = (unsigned int)std::ceil(bounds.size.x + bounds.position.x);
-            unsigned int height = (unsigned int)std::ceil(bounds.size.y + bounds.position.y);
+                sf::FloatRect bounds = sfText.getLocalBounds();
+                unsigned int width = (unsigned int)std::ceil(bounds.size.x + bounds.position.x);
+                unsigned int height = (unsigned int)std::ceil(bounds.size.y + bounds.position.y);
 
-            if (width == 0)
-                width = 1;
-            if (height == 0)
-                height = 1;
+                if (width == 0) width = 1;
+                if (height == 0) height = 1;
 
-            sf::RenderTexture renderTexture;
-            if (renderTexture.resize({width, height}))
-            {
-                renderTexture.clear(sf::Color::Transparent);
-                renderTexture.draw(sfText);
-                renderTexture.display();
-                textImage = renderTexture.getTexture().copyToImage();
-                success = true;
+                sf::RenderTexture renderTexture;
+                if (renderTexture.resize({width, height}))
+                {
+                    renderTexture.clear(sf::Color::Transparent);
+                    renderTexture.draw(sfText);
+                    renderTexture.display();
+                    textImage = renderTexture.getTexture().copyToImage();
+                    success = true;
+                }
             }
         }
 
-// Activate our renderer context to ensure the texture is created in the correct context
+        // 2. Do NOT restore context here.
+        // We leave it released (None). The main loop() will re-acquire it at the start of the next frame.
+        // This avoids switching contexts back and forth multiple times or conflicting with SFML's cleanup.
+
+        // Ensure we explicitly release if SFML left something active (though SFML usually cleans up)
 #ifdef _WIN32
-        if (_hglrc && _hdc)
-        {
-            wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+        wglMakeCurrent(NULL, NULL);
+#else
+        // Note: We cannot release SFML's context because we don't have its Display*.
+        // But we can ensure *our* Display has no context active (it already shouldn't).
+        // Best bet: Do nothing and let loop() call MakeCurrent.
+#endif
+
+        if (!success) return 0;
+
+        // Note: Generating textures (glGenTextures) requires an ACTIVE context!
+        // We just released it or let SFML release it.
+        // Wait, if context is not active, glGenTextures will FAIL or generate ID 0 or crash.
+
+        // CRITICAL FIX: We MUST have OUR context active to upload the texture data into OUR OpenGL objects.
+        // SFML created the image in CPU memory (textImage). We need to upload it to GPU in OUR context.
+
+        // So we MUST restore context. The previous crash "BadAccess" implies we failed to restore it.
+        // Let's try to release SFML's hold first? No easy way.
+
+        // Let's try to re-acquire properly.
+#ifdef _WIN32
+        if (_hglrc && _hdc) wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+#else
+        if (_hdc && _hglrc && _hwnd) {
+            // Try to release current (SFML's?) just in case implicit switch fails?
+            // glXMakeCurrent((Display*)_hdc, None, NULL); // No, this only affects _hdc.
+
+            // Force activate ours
+            if (!glXMakeCurrent((Display*)_hdc, (Window)_hwnd, (GLXContext)_hglrc)) {
+                std::cerr << "[GLEWSFMLRenderer] FATAL: Failed to restore GLX context in createTextTexture" << std::endl;
+                return 0;
+            }
         }
 #endif
 
-        if (!success)
-        {
-// Restore original context if we failed
-#ifdef _WIN32
-            if (oldDC && oldContext)
-                wglMakeCurrent(oldDC, oldContext);
-            else
-                wglMakeCurrent(NULL, NULL);
-#endif
-            return 0;
-        }
-
-        // Create texture in the main context
+        // Create texture in the main context (NOW ACTIVE)
         GLuint textureID;
         glGenTextures(1, &textureID);
         glBindTexture(GL_TEXTURE_2D, textureID);
@@ -730,18 +816,15 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-// Restore original context
+        // NOW release it to be clean for loop()
+        // CHANGE: Keep it active!
+/*
 #ifdef _WIN32
-        if (oldDC && oldContext)
-        {
-            wglMakeCurrent(oldDC, oldContext);
-        }
-        else
-        {
-            wglMakeCurrent(NULL, NULL);
-        }
+        wglMakeCurrent(NULL, NULL);
+#else
+        if (_hdc) glXMakeCurrent((Display*)_hdc, None, NULL);
 #endif
-
+*/
         return textureID;
     }
     void GLEWSFMLRenderer::cleanup()
@@ -761,7 +844,18 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         closeSocket(_publisher);
         closeSocket(_subscriber);
 
+#ifdef _WIN32
+        wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
+#else
+        if (_hdc && _hglrc) glXMakeCurrent((Display*)_hdc, (Window)_hwnd, (GLXContext)_hglrc);
+#endif
         destroyFramebuffer();
+#ifdef _WIN32
+        wglMakeCurrent(NULL, NULL);
+#else
+        if (_hdc) glXMakeCurrent((Display*)_hdc, None, NULL);
+#endif
+
 #ifdef _WIN32
         if (_hglrc)
         {
@@ -861,6 +955,15 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         if (!_glewInitialized)
             return;
 
+        // 1. Periodic Log (Every 1 second)
+        static auto lastLog = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastLog).count() >= 1) {
+            std::cout << "[GLEWRenderer] Loop active. Objects: " << _renderObjects.size()
+                      << " Particles: " << _particleGenerators.size() << std::endl;
+            lastLog = now;
+        }
+
         if (_pendingResize)
         {
             _resolution = _newResolution;
@@ -870,7 +973,6 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             _pendingResize = false;
         }
 
-        auto now = std::chrono::steady_clock::now();
         float dt = std::chrono::duration<float>(now - _lastFrameTime).count();
         _lastFrameTime = now;
 

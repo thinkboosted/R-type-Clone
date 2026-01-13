@@ -330,7 +330,7 @@ void LuaECSManager::setupLuaBindings() {
 
   _capabilities = _lua.create_named_table("capabilities");
   ecs["capabilities"] = _capabilities;
-  
+
   _capabilities["hasAuthority"] = false;
   _capabilities["hasRendering"] = false;
   _capabilities["hasLocalInput"] = false;
@@ -418,9 +418,9 @@ void LuaECSManager::setupLuaBindings() {
                                         const std::string &fontPath,
                                         int fontSize, bool isScreenSpace) {
     std::stringstream ss;
-    ss << "CreateText:" << id << ":" << fontPath << ":" << fontSize << ":"
-       << (isScreenSpace ? "1" : "0") << ":" << text;
-    sendMessage("RenderEntityCommand", ss.str());
+    ss << id << ";" << text << ";" << fontPath << ";" << fontSize << ";" << (isScreenSpace ? "1" : "0");
+    std::cout << "[LuaECSManager] Sending CreateText: " << ss.str() << std::endl;
+    sendMessage("CreateText", ss.str());
   });
 
   ecs.set_function("setText", [this](const std::string &id, const std::string &text) {
@@ -443,9 +443,63 @@ void LuaECSManager::setupLuaBindings() {
           pool.entities.push_back(entityId);
           pool.sparse[entityId] = pool.dense.size() - 1;
         }
+
+        // Automatic Renderer Sync: Create Sprite
+        if (componentName == "Sprite") {
+            std::string texturePath = componentData.get_or<std::string>("texture", "");
+            if (!texturePath.empty()) {
+                // Command: CreateEntity:Sprite:texturePath:entityId
+                std::stringstream ss;
+                ss << "CreateEntity:Sprite:" << texturePath << ":" << entityId;
+                sendMessage("RenderEntityCommand", ss.str());
+            }
+        }
+        // Automatic Renderer Sync: Camera
+        else if (componentName == "Camera") {
+             sendMessage("RenderEntityCommand", "CreateEntity:Camera:" + entityId);
+             sendMessage("RenderEntityCommand", "SetActiveCamera:" + entityId);
+        }
+
     } catch (const std::exception& e) {
         std::cerr << "[LuaECSManager] CRASH AVERTED in addComponent (" << componentName << "): " << e.what() << std::endl;
     }
+  });
+
+  ecs.set_function("syncToRenderer", [this]() {
+      // 1. Sync Transforms
+      auto transformPoolIt = _pools.find("Transform");
+      if (transformPoolIt != _pools.end()) {
+          ComponentPool& pool = transformPoolIt->second;
+          for (size_t i = 0; i < pool.dense.size(); ++i) {
+              std::string id = pool.entities[i];
+              sol::table t = pool.dense[i];
+
+              float x = t.get_or("x", 0.0f);
+              float y = t.get_or("y", 0.0f);
+              float z = t.get_or("z", 0.0f);
+              float rx = t.get_or("rx", 0.0f);
+              float ry = t.get_or("ry", 0.0f);
+              float rz = t.get_or("rz", 0.0f);
+              float sx = t.get_or("scale", 1.0f); // Simple uniform scale support
+              float sy = sx;
+              float sz = sx;
+
+              // Send Position: SetPosition:id,x,y,z
+              std::stringstream posSs;
+              posSs << "SetPosition:" << id << "," << x << "," << y << "," << z;
+              sendMessage("RenderEntityCommand", posSs.str());
+
+              // Send Rotation: SetRotation:id,x,y,z
+              // std::stringstream rotSs;
+              // rotSs << "SetRotation:" << id << "," << rx << "," << ry << "," << rz;
+              // sendMessage("RenderEntityCommand", rotSs.str());
+
+              // Send Scale: SetScale:id,x,y,z
+              std::stringstream scaleSs;
+              scaleSs << "SetScale:" << id << "," << sx << "," << sy << "," << sz;
+              sendMessage("RenderEntityCommand", scaleSs.str());
+          }
+      }
   });
 
   ecs.set_function("removeComponent", [this](const std::string &id,
@@ -740,33 +794,12 @@ void LuaECSManager::fixedUpdate(double dt) {
 // ═══════════════════════════════════════════════════════════════
 // Will be removed once all code paths use hard-wired calls
 void LuaECSManager::loop() {
-  auto currentTime = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> frameTime = currentTime - _lastFrameTime;
-  _lastFrameTime = currentTime;
+    // CRITICAL: Do NOT run update loop here.
+    // Logic is now driven by GameEngine::executeFixedUpdate() in the main thread.
+    // This thread is only responsible for processing ZMQ messages (handled in AModule::start loop).
 
-  double deltaTime = frameTime.count();
-  if (deltaTime > MAX_FRAME_TIME) {
-    deltaTime = MAX_FRAME_TIME;
-  }
-
-  _accumulator += deltaTime;
-
-  while (_accumulator >= FIXED_DT) {
-    for (auto &system : _systems) {
-      if (system["update"].valid()) {
-        try {
-          system["update"](FIXED_DT);
-        } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
-        }
-      }
-    }
-
-    _accumulator -= FIXED_DT;
-  }
-
-  auto sleepTime = std::chrono::milliseconds(10);
-  std::this_thread::sleep_for(sleepTime);
+    // Just sleep to avoid busy waiting in the thread loop
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void LuaECSManager::cleanup() {

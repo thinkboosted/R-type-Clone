@@ -1,4 +1,3 @@
-
 #include "AApplication.hpp"
 #include <chrono>
 #include <cstdlib>
@@ -46,12 +45,6 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
     // ═══════════════════════════════════════════════════════════════════════════
     // DETECT LOCAL MODE (inproc:// - In-Process, No Network)
     // ═══════════════════════════════════════════════════════════════════════════
-    // Local mode is triggered by:
-    // 1. Explicit "inproc://" in baseEndpoint
-    // 2. Empty baseEndpoint (defaults to local)
-    // 3. baseEndpoint == "local"
-    // ═══════════════════════════════════════════════════════════════════════════
-
     if (baseEndpoint.empty() ||
         baseEndpoint == "local" ||
         baseEndpoint.find("inproc://") == 0) {
@@ -65,9 +58,6 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
     }
     // Network mode (tcp:// or ipc://)
     else if (baseEndpoint.find(":*") != std::string::npos) {
-        // Wildcard mode (likely client with ephemeral ports)
-        // We can't calculate port+1, so we just use wildcard for both.
-        // ZeroMQ will assign two different random ports.
         _pubBrokerEndpoint = baseEndpoint;
         _subBrokerEndpoint = baseEndpoint; // Will bind to a new random port
     } else {
@@ -78,7 +68,6 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
             try {
                 port = std::stoi(baseEndpoint.substr(colonPos + 1));
             } catch (const std::exception& e) {
-                // If it's not a number (and not * which we caught above), log error
                 std::cerr << "Invalid port in baseEndpoint: " << e.what() << std::endl;
                 throw;
             }
@@ -101,53 +90,31 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // LOCAL MODE BROKER (Simplified - No Proxy Thread Needed)
+    // BROKER SETUP (Local or Server) - Enables Forwarding
     // ═══════════════════════════════════════════════════════════════════════════
-    if (_isLocalMode) {
+    if (_isLocalMode || _isServerMode) {
         try {
-            _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
-            _subscriber = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::sub);
-
-            // In local mode, we directly bind/connect without XPUB/XSUB proxy
-            // All modules share the same zmq::context_t (critical for inproc://)
-            _publisher->bind(_pubBrokerEndpoint);
-            _subscriber->bind(_subBrokerEndpoint);
-            _subscriber->set(zmq::sockopt::subscribe, "");
-
-            _isBrokerActive = true;
-
-            if (debugEnabled()) {
-                std::cout << "[App] Local broker started (no network):" << std::endl;
-                std::cout << "  - Pub: " << _pubBrokerEndpoint << std::endl;
-                std::cout << "  - Sub: " << _subBrokerEndpoint << std::endl;
-            }
-        } catch (const zmq::error_t& e) {
-            std::cerr << "Failed to setup local message broker: " << e.what() << std::endl;
-            throw;
-        }
-    }
-    // ═══════════════════════════════════════════════════════════════════════════
-    // SERVER MODE BROKER (Network - Requires Proxy Thread)
-    // ═══════════════════════════════════════════════════════════════════════════
-    else if (_isServerMode) {
-        try {
+            // Use XPUB/XSUB for the broker (allows forwarding)
             _xpubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xpub);
             _xsubSocket = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::xsub);
             _publisher = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::pub);
             _subscriber = std::make_unique<zmq::socket_t>(_zmqContext, zmq::socket_type::sub);
 
-            _xpubSocket->bind(_pubBrokerEndpoint);
-            // If we bound to a wildcard port, update the endpoint with the actual assigned port
-            if (_pubBrokerEndpoint.find(":*") != std::string::npos) {
-                _pubBrokerEndpoint = _xpubSocket->get(zmq::sockopt::last_endpoint);
+            // Bind the Broker sockets
+            _xpubSocket->bind(_pubBrokerEndpoint); // Modules SUBSCRIBE here
+            _xsubSocket->bind(_subBrokerEndpoint); // Modules PUBLISH here
+
+            // Update endpoints if wildcard was used (Server mode)
+            if (!_isLocalMode) {
+                if (_pubBrokerEndpoint.find(":*") != std::string::npos) {
+                    _pubBrokerEndpoint = _xpubSocket->get(zmq::sockopt::last_endpoint);
+                }
+                if (_subBrokerEndpoint.find(":*") != std::string::npos) {
+                    _subBrokerEndpoint = _xsubSocket->get(zmq::sockopt::last_endpoint);
+                }
             }
 
-            _xsubSocket->bind(_subBrokerEndpoint);
-            if (_subBrokerEndpoint.find(":*") != std::string::npos) {
-                _subBrokerEndpoint = _xsubSocket->get(zmq::sockopt::last_endpoint);
-            }
-
-            // AApplication's own publisher/subscriber connect to its internal broker
+            // Connect App's sockets to the Broker
             _publisher->connect(_subBrokerEndpoint);
             _subscriber->connect(_pubBrokerEndpoint);
             _subscriber->set(zmq::sockopt::subscribe, "");
@@ -155,8 +122,8 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
             _isBrokerActive = true;
 
             if (debugEnabled()) {
-              std::cout << "[App] Broker started (server mode) pub=" << _pubBrokerEndpoint
-                    << " sub=" << _subBrokerEndpoint << std::endl;
+                std::cout << "[App] Broker started (Proxy Mode) pub=" << _pubBrokerEndpoint
+                          << " sub=" << _subBrokerEndpoint << std::endl;
             }
 
             _proxyThread = std::thread([this]() {
@@ -169,13 +136,12 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
                 }
             });
         } catch (const zmq::error_t& e) {
-            std::cerr << "Failed to setup server message broker: " << e.what()
-                      << " (Bind endpoints: " << _pubBrokerEndpoint << ", " << _subBrokerEndpoint << ")" << std::endl;
+            std::cerr << "Failed to setup message broker: " << e.what() << std::endl;
             throw;
         }
     }
     // ═══════════════════════════════════════════════════════════════════════════
-    // CLIENT MODE BROKER (Connect to Remote Server)
+    // CLIENT MODE (No Broker, just connect)
     // ═══════════════════════════════════════════════════════════════════════════
     else {
         try {
@@ -291,7 +257,14 @@ void AApplication::sendMessage(const std::string& topic, const std::string& mess
   _publisher->send(zmqMessage, zmq::send_flags::none);
 
   if (debugEnabled()) {
-    std::cout << "[Bus->] " << topic << " | " << truncatePayload(message) << std::endl;
+    bool isBinary = (topic == "ImageRendered" || message.size() > 200);
+    std::cout << "[Bus->] " << topic << " | ";
+    if (isBinary) {
+        std::cout << "[Binary Data / Payload too large: " << message.size() << " bytes]";
+    } else {
+        std::cout << message;
+    }
+    std::cout << std::endl;
   }
 }
 
@@ -375,7 +348,14 @@ void AApplication::processMessages() {
         std::string payload = (spacePos != std::string::npos && spacePos + 1 < fullMessage.size())
                                   ? fullMessage.substr(spacePos + 1)
                                   : "";
-        std::cout << "[Bus<-] " << messageTopic << " | " << truncatePayload(payload) << std::endl;
+        bool isBinary = (messageTopic == "ImageRendered" || payload.size() > 200);
+        std::cout << "[Bus<-] " << messageTopic << " | ";
+        if (isBinary) {
+            std::cout << "[Binary Data / Payload too large: " << payload.size() << " bytes]";
+        } else {
+            std::cout << payload;
+        }
+        std::cout << std::endl;
     }
 
     for (const auto& subscription : _subscriptions) {

@@ -20,6 +20,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void cleanup() override;
 
     void onRenderEntityCommand(const std::string& message);
+    void loadText(const std::string& message);
     void handleWindowResized(const std::string& message);
 
     void clearBuffer() override;

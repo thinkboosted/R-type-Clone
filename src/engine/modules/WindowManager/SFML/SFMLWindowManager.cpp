@@ -40,40 +40,9 @@ void SFMLWindowManager::init() {
 // HARD-WIRED FIXED UPDATE (Called by GameEngine at 60Hz)
 // ═══════════════════════════════════════════════════════════════
 void SFMLWindowManager::fixedUpdate(double /*dt*/) {
-    if (!_window || !_window->isOpen()) {
-        return;
-    }
-
-    // Poll all events from SFML
-    while (auto event = _window->pollEvent()) {
-        if (event->is<sf::Event::Closed>()) {
-            std::cout << "[SFMLWindowManager] Window closed by user" << std::endl;
-            _window->close();
-            sendMessage("ExitApplication", "");
-            return;
-        }
-
-        if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
-            if (keyPressed->code == sf::Keyboard::Key::Escape) {
-                std::cout << "[SFMLWindowManager] Escape pressed - closing window" << std::endl;
-                _window->close();
-                sendMessage("ExitApplication", "");
-                return;
-            }
-        }
-
-        if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
-            std::stringstream ss;
-            ss << static_cast<int>(mousePressed->button) << ":" << mousePressed->position.x << "," << mousePressed->position.y;
-            sendMessage("MousePressed", ss.str());
-        }
-
-        if (const auto* mouseMoved = event->getIf<sf::Event::MouseMoved>()) {
-            std::stringstream ss;
-            ss << mouseMoved->position.x << "," << mouseMoved->position.y;
-            sendMessage("MouseMoved", ss.str());
-        }
-    }
+    // CRITICAL: Do NOT poll events here.
+    // The window is owned by the Module Thread (via loop()), and SFML windows are not thread-safe.
+    // Polling here would conflict with polling in loop().
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -81,6 +50,9 @@ void SFMLWindowManager::fixedUpdate(double /*dt*/) {
 // ═══════════════════════════════════════════════════════════════
 void SFMLWindowManager::loop() {
     if (_window && _window->isOpen()) {
+        // Ensure context is active for this thread if needed, though pollEvent doesn't strictly need it.
+        // But drawPixels needs it.
+        
         while (auto event = _window->pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 _window->close();
@@ -144,12 +116,9 @@ void SFMLWindowManager::loop() {
 }
 
 void SFMLWindowManager::render(double /*alpha*/) {
-    if (_window && _window->isOpen()) {
-        // Activate context for rendering in this thread
-        _window->setActive(true);
-        _window->display();
-        _window->setActive(false);  // Release for next frame
-    }
+    // CRITICAL: Do NOT render here (Main Thread).
+    // Rendering is handled by drawPixels() in the Module Thread when an image is received.
+    // Calling display() here would conflict with the Module Thread context.
 }
 
 void SFMLWindowManager::cleanup() {
@@ -199,10 +168,16 @@ void SFMLWindowManager::drawPixels(const std::vector<uint32_t> &pixels, const Ve
 
     _window->clear(sf::Color::Black);
     _window->draw(_sprite);
+
     _window->display();
 }
 
 void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
+    static int frameCount = 0;
+    if (++frameCount % 60 == 0) {
+        std::cout << "[SFMLWindow] Received ImageRendered message. Size: " << pixelData.size() << std::endl;
+    }
+
     const uint32_t* pixelPtr = reinterpret_cast<const uint32_t*>(pixelData.data());
     size_t pixelCount = pixelData.size() / sizeof(uint32_t);
 

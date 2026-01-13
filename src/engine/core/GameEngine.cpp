@@ -164,6 +164,7 @@ void GameEngine::run() {
     for (const auto &module : _modules) {
         module->start();
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // After modules are running, request LuaECSManager to load startup scripts into its own Lua state
     for (const auto& scriptPath : _config.startupScripts) {

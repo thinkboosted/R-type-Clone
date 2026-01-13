@@ -10,8 +10,7 @@
 
 namespace {
 bool debugEnabled() {
-    static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
-    return enabled;
+    return true;
 }
 
 bool sniperDebugEnabled() {
@@ -183,7 +182,14 @@ void AModule::sendMessage(const std::string& topic, const std::string& message) 
     auto result = _publisher->send(zmqMessage, zmq::send_flags::none);
 
     if (debugEnabled()) {
-        std::cout << "[Module->] " << moduleName(this) << " " << topic << " | " << truncatePayload(message) << std::endl;
+        bool isBinary = (topic == "ImageRendered" || message.size() > 200);
+        std::cout << "[Module->] " << moduleName(this) << " " << topic << " | ";
+        if (isBinary) {
+            std::cout << "[Binary Data / Payload too large: " << message.size() << " bytes]";
+        } else {
+            std::cout << message;
+        }
+        std::cout << std::endl;
     }
 }
 
@@ -255,7 +261,14 @@ void AModule::processMessages() {
                         payload = fullMessage.substr(topic.length() + 1);
                     }
                     if (debugEnabled()) {
-                        std::cout << "[Module<-] " << moduleName(this) << " " << topic << " | " << truncatePayload(payload) << std::endl;
+                        bool isBinary = (topic == "ImageRendered" || payload.size() > 200);
+                        std::cout << "[Module<-] " << moduleName(this) << " " << topic << " | ";
+                        if (isBinary) {
+                            std::cout << "[Binary Data / Payload too large: " << payload.size() << " bytes]";
+                        } else {
+                            std::cout << payload;
+                        }
+                        std::cout << std::endl;
                     }
                     handler(payload);
                 }
