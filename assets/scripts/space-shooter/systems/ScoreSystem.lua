@@ -14,6 +14,8 @@ function ScoreSystem.init()
 end
 
 function ScoreSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- Only update text rendering on instances with rendering capability
     if not ECS.capabilities.hasRendering then return end
     
