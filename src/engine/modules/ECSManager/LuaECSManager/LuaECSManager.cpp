@@ -15,6 +15,7 @@
 #include <thread>
 #include <vector>
 #include "../../../core/Logger.hpp"
+#include "../../../types/Vec3.hpp"
 
 namespace {
     void serializeToMsgPack(const sol::object& obj, msgpack::packer<msgpack::sbuffer>& pk) {
@@ -354,6 +355,21 @@ std::string LuaECSManager::generateUuid() {
 }
 
 void LuaECSManager::setupLuaBindings() {
+  // Register Vec3 UserType
+  _lua.new_usertype<Vec3>("Vec3",
+      sol::constructors<Vec3(), Vec3(float, float, float)>(),
+      "x", &Vec3::x,
+      "y", &Vec3::y,
+      "z", &Vec3::z,
+      "normalize", &Vec3::normalize,
+      "length", &Vec3::length,
+      sol::meta_function::addition, [](const Vec3& a, const Vec3& b) { return a + b; },
+      sol::meta_function::subtraction, [](const Vec3& a, const Vec3& b) { return a - b; },
+      sol::meta_function::multiplication, [](const Vec3& a, float b) { return a * b; },
+      sol::meta_function::division, [](const Vec3& a, float b) { return a / b; },
+      sol::meta_function::to_string, &Vec3::toString
+  );
+
   auto ecs = _lua.create_named_table("ECS");
 
   _capabilities = _lua.create_named_table("capabilities");
