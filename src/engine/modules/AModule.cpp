@@ -87,10 +87,16 @@ void AModule::start() {
 void AModule::stop() {
     _running = false; // Signal the thread to stop
 
-    if (_moduleThread.joinable()) {
-        _moduleThread.join(); // Wait for the thread to finish its cleanup
+    if (_moduleThread.get_id() == std::this_thread::get_id()) {
+        if (_moduleThread.joinable()) {
+            _moduleThread.detach();
+        }
+    } else {
+        if (_moduleThread.joinable()) {
+            _moduleThread.join();
+        }
     }
-    _initialized = false; // Reset initialized state after thread has cleaned up
+    _initialized = false;
 }
 
 void AModule::release() {
