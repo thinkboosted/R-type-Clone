@@ -41,26 +41,23 @@ GameEngine::GameEngine(const std::string& configPath)
 }
 
 GameEngine::~GameEngine() {
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] Destroying (frames rendered: " << _frameCount << ")" << std::endl;
+    {
+        std::unique_lock<std::shared_mutex> lock(_moduleMutex);
+        _modules.clear();
     }
 
+    _renderModule.reset();
+    _physicsModule.reset();
+    _ecsModule.reset();
     _networkModule.reset();
     _windowModule.reset();
-    _renderModule.reset();
-    _ecsModule.reset();
-    _physicsModule.reset();
 
     if (_modulesManager) {
         _modulesManager.reset();
     }
 
-    {
-        std::unique_lock<std::shared_mutex> lock(_moduleMutex);
-        _modules.clear();
-    }
+    cleanupMessageBroker();
 }
-
 void GameEngine::init() {
     if (isDebugEnabled()) {
         std::cout << "[GameEngine] ======== INITIALIZATION START ========" << std::endl;
@@ -489,20 +486,8 @@ void GameEngine::loadModules() {
                     std::cout << "[GameEngine] Loading module: " << modulePath << std::endl;
                 }
 
-                // ═══════════════════════════════════════════════════════════════════════════
-                // CRITICAL: Pass shared ZMQ context to prevent segfault
-                // ═══════════════════════════════════════════════════════════════════════════
-                // For inproc://, all sockets MUST share the same zmq::context_t
-                // Without this, modules create their own context → segfault
-                // ═══════════════════════════════════════════════════════════════════════════
-                addModule(modulePath, _pubBrokerEndpoint, _subBrokerEndpoint, &_sharedZmqContext);
+                addModule(modulePath, _pubBrokerEndpoint, _subBrokerEndpoint, &_zmqContext);
 
-                // ═══════════════════════════════════════════════════════════════════════════
-                // CACHE MODULE POINTERS (Hard-Wired Architecture)
-                // ═══════════════════════════════════════════════════════════════════════════
-                // Store pointers to critical modules for direct virtual calls
-                // Detect by module path or name (order-independent)
-                // ═══════════════════════════════════════════════════════════════════════════
                 if (modulePath.find("BulletPhysicEngine") != std::string::npos) {
                     _physicsModule = _modules.back();
                 } else if (modulePath.find("LuaECSManager") != std::string::npos) {
