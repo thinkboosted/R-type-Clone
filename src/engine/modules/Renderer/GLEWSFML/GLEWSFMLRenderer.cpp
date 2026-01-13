@@ -313,7 +313,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.isRect = true;
                         obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                         obj.position = {pos[0], pos[1], 0};
-                        obj.scale = {pos[2], pos[3], 1};  // width, height stored in scale
+                        // Validate dimensions
+                        obj.scale = {std::max(0.0f, pos[2]), std::max(0.0f, pos[3]), 1};  // width, height stored in scale
                         obj.color = {col[0], col[1], col[2]};
                         float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
                         obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
@@ -339,7 +340,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     {
                         auto& obj = _renderObjects[id];
                         obj.position = {v[0], v[1], 0};
-                        obj.scale = {v[2], v[3], 1};
+                        obj.scale = {std::max(0.0f, v[2]), std::max(0.0f, v[3]), 1};
                     }
                 }
             }
@@ -406,7 +407,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.isCircle = true;
                         obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                         obj.position = {pos[0], pos[1], 0};
-                        obj.radius = pos[2];
+                        obj.radius = std::max(0.0f, pos[2]);
                         obj.color = {col[0], col[1], col[2]};
                         obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
                         int segments = segmentsStr.empty() ? 32 : safeParseInt(segmentsStr, 32);
@@ -448,10 +449,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.isRoundedRect = true;
                         obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                         obj.position = {pos[0], pos[1], 0};
-                        obj.scale = {pos[2], pos[3], 1};  // width, height
+                        float w = std::max(0.0f, pos[2]);
+                        float h = std::max(0.0f, pos[3]);
+                        obj.scale = {w, h, 1};  // width, height
                         // Clamp corner radius to half of smallest dimension
-                        float maxRadius = std::min(pos[2], pos[3]) / 2.0f;
-                        obj.cornerRadius = std::min(pos[4], maxRadius);
+                        float maxRadius = std::min(w, h) / 2.0f;
+                        obj.cornerRadius = std::max(0.0f, std::min(pos[4], maxRadius));
                         obj.color = {col[0], col[1], col[2]};
                         float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
                         obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
