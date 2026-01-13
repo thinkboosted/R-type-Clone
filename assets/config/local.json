@@ -7,11 +7,9 @@
   "modules": [
     "../lib/SFMLWindowManager.so",
     "../lib/GLEWSFMLRenderer.so",
-    "../lib/BulletPhysicEngine.so",
     "../lib/LuaECSManager.so"
   ],
   "module_order": [
-    "PhysicModule",
     "LuaECSManager",
     "RenderModule",
     "WindowModule"
