@@ -441,7 +441,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.isScreenSpace = (isScreenSpaceStr == "1" || isScreenSpaceStr == "true");
                         obj.position = {pos[0], pos[1], 0};
                         obj.scale = {pos[2], pos[3], 1};  // width, height
-                        obj.cornerRadius = pos[4];
+                        // Clamp corner radius to half of smallest dimension
+                        float maxRadius = std::min(pos[2], pos[3]) / 2.0f;
+                        obj.cornerRadius = std::min(pos[4], maxRadius);
                         obj.color = {col[0], col[1], col[2]};
                         obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
                         _renderObjects[id] = obj;
@@ -582,7 +584,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
-                        _renderObjects[id].cornerRadius = radius;
+                        auto& obj = _renderObjects[id];
+                        // Clamp corner radius to half of smallest dimension
+                        float maxRadius = std::min(obj.scale.x, obj.scale.y) / 2.0f;
+                        obj.cornerRadius = std::min(radius, maxRadius);
                     }
                 }
             }
@@ -1516,12 +1521,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 float y = obj.position.y;
                 float w = obj.scale.x;
                 float h = obj.scale.y;
-                float r = obj.cornerRadius;
+                float r = obj.cornerRadius;  // Already clamped when set
                 int cornerSegments = 8;  // segments per corner
-                
-                // Clamp radius to half of smallest dimension
-                if (r > w / 2.0f) r = w / 2.0f;
-                if (r > h / 2.0f) r = h / 2.0f;
                 
                 glBegin(GL_TRIANGLE_FAN);
                 // Center point

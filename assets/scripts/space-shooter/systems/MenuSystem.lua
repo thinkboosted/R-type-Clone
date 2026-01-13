@@ -278,6 +278,11 @@ function MenuSystem.executeAction(action)
         ECS.setGameMode("MULTI_CLIENT")
         ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
         
+        -- Create game camera for client rendering
+        local gameCam = ECS.createEntity()
+        ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
+        ECS.addComponent(gameCam, "Camera", Camera(90))
+        
         print("[MenuSystem] Sending REQUEST_GAME_START to server...")
         ECS.sendNetworkMessage("REQUEST_GAME_START", "1")
         

@@ -177,14 +177,18 @@ function NetworkSystem.init()
         end)
 
         ECS.subscribe("REQUEST_GAME_START", function(msg)
+            print("[NetworkSystem] Received REQUEST_GAME_START: " .. tostring(msg))
             local gameStateEntities = ECS.getEntitiesWith({"GameState"})
             if #gameStateEntities > 0 then
                 local gameState = ECS.getComponent(gameStateEntities[1], "GameState")
+                print("[NetworkSystem] Current GameState: " .. gameState.state)
                 if gameState.state == "MENU" then
                     print("  -> Starting game upon client request")
                     ECS.sendMessage("REQUEST_GAME_STATE_CHANGE", "PLAYING")
                     gameState.lastScore = 0
                 end
+            else
+                print("[NetworkSystem] ERROR: No GameState entity found!")
             end
         end)
 
@@ -212,10 +216,18 @@ function NetworkSystem.init()
                      NetworkSystem.readyClients[clientId] = nil
                      print("Client Disconnected: " .. clientId)
 
-                     -- When the last client leaves, clear the arena for the next joiner.
+                     -- When the last client leaves, reset game state for next session
                      if not hasActiveClients() then
                          NetworkSystem.resetWorldState()
                          ECS.isGameRunning = false
+                         
+                         -- Reset GameState to MENU so next client can start fresh
+                         local gameStateEntities = ECS.getEntitiesWith({"GameState"})
+                         if #gameStateEntities > 0 then
+                             local gameState = ECS.getComponent(gameStateEntities[1], "GameState")
+                             gameState.state = "MENU"
+                             print("[NetworkSystem] Reset GameState to MENU for next session")
+                         end
                      end
                  end
              end
