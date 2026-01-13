@@ -716,6 +716,58 @@ void LuaECSManager::setupLuaBindings() {
     sendMessage("RenderEntityCommand", ss.str());
   });
 
+  // ============================================================================
+  // WINDOW CONTROL FUNCTIONS
+  // ============================================================================
+
+  // Set fullscreen mode
+  // ECS.setFullscreen(enabled)
+  ecs.set_function("setFullscreen", [this](bool enabled) {
+    sendMessage("SetFullscreen", enabled ? "1" : "0");
+  });
+
+  // Toggle fullscreen mode
+  // ECS.toggleFullscreen()
+  ecs.set_function("toggleFullscreen", [this]() {
+    sendMessage("ToggleFullscreen", "");
+  });
+
+  // Set window size (only works in windowed mode)
+  // ECS.setWindowSize(width, height)
+  ecs.set_function("setWindowSize", [this](int width, int height) {
+    std::stringstream ss;
+    ss << width << "," << height;
+    std::cout << "[LuaECSManager] setWindowSize called: " << width << "x" << height << std::endl << std::flush;
+    sendMessage("SetWindowSize", ss.str());
+    std::cout << "[LuaECSManager] setWindowSize message sent" << std::endl << std::flush;
+  });
+
+  // Toggle fullscreen mode
+  // ECS.toggleFullscreen()
+  ecs.set_function("toggleFullscreen", [this]() {
+    std::cout << "[LuaECSManager] toggleFullscreen called" << std::endl;
+    sendMessage("ToggleFullscreen", "");
+  });
+
+  // Set fullscreen mode
+  // ECS.setFullscreen(enabled)
+  ecs.set_function("setFullscreen", [this](bool enabled) {
+    std::cout << "[LuaECSManager] setFullscreen called: " << (enabled ? "true" : "false") << std::endl;
+    sendMessage("SetFullscreen", enabled ? "1" : "0");
+  });
+
+  // Request window info (will trigger WindowInfo event)
+  // ECS.requestWindowInfo()
+  ecs.set_function("requestWindowInfo", [this]() {
+    sendMessage("GetWindowInfo", "");
+  });
+
+  // Close the window/exit application
+  // ECS.closeWindow()
+  ecs.set_function("closeWindow", [this]() {
+    sendMessage("CloseWindow", "");
+  });
+
   std::cout << "[LuaECSManager] DEBUG: setupLuaBindings completed" << std::endl;
 }
 

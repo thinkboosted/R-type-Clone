@@ -1169,10 +1169,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         if (_pendingResize)
         {
             _resolution = _newResolution;
+            _hudResolution = _newResolution;  // Also update HUD resolution
             _pixelBuffer.resize(_resolution.x * _resolution.y);
             destroyFramebuffer();
             createFramebuffer();
             _pendingResize = false;
+            std::cout << "[GLEWSFMLRenderer] Resized to " << _resolution.x << "x" << _resolution.y << std::endl;
         }
 
         auto now = std::chrono::steady_clock::now();
@@ -1672,9 +1674,18 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         }
         _pixelBuffer = flippedBuffer;
 
-        std::string pixelData(reinterpret_cast<const char *>(_pixelBuffer.data()),
-                              _pixelBuffer.size() * sizeof(uint32_t));
-        sendMessage("ImageRendered", pixelData);
+    // Prepend a small text header with the resolution so the consumer knows sizes
+    std::string header;
+    header.reserve(32);
+    header += std::to_string(_resolution.x);
+    header += ",";
+    header += std::to_string(_resolution.y);
+    header += ";";
+
+    std::string pixelData(reinterpret_cast<const char *>(_pixelBuffer.data()),
+                  _pixelBuffer.size() * sizeof(uint32_t));
+    std::string message = header + pixelData;
+    sendMessage("ImageRendered", message);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }

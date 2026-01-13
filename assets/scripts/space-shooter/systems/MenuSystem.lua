@@ -17,6 +17,18 @@ local selectedIndex = 1
 local menuState = "MAIN"    -- MAIN, SETTINGS, PAUSE
 local isPaused = false
 
+-- Settings state (must be defined before executeAction uses it)
+local settingsState = {
+    isFullscreen = false,
+    selectedResolution = 1,
+    resolutions = {
+        { width = 800, height = 600, label = "800x600" },
+        { width = 1024, height = 768, label = "1024x768" },
+        { width = 1280, height = 720, label = "1280x720" },
+        { width = 1920, height = 1080, label = "1920x1080" },
+    }
+}
+
 -- Screen dimensions (will be updated from renderer if possible)
 local SCREEN_WIDTH = 800
 local SCREEN_HEIGHT = 600
@@ -92,6 +104,7 @@ function MenuSystem.init()
     ECS.subscribe("MouseMoved", MenuSystem.onMouseMoved)
     ECS.subscribe("PAUSE_GAME", MenuSystem.showPauseMenu)
     ECS.subscribe("RESUME_GAME", MenuSystem.hidePauseMenu)
+    ECS.subscribe("WindowResized", MenuSystem.onWindowResized)
 
     -- Create GameState entity
     local gs = ECS.createEntity()
@@ -275,6 +288,44 @@ function MenuSystem.executeAction(action)
         MenuSystem.showSettings()
         menuState = "PAUSE_SETTINGS"
         
+    elseif action == "TOGGLE_FULLSCREEN" then
+        settingsState.isFullscreen = not settingsState.isFullscreen
+        ECS.setFullscreen(settingsState.isFullscreen)
+        print("[MenuSystem] Fullscreen: " .. tostring(settingsState.isFullscreen))
+        MenuSystem.showSettings()
+        
+    elseif action == "RES_800x600" then
+        settingsState.selectedResolution = 1
+        ECS.setWindowSize(800, 600)
+        SCREEN_WIDTH = 800
+        SCREEN_HEIGHT = 600
+        print("[MenuSystem] Resolution set to 800x600")
+        MenuSystem.showSettings()
+        
+    elseif action == "RES_1024x768" then
+        settingsState.selectedResolution = 2
+        ECS.setWindowSize(1024, 768)
+        SCREEN_WIDTH = 1024
+        SCREEN_HEIGHT = 768
+        print("[MenuSystem] Resolution set to 1024x768")
+        MenuSystem.showSettings()
+        
+    elseif action == "RES_1280x720" then
+        settingsState.selectedResolution = 3
+        ECS.setWindowSize(1280, 720)
+        SCREEN_WIDTH = 1280
+        SCREEN_HEIGHT = 720
+        print("[MenuSystem] Resolution set to 1280x720 HD")
+        MenuSystem.showSettings()
+        
+    elseif action == "RES_1920x1080" then
+        settingsState.selectedResolution = 4
+        ECS.setWindowSize(1920, 1080)
+        SCREEN_WIDTH = 1920
+        SCREEN_HEIGHT = 1080
+        print("[MenuSystem] Resolution set to 1920x1080 FHD")
+        MenuSystem.showSettings()
+        
     elseif action == "QUIT" then
         print("[MenuSystem] Quitting game...")
         ECS.sendMessage("ExitApplication", "")
@@ -319,6 +370,7 @@ end
 -- ============================================================================
 -- SHOW SETTINGS
 -- ============================================================================
+
 function MenuSystem.showSettings()
     MenuSystem.hideMenu()
     isMenuRendered = true
@@ -327,22 +379,69 @@ function MenuSystem.showSettings()
     selectedIndex = 1
     menuState = "SETTINGS"
     
-    -- Background
-    local bgId = ECS.createRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT,
-        COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
+    -- Background with rounded corners
+    local bgId = ECS.createRoundedRect(20, 20, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 40,
+        15, COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
     table.insert(menuElements, bgId)
+    ECS.setOutline(bgId, true, 3, 0.2, 0.4, 0.6)
     
     -- Title
     MenuSystem.createLabel("SETTINGS", SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT - 100, 48, COLORS.title, 20)
     
-    -- Settings content (placeholder)
-    MenuSystem.createLabel("Music Volume: 40%", SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT - 200, 24, COLORS.textNormal, 15)
-    MenuSystem.createLabel("SFX Volume: 60%", SCREEN_WIDTH/2 - 90, SCREEN_HEIGHT - 240, 24, COLORS.textNormal, 15)
-    MenuSystem.createLabel("(Settings coming soon)", SCREEN_WIDTH/2 - 120, SCREEN_HEIGHT - 320, 20, COLORS.textNormal, 15)
+    -- Decorative line under title
+    local line = ECS.createLine(100, SCREEN_HEIGHT - 130, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 130, 2, 0.3, 0.5, 0.7, 0.6, 2)
+    table.insert(menuElements, line)
     
-    -- Back button
-    MenuSystem.createButton("BACK", "BACK", 
-        SCREEN_WIDTH/2 - 100, 80, 200, 50, COLORS.quit, 24, 10)
+    -- ==================== DISPLAY SECTION ====================
+    MenuSystem.createLabel("DISPLAY", SCREEN_WIDTH/2 - 50, SCREEN_HEIGHT - 165, 24, COLORS.title, 20)
+    
+    -- Fullscreen toggle button
+    local fsLabel = settingsState.isFullscreen and "FULLSCREEN: ON" or "FULLSCREEN: OFF"
+    local fsColor = settingsState.isFullscreen and COLORS.solo or COLORS.multi
+    MenuSystem.createButton("TOGGLE_FULLSCREEN", fsLabel,
+        SCREEN_WIDTH/2 - 140, SCREEN_HEIGHT - 210, 280, 40, fsColor, 20, 10)
+    
+    -- Resolution Section Label
+    MenuSystem.createLabel("Window Size:", SCREEN_WIDTH/2 - 60, SCREEN_HEIGHT - 260, 20, COLORS.textNormal, 15)
+    
+    -- Resolution preset buttons - 2x2 grid
+    local btnW = 130
+    local btnH = 38
+    local startX = SCREEN_WIDTH/2 - btnW - 10
+    local startY = SCREEN_HEIGHT - 310
+    local spacing = 10
+    
+    -- Row 1: 800x600 and 1024x768
+    local res1Color = (settingsState.selectedResolution == 1) and COLORS.solo or COLORS.settings
+    MenuSystem.createButton("RES_800x600", "800x600", 
+        startX, startY, btnW, btnH, res1Color, 16, 10)
+    
+    local res2Color = (settingsState.selectedResolution == 2) and COLORS.solo or COLORS.settings
+    MenuSystem.createButton("RES_1024x768", "1024x768", 
+        startX + btnW + spacing, startY, btnW, btnH, res2Color, 16, 10)
+    
+    -- Row 2: 1280x720 and 1920x1080
+    local res3Color = (settingsState.selectedResolution == 3) and COLORS.solo or COLORS.settings
+    MenuSystem.createButton("RES_1280x720", "1280x720 HD", 
+        startX, startY - btnH - spacing, btnW, btnH, res3Color, 14, 10)
+    
+    local res4Color = (settingsState.selectedResolution == 4) and COLORS.solo or COLORS.settings
+    MenuSystem.createButton("RES_1920x1080", "1920x1080 FHD", 
+        startX + btnW + spacing, startY - btnH - spacing, btnW, btnH, res4Color, 14, 10)
+    
+    -- Separator line
+    local line2 = ECS.createLine(100, SCREEN_HEIGHT - 400, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 400, 1, 0.3, 0.3, 0.4, 0.5, 2)
+    table.insert(menuElements, line2)
+    
+    -- ==================== AUDIO SECTION ====================
+    MenuSystem.createLabel("AUDIO", SCREEN_WIDTH/2 - 40, SCREEN_HEIGHT - 430, 24, COLORS.title, 20)
+    
+    MenuSystem.createLabel("Music: 40%  |  SFX: 60%", SCREEN_WIDTH/2 - 95, SCREEN_HEIGHT - 465, 16, COLORS.textNormal, 15)
+    MenuSystem.createLabel("(Volume controls coming soon)", SCREEN_WIDTH/2 - 115, SCREEN_HEIGHT - 490, 14, { r = 0.5, g = 0.5, b = 0.5 }, 15)
+    
+    -- ==================== BACK BUTTON ====================
+    MenuSystem.createButton("BACK", "BACK",
+        SCREEN_WIDTH/2 - 100, 50, 200, 45, COLORS.quit, 22, 10)
     
     MenuSystem.updateSelection()
 end
@@ -405,6 +504,14 @@ end
 -- KEYBOARD INPUT
 -- ============================================================================
 function MenuSystem.onKeyPressed(key)
+    -- F11 for fullscreen toggle (works anywhere)
+    if key == "F11" then
+        settingsState.isFullscreen = not settingsState.isFullscreen
+        ECS.toggleFullscreen()
+        print("[MenuSystem] Toggled fullscreen via F11")
+        return
+    end
+    
     -- Handle ESC for pause
     if key == "ESCAPE" then
         if ECS.isGameRunning and not isMenuRendered then
@@ -485,14 +592,47 @@ function MenuSystem.onMousePressed(msg)
     if not x or not y then return end
     x, y = tonumber(x), tonumber(y)
     
-    -- Convert to bottom-left origin
-    y = SCREEN_HEIGHT - y
+    -- Convert to bottom-left origin (OpenGL style)
+    local screenY = SCREEN_HEIGHT - y
     
     for i, button in ipairs(menuButtons) do
         if x >= button.x and x <= button.x + button.width and
-           y >= button.y and y <= button.y + button.height then
+           screenY >= button.y and screenY <= button.y + button.height then
             MenuSystem.executeAction(button.action)
             return
+        end
+    end
+end
+
+-- Handle window resize events from the engine
+function MenuSystem.onWindowResized(msg)
+    local w, h = msg:match("(%d+),(%d+)")
+    if w and h then
+        local newWidth = tonumber(w)
+        local newHeight = tonumber(h)
+        if newWidth and newHeight and newWidth > 0 and newHeight > 0 then
+            print("[MenuSystem] Window resized to " .. newWidth .. "x" .. newHeight)
+            SCREEN_WIDTH = newWidth
+            SCREEN_HEIGHT = newHeight
+            
+            -- Update settings state to reflect actual resolution
+            for i, res in ipairs(settingsState.resolutions) do
+                if res.width == newWidth and res.height == newHeight then
+                    settingsState.selectedResolution = i
+                    break
+                end
+            end
+            
+            -- If menu is currently shown, redraw it with new dimensions
+            if isMenuRendered then
+                if menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
+                    MenuSystem.showSettings()
+                elseif menuState == "PAUSE" then
+                    MenuSystem.showPauseMenu()
+                elseif menuState == "MAIN" then
+                    MenuSystem.renderMenu()
+                end
+            end
         end
     end
 end
