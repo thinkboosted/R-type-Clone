@@ -404,7 +404,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.radius = pos[2];
                         obj.color = {col[0], col[1], col[2]};
                         obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
-                        obj.segments = segmentsStr.empty() ? 32 : safeParseInt(segmentsStr, 32);
+                        int segments = segmentsStr.empty() ? 32 : safeParseInt(segmentsStr, 32);
+                        if (segments < 3) segments = 3;
+                        else if (segments > 128) segments = 128;
+                        obj.segments = segments;
                         _renderObjects[id] = obj;
                     }
                 }
