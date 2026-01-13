@@ -315,7 +315,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.position = {pos[0], pos[1], 0};
                         obj.scale = {pos[2], pos[3], 1};  // width, height stored in scale
                         obj.color = {col[0], col[1], col[2]};
-                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
+                        obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
                         _renderObjects[id] = obj;
                     }
                 }
@@ -353,7 +354,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
-                        _renderObjects[id].alpha = alpha;
+                        // Clamp alpha between 0.0 and 1.0
+                        _renderObjects[id].alpha = std::max(0.0f, std::min(1.0f, alpha));
                     }
                 }
             }
@@ -491,7 +493,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.endPosition = {pos[2], pos[3], 0};
                         obj.lineWidth = pos[4];
                         obj.color = {col[0], col[1], col[2]};
-                        obj.alpha = (col.size() >= 4) ? col[3] : 1.0f;
+                        float alphaRaw = (col.size() >= 4) ? col[3] : 1.0f;
+                        obj.alpha = std::max(0.0f, std::min(1.0f, alphaRaw));
                         _renderObjects[id] = obj;
                     }
                 }
@@ -611,11 +614,14 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     if (obj.isText) {
                         obj.text = newText;
                         if (obj.textureID) glDeleteTextures(1, &obj.textureID);
-                        obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
+                        // Always create white texture so glColor3f in render() can tint it correctly
+                        obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, {1.0f, 1.0f, 1.0f});
                     }
                 }
             }
-        } else if (command == "SetPosition") {
+        }
+        else if (command == "SetPosition")
+        {
             std::stringstream dss(data);
             std::string id, val;
             std::getline(dss, id, ',');
@@ -741,11 +747,15 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             else if (command == "CreateParticleGenerator")
             {
                 // Format: ID:offsetX,offsetY,offsetZ:dirX,dirY,dirZ:spread:speed:life:rate:size:r,g,b
+                // The comment implies colons, but the code parses commas. Let's support colon delimiters too by replacing them.
                 size_t split = data.find(':');
                 if (split != std::string::npos)
                 {
                     std::string id = data.substr(0, split);
                     std::string params = data.substr(split + 1);
+
+                    // Replace all colons in params with commas to handle grouped format
+                    std::replace(params.begin(), params.end(), ':', ',');
 
                     ParticleGenerator gen;
                     gen.id = id;
@@ -754,10 +764,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     gen.offset = {0, 0, 0};
                     gen.direction = {0, 1, 0};
 
-                std::stringstream pss(params);
-                std::string val;
-                std::vector<float> v;
-                while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
+                    std::stringstream pss(params);
+                    std::string val;
+                    std::vector<float> v;
+                    while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
 
                     if (v.size() >= 14)
                     {
@@ -769,6 +779,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         gen.rate = v[9];
                         gen.size = v[10];
                         gen.color = {v[11], v[12], v[13]};
+                    }
+                    else
+                    {
+                         // If we didn't get enough values, maybe it's the simpler format?
+                         // Fallback defaults?
                     }
                     _particleGenerators[id] = gen;
                 }
@@ -782,31 +797,32 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     std::string id = data.substr(0, split);
                     std::string params = data.substr(split + 1);
 
-                if (_particleGenerators.find(id) != _particleGenerators.end()) {
-                    auto& gen = _particleGenerators[id];
-                    std::stringstream pss(params);
-                    std::string val;
-                    std::vector<float> v;
-                    while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
+                    if (_particleGenerators.find(id) != _particleGenerators.end())
+                    {
+                        auto& gen = _particleGenerators[id];
+                        std::stringstream pss(params);
+                        std::string val;
+                        std::vector<float> v;
+                        while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
 
-                    // Expected 14 values
-                    if (v.size() >= 14) {
-                        gen.position = {v[0], v[1], v[2]};
-                        gen.direction = {v[3], v[4], v[5]};
-                        gen.spread = v[6];
-                        gen.speed = v[7];
-                        gen.lifeTime = v[8];
-                        gen.rate = v[9];
-                        gen.size = v[10];
-                        gen.color = {v[11], v[12], v[13]};
+                        // Expected 14 values
+                        if (v.size() >= 14) {
+                            gen.position = {v[0], v[1], v[2]};
+                            gen.direction = {v[3], v[4], v[5]};
+                            gen.spread = v[6];
+                            gen.speed = v[7];
+                            gen.lifeTime = v[8];
+                            gen.rate = v[9];
+                            gen.size = v[10];
+                            gen.color = {v[11], v[12], v[13]};
+                        }
                     }
                 }
             }
-        }
-        } catch (const std::exception& e) {
-            std::cerr << "[GLEWSFMLRenderer] RenderEntity parse error: " << e.what() << " in msg='" << message << "'" << std::endl;
-        }
+    } catch (const std::exception& e) {
+        std::cerr << "[GLEWSFMLRenderer] RenderEntity parse error: " << e.what() << " in msg='" << message << "'" << std::endl;
     }
+}
 }
 
     void GLEWSFMLRenderer::loadMesh(const std::string &path)
