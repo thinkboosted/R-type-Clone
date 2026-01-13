@@ -240,7 +240,7 @@ function NetworkSystem.init()
         ECS.subscribe("INPUT", function(msg)
             local clientId, payload = ECS.splitClientIdAndMessage(msg)
             local data = ECS.unpackMsgPack(payload)
-            
+
             local key, state = nil, nil
             if data then
                 -- Binary format {k="KEY", s=1/0}
@@ -248,7 +248,7 @@ function NetworkSystem.init()
                 state = data.s
             else
                 -- Legacy text format fallback: "UP 1"
-                -- msg contains "clientId key state" if it wasn't stripped? 
+                -- msg contains "clientId key state" if it wasn't stripped?
                 -- Actually splitClientIdAndMessage returns (id, rest).
                 -- So payload is "key state".
                 local k, s = string.match(payload, "(%w+) (%d)")
@@ -475,12 +475,12 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              end
 
         elseif nType == 2 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
-             ECS.addComponent(localId, "Color", Color(1.0, 1.0, 0.0))
+             ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", nil))
+             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 1.0))
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         elseif nType == 3 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
+             ECS.addComponent(localId, "Mesh", Mesh("assets/models/Monster_1/motion_1.obj", nil))
              ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0))
         end
         NetworkSystem.serverEntities[serverId] = localId
