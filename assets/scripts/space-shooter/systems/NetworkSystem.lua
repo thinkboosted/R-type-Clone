@@ -276,10 +276,10 @@ function NetworkSystem.init()
                     local input = ECS.getComponent(entityId, "InputState")
                     if input then
                         local pressed = (state == 1 or state == true)
-                        if key == "UP" then input.up = pressed end
-                        if key == "DOWN" then input.down = pressed end
-                        if key == "LEFT" then input.left = pressed end
-                        if key == "RIGHT" then input.right = pressed end
+                        if key == "UP" or key == "Z" or key == "W" then input.up = pressed end
+                        if key == "DOWN" or key == "S" then input.down = pressed end
+                        if key == "LEFT" or key == "Q" or key == "A" then input.left = pressed end
+                        if key == "RIGHT" or key == "D" then input.right = pressed end
                         if key == "SPACE" then input.shoot = pressed end
                     end
                 end
