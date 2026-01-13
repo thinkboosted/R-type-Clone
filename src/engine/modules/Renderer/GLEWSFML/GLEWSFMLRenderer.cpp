@@ -1552,36 +1552,60 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 // Use user-provided segments when available, fallback to 8 for compatibility
                 int cornerSegments = (obj.segments > 0) ? obj.segments : 8;  // segments per corner
                 
+                // Draw central body (3 distinct quads to avoid overdraw/artifacts)
+                glBegin(GL_QUADS);
+                // Center vertical strip (top to bottom)
+                glVertex2f(x + r, y);
+                glVertex2f(x + w - r, y);
+                glVertex2f(x + w - r, y + h);
+                glVertex2f(x + r, y + h);
+                // Left side strip
+                glVertex2f(x, y + r);
+                glVertex2f(x + r, y + r);
+                glVertex2f(x + r, y + h - r);
+                glVertex2f(x, y + h - r);
+                // Right side strip
+                glVertex2f(x + w - r, y + r);
+                glVertex2f(x + w, y + r);
+                glVertex2f(x + w, y + h - r);
+                glVertex2f(x + w - r, y + h - r);
+                glEnd();
+
+                // Draw corners (Fans)
+                // Bottom-left
                 glBegin(GL_TRIANGLE_FAN);
-                // Center point
-                glVertex2f(x + w / 2.0f, y + h / 2.0f);
-                
-                // Bottom-left corner
-                for (int i = 0; i <= cornerSegments; i++)
-                {
+                glVertex2f(x + r, y + r);
+                for (int i = 0; i <= cornerSegments; i++) {
                     float angle = PI + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + r + r * cos(angle), y + r + r * sin(angle));
                 }
-                // Bottom-right corner
-                for (int i = 0; i <= cornerSegments; i++)
-                {
-                    float angle = PI * 1.5f + (PI / 2.0f) * (float)i / (float)cornerSegments;
+                glEnd();
+
+                // Bottom-right
+                glBegin(GL_TRIANGLE_FAN);
+                glVertex2f(x + w - r, y + r);
+                for (int i = 0; i <= cornerSegments; i++) {
+                    float angle = 1.5f * PI + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + w - r + r * cos(angle), y + r + r * sin(angle));
                 }
-                // Top-right corner
-                for (int i = 0; i <= cornerSegments; i++)
-                {
+                glEnd();
+
+                // Top-right
+                glBegin(GL_TRIANGLE_FAN);
+                glVertex2f(x + w - r, y + h - r);
+                for (int i = 0; i <= cornerSegments; i++) {
                     float angle = 0.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + w - r + r * cos(angle), y + h - r + r * sin(angle));
                 }
-                // Top-left corner
-                for (int i = 0; i <= cornerSegments; i++)
-                {
-                    float angle = PI / 2.0f + (PI / 2.0f) * (float)i / (float)cornerSegments;
+                glEnd();
+
+                // Top-left
+                glBegin(GL_TRIANGLE_FAN);
+                glVertex2f(x + r, y + h - r);
+                for (int i = 0; i <= cornerSegments; i++) {
+                    float angle = 0.5f * PI + (PI / 2.0f) * (float)i / (float)cornerSegments;
                     glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
                 }
-                // Close the shape
-                glVertex2f(x, y + r);
                 glEnd();
                 
                 // Draw outline if enabled

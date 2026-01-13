@@ -8,6 +8,8 @@ function InputSystem.init()
 end
 
 function InputSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- REMOVED GUARD: Update must run on Server (to process network inputs) AND Client (for prediction)
     -- if not ECS.capabilities.hasLocalInput then return end
 
