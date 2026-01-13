@@ -1549,7 +1549,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 float w = obj.scale.x;
                 float h = obj.scale.y;
                 float r = obj.cornerRadius;  // Already clamped when set
-                int cornerSegments = 8;  // segments per corner
+                // Use user-provided segments when available, fallback to 8 for compatibility
+                int cornerSegments = (obj.segments > 0) ? obj.segments : 8;  // segments per corner
                 
                 glBegin(GL_TRIANGLE_FAN);
                 // Center point
