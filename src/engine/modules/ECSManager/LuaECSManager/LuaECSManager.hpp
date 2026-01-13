@@ -7,6 +7,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
+#include <queue>
+#include <functional>
 
 namespace rtypeEngine {
 
@@ -16,7 +19,7 @@ public:
   ~LuaECSManager() override;
 
   void init() override;
-  void loop() override;  // DEPRECATED: Use fixedUpdate() via hard-wired calls
+  void loop() override;
   void cleanup() override;
 
   // ═══════════════════════════════════════════════════════════════
@@ -24,13 +27,17 @@ public:
   // ═══════════════════════════════════════════════════════════════
   void fixedUpdate(double /*dt*/) override;
 
-        void loadScript(const std::string& path);
-        void unloadScript(const std::string& path);
+  void loadScript(const std::string& path);
+  void unloadScript(const std::string& path);
 
   std::string serializeState();
   void deserializeState(const std::string &state);
 
 private:
+  // Thread safety
+  std::mutex _eventQueueMutex;
+  std::queue<std::function<void()>> _eventQueue;
+
   std::string serializeTable(const sol::table &table);
   sol::state _lua;
   std::vector<sol::table> _systems;
@@ -42,7 +49,7 @@ private:
 
   std::chrono::high_resolution_clock::time_point _lastFrameTime;
   double _accumulator = 0.0;
-  const double FIXED_DT = 1.0 / 60.0;  // 60 Hz (16.666ms)
+  const double FIXED_DT = 1.0 / 60.0;
   const double MAX_FRAME_TIME = 0.25;
 
   void setupLuaBindings();

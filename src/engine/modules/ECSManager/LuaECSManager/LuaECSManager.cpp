@@ -14,6 +14,7 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#include "../../../core/Logger.hpp"
 
 namespace {
     void serializeToMsgPack(const sol::object& obj, msgpack::packer<msgpack::sbuffer>& pk) {
@@ -25,10 +26,8 @@ namespace {
                 pk.pack(obj.as<bool>());
                 break;
             case sol::type::number:
-                // Check if integer or float
                 if (obj.is<double>()) {
                     double val = obj.as<double>();
-                    // Robust check: is it effectively an integer?
                     if (std::floor(val) == val && val >= static_cast<double>(std::numeric_limits<int64_t>::min()) && val <= static_cast<double>(std::numeric_limits<int64_t>::max())) {
                         pk.pack(static_cast<int64_t>(val));
                     } else {
@@ -45,16 +44,11 @@ namespace {
                 break;
             case sol::type::table: {
                 sol::table tbl = obj.as<sol::table>();
-                // Basic heuristic: if keys are 1..N sequential, it's an array. Else map.
-                // For simplicity/safety in game dev, often treating everything as map is safer unless we check keys.
-                // But for packed size, array is better. Let's check size.
                 size_t sz = tbl.size();
                 bool isArray = true;
                 if (sz == 0) {
-                     // Empty table, check if it has any keys
                      if (tbl.begin() != tbl.end()) isArray = false;
                 } else {
-                     // Check if keys are 1..sz
                      for (size_t i = 1; i <= sz; ++i) {
                          if (!tbl[i].valid()) {
                              isArray = false;
@@ -69,7 +63,6 @@ namespace {
                         serializeToMsgPack(tbl[i], pk);
                     }
                 } else {
-                    // Count keys manually for map
                     size_t mapSize = 0;
                     for (auto kv : tbl) mapSize++;
                     pk.pack_map(mapSize);
@@ -81,8 +74,7 @@ namespace {
                 break;
             }
             default:
-                std::cerr << "[LuaECSManager] Warning: Unsupported type for MsgPack serialization" << std::endl;
-                pk.pack_nil();
+                // Logger used instead of cerr
                 break;
         }
     }
@@ -142,62 +134,80 @@ void LuaECSManager::init() {
   try {
     setupLuaBindings();
   } catch (const sol::error &e) {
-    std::cerr << "[LuaECSManager] ERROR in setupLuaBindings: " << e.what() << std::endl;
+    Logger::Error(std::string("[LuaECSManager] ERROR in setupLuaBindings: ") + e.what());
   } catch (const std::exception &e) {
-    std::cerr << "[LuaECSManager] ERROR in setupLuaBindings (std): " << e.what() << std::endl;
+    Logger::Error(std::string("[LuaECSManager] ERROR in setupLuaBindings (std): ") + e.what());
   }
 
-  subscribe("NetworkStatus", [this](const std::string &msg) {
-    if (msg.find("Bound") != std::string::npos) {
-      _isServer = true;
-      _capabilities["isServer"] = true;
-      _capabilities["isClientMode"] = false;
-      _capabilities["isLocalMode"] = false;
-      _capabilities["hasAuthority"] = true;
-      _capabilities["hasRendering"] = false;
-      _capabilities["hasLocalInput"] = false;
-      _capabilities["hasNetworkSync"] = true;
-      std::cout << "[LuaECSManager] Detected Server Mode" << std::endl;
-    } else if (msg.find("Connected") != std::string::npos) {
-      _isServer = false;
-      _capabilities["isServer"] = false;
-      _capabilities["isClientMode"] = true;
-      _capabilities["isLocalMode"] = false;
-      _capabilities["hasAuthority"] = false;
-      _capabilities["hasRendering"] = true;
-      _capabilities["hasLocalInput"] = true;
-      _capabilities["hasNetworkSync"] = true;
-      std::cout << "[LuaECSManager] Detected Client Mode" << std::endl;
-    }
+  // Helper to queue events for the Main Thread
+  auto queueEvent = [this](std::function<void()> func) {
+      std::lock_guard<std::mutex> lock(_eventQueueMutex);
+      _eventQueue.push(func);
+  };
+
+  subscribe("NetworkStatus", [this, queueEvent](const std::string &msg) {
+    queueEvent([this, msg]() {
+        if (msg.find("Bound") != std::string::npos) {
+          _isServer = true;
+          _capabilities["isServer"] = true;
+          _capabilities["isClientMode"] = false;
+          _capabilities["isLocalMode"] = false;
+          _capabilities["hasAuthority"] = true;
+          _capabilities["hasRendering"] = false;
+          _capabilities["hasLocalInput"] = false;
+          _capabilities["hasNetworkSync"] = true;
+          Logger::Info("[LuaECSManager] Detected Server Mode");
+        } else if (msg.find("Connected") != std::string::npos) {
+          _isServer = false;
+          _capabilities["isServer"] = false;
+          _capabilities["isClientMode"] = true;
+          _capabilities["isLocalMode"] = false;
+          _capabilities["hasAuthority"] = false;
+          _capabilities["hasRendering"] = true;
+          _capabilities["hasLocalInput"] = true;
+          _capabilities["hasNetworkSync"] = true;
+          Logger::Info("[LuaECSManager] Detected Client Mode");
+        }
+    });
   });
 
-  subscribe("LoadScript", [this](const std::string &msg) { this->loadScript(msg); });
-  subscribe("UnloadScript", [this](const std::string &msg) { this->unloadScript(msg); });
-
-  subscribe("ECSStateLoadedEvent", [this](const std::string &msg) { this->deserializeState(msg); });
-
-  subscribe("SavesListEvent", [this](const std::string &msg) {
-    for (auto &system : _systems) {
-      if (system["onSavesListReceived"].valid()) {
-        try {
-          system["onSavesListReceived"](msg);
-        } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in onSavesListReceived: " << e.what() << std::endl;
-        }
-      }
-    }
+  subscribe("LoadScript", [this, queueEvent](const std::string &msg) { 
+      queueEvent([this, msg]() { this->loadScript(msg); }); 
+  });
+  subscribe("UnloadScript", [this, queueEvent](const std::string &msg) { 
+      queueEvent([this, msg]() { this->unloadScript(msg); }); 
   });
 
-  auto forwardEvent = [this](const std::string &eventName, const std::string &msg) {
-    for (auto &system : _systems) {
-      if (system[eventName].valid()) {
-        try {
-          system[eventName](msg);
-        } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in system " << eventName << ": " << e.what() << std::endl;
+  subscribe("ECSStateLoadedEvent", [this, queueEvent](const std::string &msg) { 
+      queueEvent([this, msg]() { this->deserializeState(msg); }); 
+  });
+
+  subscribe("SavesListEvent", [this, queueEvent](const std::string &msg) {
+    queueEvent([this, msg]() {
+        for (auto &system : _systems) {
+          if (system["onSavesListReceived"].valid()) {
+            try {
+              system["onSavesListReceived"](msg);
+            } catch (const sol::error &e) {
+              Logger::Error(std::string("[LuaECSManager] Error in onSavesListReceived: ") + e.what());
+            }
+          }
         }
-      }
-    }
+    });
+  });
+
+  auto forwardEvent = [this, queueEvent](const std::string &eventName, const std::string &msg) {
+    queueEvent([this, eventName, msg]() {
+        for (auto &system : _systems) {
+          if (system[eventName].valid()) {
+            try {
+              system[eventName](msg);
+            } catch (const sol::error &e) {
+              Logger::Error(std::string("[LuaECSManager] Error in system ") + eventName + ": " + e.what());
+            }
+          }
+        }
+    });
   };
 
   subscribe("KeyPressed", [=](const std::string &msg) { forwardEvent("onKeyPressed", msg); });
@@ -206,91 +216,95 @@ void LuaECSManager::init() {
   subscribe("MouseReleased", [=](const std::string &msg) { forwardEvent("onMouseReleased", msg); });
   subscribe("MouseMoved", [=](const std::string &msg) { forwardEvent("onMouseMoved", msg); });
 
-  subscribe("PhysicEvent", [this](const std::string &msg) {
-    std::stringstream ss(msg);
-    std::string segment;
-    while (std::getline(ss, segment, ';')) {
-      if (segment.empty()) continue;
-      size_t split1 = segment.find(':');
-      if (split1 == std::string::npos) continue;
-      std::string command = segment.substr(0, split1);
-      std::string data = segment.substr(split1 + 1);
+  subscribe("PhysicEvent", [this, queueEvent](const std::string &msg) {
+    queueEvent([this, msg]() {
+        std::stringstream ss(msg);
+        std::string segment;
+        while (std::getline(ss, segment, ';')) {
+          if (segment.empty()) continue;
+          size_t split1 = segment.find(':');
+          if (split1 == std::string::npos) continue;
+          std::string command = segment.substr(0, split1);
+          std::string data = segment.substr(split1 + 1);
 
-      if (command == "Collision") {
-        for (auto &system : _systems) {
-          if (system["onCollision"].valid()) {
+          if (command == "Collision") {
+            for (auto &system : _systems) {
+              if (system["onCollision"].valid()) {
+                size_t split2 = data.find(':');
+                if (split2 != std::string::npos) {
+                  std::string id1 = data.substr(0, split2);
+                  std::string id2 = data.substr(split2 + 1);
+                  try {
+                    system["onCollision"](id1, id2);
+                  } catch (const sol::error &e) {
+                    Logger::Error(std::string("[LuaECSManager] Error in onCollision: ") + e.what());
+                  }
+                }
+              }
+            }
+          } else if (command == "RaycastHit") {
             size_t split2 = data.find(':');
             if (split2 != std::string::npos) {
-              std::string id1 = data.substr(0, split2);
-              std::string id2 = data.substr(split2 + 1);
+              std::string id = data.substr(0, split2);
+              float distance = 0.0f;
               try {
-                system["onCollision"](id1, id2);
-              } catch (const sol::error &e) {
-                std::cerr << "[LuaECSManager] Error in onCollision: " << e.what() << std::endl;
+                 distance = std::stof(data.substr(split2 + 1));
+              } catch (...) { distance = 0.0f; }
+              for (auto &system : _systems) {
+                if (system["onRaycastHit"].valid()) {
+                  try {
+                    system["onRaycastHit"](id, distance);
+                  } catch (const sol::error &e) {
+                    Logger::Error(std::string("[LuaECSManager] Error in onRaycastHit: ") + e.what());
+                  }
+                }
               }
             }
           }
         }
-      } else if (command == "RaycastHit") {
-        size_t split2 = data.find(':');
-        if (split2 != std::string::npos) {
-          std::string id = data.substr(0, split2);
-          float distance = 0.0f;
-          try {
-             distance = std::stof(data.substr(split2 + 1));
-          } catch (...) { distance = 0.0f; }
+    });
+  });
+
+  subscribe("EntityUpdated", [this, queueEvent](const std::string &msg) {
+    queueEvent([this, msg]() {
+        std::stringstream ss(msg);
+        std::string segment;
+        while (std::getline(ss, segment, ';')) {
+          if (segment.empty()) continue;
+          size_t split1 = segment.find(':');
+          if (split1 == std::string::npos) continue;
+          std::string rest = segment.substr(split1 + 1);
+          size_t split2 = rest.find(':');
+          if (split2 == std::string::npos) continue;
+          std::string id = rest.substr(0, split2);
+          std::string coords = rest.substr(split2 + 1);
+          size_t split3 = coords.find(':');
+          if (split3 == std::string::npos) continue;
+
+          std::string posStr = coords.substr(0, split3);
+          std::string rotStr = coords.substr(split3 + 1);
+
+          float x, y, z, rx, ry, rz;
+          char comma;
+          std::stringstream pss(posStr);
+          pss >> x >> comma >> y >> comma >> z;
+          std::stringstream rss(rotStr);
+          rss >> rx >> comma >> ry >> comma >> rz;
+
           for (auto &system : _systems) {
-            if (system["onRaycastHit"].valid()) {
+            if (system["onEntityUpdated"].valid()) {
               try {
-                system["onRaycastHit"](id, distance);
+                system["onEntityUpdated"](id, x, y, z, rx, ry, rz);
               } catch (const sol::error &e) {
-                std::cerr << "[LuaECSManager] Error in onRaycastHit: " << e.what() << std::endl;
+                Logger::Error(std::string("[LuaECSManager] Error in onEntityUpdated: ") + e.what());
               }
             }
           }
         }
-      }
-    }
+    });
   });
 
-  subscribe("EntityUpdated", [this](const std::string &msg) {
-    std::stringstream ss(msg);
-    std::string segment;
-    while (std::getline(ss, segment, ';')) {
-      if (segment.empty()) continue;
-      size_t split1 = segment.find(':');
-      if (split1 == std::string::npos) continue;
-      std::string rest = segment.substr(split1 + 1);
-      size_t split2 = rest.find(':');
-      if (split2 == std::string::npos) continue;
-      std::string id = rest.substr(0, split2);
-      std::string coords = rest.substr(split2 + 1);
-      size_t split3 = coords.find(':');
-      if (split3 == std::string::npos) continue;
-
-      std::string posStr = coords.substr(0, split3);
-      std::string rotStr = coords.substr(split3 + 1);
-
-      float x, y, z, rx, ry, rz;
-      char comma;
-      std::stringstream pss(posStr);
-      pss >> x >> comma >> y >> comma >> z;
-      std::stringstream rss(rotStr);
-      rss >> rx >> comma >> ry >> comma >> rz;
-
-      for (auto &system : _systems) {
-        if (system["onEntityUpdated"].valid()) {
-          try {
-            system["onEntityUpdated"](id, x, y, z, rx, ry, rz);
-          } catch (const sol::error &e) {
-            std::cerr << "[LuaECSManager] Error in onEntityUpdated: " << e.what() << std::endl;
-          }
-        }
-      }
-    }
-  });
-
-  std::cout << "[LuaECSManager] Initialized" << std::endl;
+  Logger::Info("[LuaECSManager] Initialized");
 }
 
 std::string LuaECSManager::generateUuid() {
@@ -373,7 +387,7 @@ void LuaECSManager::setupLuaBindings() {
           _capabilities["isClientMode"] = false;
           _capabilities["isServer"] = false;
       }
-      std::cout << "[LuaECSManager] Set game mode to: " << mode_name << std::endl;
+      Logger::Info("[LuaECSManager] Set game mode to: " + mode_name);
   });
 
   ecs.set_function("isServer", [this]() { return _capabilities["isServer"]; });
@@ -419,7 +433,7 @@ void LuaECSManager::setupLuaBindings() {
                                         int fontSize, bool isScreenSpace) {
     std::stringstream ss;
     ss << id << ";" << text << ";" << fontPath << ";" << fontSize << ";" << (isScreenSpace ? "1" : "0");
-    std::cout << "[LuaECSManager] Sending CreateText: " << ss.str() << std::endl;
+    Logger::Debug("[LuaECSManager] Sending CreateText: " + ss.str());
     sendMessage("CreateText", ss.str());
   });
 
@@ -461,7 +475,7 @@ void LuaECSManager::setupLuaBindings() {
         }
 
     } catch (const std::exception& e) {
-        std::cerr << "[LuaECSManager] CRASH AVERTED in addComponent (" << componentName << "): " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] CRASH AVERTED in addComponent (") + componentName + "): " + e.what());
     }
   });
 
@@ -594,7 +608,7 @@ void LuaECSManager::setupLuaBindings() {
                   try {
                     func(msg);
                   } catch (const sol::error &e) {
-                    std::cerr << "[LuaECSManager] Error in subscriber for " << topic << ": " << e.what() << std::endl;
+                    Logger::Error(std::string("[LuaECSManager] Error in subscriber for ") + topic + ": " + e.what());
                   }
                 }
               }
@@ -672,7 +686,7 @@ void LuaECSManager::setupLuaBindings() {
           msgpack::object_handle oh = msgpack::unpack(data.data(), data.size());
           return msgpackToLua(_lua, oh.get());
       } catch (const std::exception &e) {
-          std::cerr << "[LuaECSManager] Error unpacking msgpack: " << e.what() << std::endl;
+          Logger::Error(std::string("[LuaECSManager] Error unpacking msgpack: ") + e.what());
           return sol::make_object(_lua, sol::nil);
       }
   });
@@ -692,7 +706,7 @@ void LuaECSManager::setupLuaBindings() {
               return std::make_tuple(id, std::string(""));
           }
       } catch (const std::exception &e) {
-          std::cerr << "[LuaECSManager] Error parsing client id from message: " << e.what() << std::endl;
+          Logger::Error(std::string("[LuaECSManager] Error parsing client id from message: ") + e.what());
           return std::make_tuple(0, data);
       }
   });
@@ -703,7 +717,7 @@ void LuaECSManager::setupLuaBindings() {
       try {
         system["init"]();
       } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error in system init: " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] Error in system init: ") + e.what());
       }
     }
   });
@@ -738,16 +752,16 @@ void LuaECSManager::setupLuaBindings() {
       _pools.clear();
   });
 
-  std::cout << "[LuaECSManager] DEBUG: setupLuaBindings completed" << std::endl;
+  Logger::Debug("[LuaECSManager] DEBUG: setupLuaBindings completed");
 }
 
 void LuaECSManager::loadScript(const std::string &path) {
   try {
     sol::table ecsGlobal = _lua.globals()["ECS"];
     _lua.script_file(path);
-    std::cout << "[LuaECSManager] Loaded script: " << path << std::endl;
+    Logger::Info("[LuaECSManager] Loaded script: " + path);
   } catch (const sol::error &e) {
-    std::cerr << "[LuaECSManager] Error loading script: " << e.what() << std::endl;
+    Logger::Error(std::string("[LuaECSManager] Error loading script: ") + e.what());
   }
 }
 
@@ -767,9 +781,9 @@ void LuaECSManager::unloadScript(const std::string& path) {
 
         setupLuaBindings();
 
-        std::cout << "[LuaECSManager] Unloaded scripts and cleared ECS state" << std::endl;
+        Logger::Info("[LuaECSManager] Unloaded scripts and cleared ECS state");
     } catch (const std::exception& e) {
-        std::cerr << "[LuaECSManager] Error unloading scripts: " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] Error unloading scripts: ") + e.what());
     }
 }
 
@@ -777,13 +791,23 @@ void LuaECSManager::unloadScript(const std::string& path) {
 // HARD-WIRED FIXED UPDATE (Called by GameEngine at 60Hz)
 // ═══════════════════════════════════════════════════════════════
 void LuaECSManager::fixedUpdate(double dt) {
-  // Execute all Lua systems with fixed timestep (deterministic)
+  // 1. Process queued events (e.g. Input, Script Load) from Main Thread
+  {
+      std::lock_guard<std::mutex> lock(_eventQueueMutex);
+      while (!_eventQueue.empty()) {
+          auto func = _eventQueue.front();
+          _eventQueue.pop();
+          if (func) func();
+      }
+  }
+
+  // 2. Execute all Lua systems with fixed timestep (deterministic)
   for (auto &system : _systems) {
     if (system["update"].valid()) {
       try {
         system["update"](dt);  // Pass GameEngine's fixed dt directly
       } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] Error in system update: ") + e.what());
       }
     }
   }
@@ -866,7 +890,7 @@ std::string LuaECSManager::serializeState() {
       try {
         serializedComp = serializeTable(comp);
       } catch (const std::exception &e) {
-        std::cerr << "[LuaECSManager] Error serializing component: " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] Error serializing component: ") + e.what());
         continue;
       }
       ss << "COMP:" << entityId << ":" << serializedComp << ";\n";
@@ -925,11 +949,11 @@ void LuaECSManager::deserializeState(const std::string &state) {
         pool.sparse[entityId] = pool.dense.size() - 1;
 
       } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error deserializing component: " << e.what() << std::endl;
+        Logger::Error(std::string("[LuaECSManager] Error deserializing component: ") + e.what());
       }
     }
   }
-  std::cout << "[LuaECSManager] State deserialized" << std::endl;
+  Logger::Info("[LuaECSManager] State deserialized");
 }
 } // namespace rtypeEngine
 
