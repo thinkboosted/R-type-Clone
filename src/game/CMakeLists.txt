@@ -130,48 +130,9 @@ foreach(MOD ${ALL_MODULES})
     endif()
 endforeach()
 
-    # Ensure modules are built before the executable (so their artifacts exist for copying)
-    if(TARGET SFMLWindowManager)
-        add_dependencies(${EXECUTABLE_TARGET} SFMLWindowManager)
-    endif()
-    if(TARGET GLEWSFMLRenderer)
-        add_dependencies(${EXECUTABLE_TARGET} GLEWSFMLRenderer)
-    endif()
-    if(TARGET LuaECSManager)
-        add_dependencies(${EXECUTABLE_TARGET} LuaECSManager)
-    endif()
-    if(TARGET ECSSavesManager)
-        add_dependencies(${EXECUTABLE_TARGET} ECSSavesManager)
-    endif()
-    if(TARGET BulletPhysicEngine)
-        add_dependencies(${EXECUTABLE_TARGET} BulletPhysicEngine)
-    endif()
-    if(TARGET NetworkManager)
-        add_dependencies(${EXECUTABLE_TARGET} NetworkManager)
-    endif()
-
-    # Copy all .so modules from lib/ directory (Linux/Unix only)
-    if(NOT WIN32)
-        add_custom_command(TARGET ${EXECUTABLE_TARGET} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_BINARY_DIR}/lib
-                $<TARGET_FILE_DIR:${EXECUTABLE_TARGET}>
-            COMMENT "Copying all module libraries to executable directory for ${EXECUTABLE_TARGET}"
-        )
-    endif()
-
-endforeach()
-
-# Create a shared target for copying assets to avoid race conditions during parallel builds
-add_custom_target(CopyAssets
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets
-        ${CMAKE_BINARY_DIR}/assets
-    COMMENT "Copying assets to build directory"
-    VERBATIM
-)
-add_dependencies(r-type_client CopyAssets)
-add_dependencies(r-type_server CopyAssets)
+# Add dependencies for both executables on prepare_game_env
+add_dependencies(r-type_client prepare_game_env)
+add_dependencies(r-type_server prepare_game_env)
 
 # Install rules
 install(TARGETS r-type_client r-type_server
