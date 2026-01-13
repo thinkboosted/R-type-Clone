@@ -27,9 +27,9 @@ public:
 protected:
   void initializeMessageBroker();
   void cleanupMessageBroker();
+  zmq::context_t _zmqContext;
 
 private:
-  zmq::context_t _zmqContext;
   std::unique_ptr<zmq::socket_t> _xpubSocket;
   std::unique_ptr<zmq::socket_t> _xsubSocket;
   std::unique_ptr<zmq::socket_t> _publisher;

@@ -203,25 +203,37 @@ void AApplication::cleanupMessageBroker() {
   _isBrokerActive = false;
 
   if (_publisher) {
-    _publisher->close();
+    try { _publisher->set(zmq::sockopt::linger, 0); } catch (...) {}
+    try { _publisher->close(); } catch (...) {}
     _publisher.reset();
   }
   if (_subscriber) {
-    _subscriber->close();
+    try { _subscriber->set(zmq::sockopt::linger, 0); } catch (...) {}
+    try { _subscriber->close(); } catch (...) {}
     _subscriber.reset();
   }
 
   if (_xpubSocket) {
-    _xpubSocket->close();
+    try { _xpubSocket->set(zmq::sockopt::linger, 0); } catch (...) {}
+    try { _xpubSocket->close(); } catch (...) {}
     _xpubSocket.reset();
   }
   if (_xsubSocket) {
-    _xsubSocket->close();
+    try { _xsubSocket->set(zmq::sockopt::linger, 0); } catch (...) {}
+    try { _xsubSocket->close(); } catch (...) {}
     _xsubSocket.reset();
   }
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
   if (_proxyThread.joinable()) {
-    _proxyThread.join();
+    try {
+      _proxyThread.join();
+    } catch (const std::exception& e) {
+      if (debugEnabled()) {
+        std::cerr << "[App] Error joining proxy thread: " << e.what() << std::endl;
+      }
+    }
   }
 }
 
