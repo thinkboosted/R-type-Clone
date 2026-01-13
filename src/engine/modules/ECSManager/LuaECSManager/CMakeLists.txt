@@ -5,6 +5,7 @@ add_library(LuaECSManager SHARED
     ../../IModule.hpp
     ../../AModule.hpp
     ../../AModule.cpp
+    ../../../core/Logger.cpp
 )
 
 target_include_directories(LuaECSManager PUBLIC

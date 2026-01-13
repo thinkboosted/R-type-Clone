@@ -4,6 +4,8 @@
 add_library(GameEngine STATIC
     GameEngine.cpp
     GameEngine.hpp
+    Logger.cpp
+    Logger.hpp
     ../app/AApplication.cpp
     ../app/AApplication.hpp
     ../app/IApplication.hpp

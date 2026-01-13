@@ -1,4 +1,3 @@
-
 #include "AModule.hpp"
 #include <chrono>
 #include <cstdlib>
@@ -7,23 +6,9 @@
 #include <string>
 #include <typeinfo>
 #include <zmq.hpp>
+#include "../core/Logger.hpp"
 
 namespace {
-bool debugEnabled() {
-    return true;
-}
-
-bool sniperDebugEnabled() {
-    static bool enabled = (std::getenv("RTYPE_SNIPER_DEBUG") != nullptr);
-    return enabled;
-}
-std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
-    if (msg.size() <= limit) {
-        return msg;
-    }
-    return msg.substr(0, limit) + "...";
-}
-
 std::string moduleName(const rtypeEngine::AModule* module) {
     return module ? typeid(*module).name() : "AModule";
 }
@@ -46,56 +31,44 @@ void AModule::start() {
     _running = true;
     _moduleThread = std::thread([this]() {
         const std::string name = moduleName(this);
-        bool isBullet = (name.find("Bullet") != std::string::npos);
-        bool sniper = sniperDebugEnabled() && isBullet;
+        
+        std::stringstream ss;
+        ss << "Start " << name << " TID:" << std::this_thread::get_id();
+        Logger::Debug(ss.str());
 
-        if (debugEnabled()) {
-            std::cout << "[Module] Start " << name << std::endl;
-        }
         if (!_initialized) {
-            if (debugEnabled()) {
-                std::cout << "[Module] Init " << name << std::endl;
-            }
+            Logger::Debug("Init " + name);
             init();
             _initialized = true;
         }
         while (_running) {
-            if (sniper) std::cout << "[Sniper] " << name << " Step 1: Entering processMessages" << std::endl;
             processMessages();
-            if (sniper) std::cout << "[Sniper] " << name << " Step 2: Exited processMessages" << std::endl;
-
-            if (sniper) std::cout << "[Sniper] " << name << " Step 3: Entering loop" << std::endl;
             loop();
-            if (sniper) std::cout << "[Sniper] " << name << " Step 4: Exited loop" << std::endl;
-
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if (_initialized) {
-            if (debugEnabled()) {
-                std::cout << "[Module] Cleanup " << name << std::endl;
-            }
+            Logger::Debug("Cleanup " + name);
             cleanup();
             _initialized = false;
         }
-        if (debugEnabled()) {
-            std::cout << "[Module] Stop " << name << std::endl;
-        }
+        Logger::Debug("Stop " + name);
     });
 }
 
 void AModule::stop() {
     _running = false; // Signal the thread to stop
 
+    // Check if we are trying to join the thread from within itself
     if (_moduleThread.get_id() == std::this_thread::get_id()) {
         if (_moduleThread.joinable()) {
-            _moduleThread.detach();
+            _moduleThread.detach(); // Detach if we are stopping from within the thread
         }
     } else {
         if (_moduleThread.joinable()) {
-            _moduleThread.join();
+            _moduleThread.join(); // Wait for the thread to finish its cleanup
         }
     }
-    _initialized = false;
+    _initialized = false; // Reset initialized state after thread has cleaned up
 }
 
 void AModule::release() {
@@ -138,11 +111,9 @@ void AModule::setZmqContext(void* context) {
     try {
         _publisher->connect(zmqSubEndpoint);
         _subscriber->connect(zmqPubEndpoint);
-        if (debugEnabled()) {
-            std::cout << "[AModule] Successfully injected shared ZMQ context and reconnected sockets" << std::endl;
-        }
+        Logger::Debug("Successfully injected shared ZMQ context and reconnected sockets");
     } catch (const zmq::error_t& e) {
-        std::cerr << "[AModule] setZmqContext connection error: " << e.what() << std::endl;
+        Logger::Error(std::string("[AModule] setZmqContext connection error: ") + e.what());
         throw;
     }
 }
@@ -169,7 +140,7 @@ AModule::AModule(const char* pubEndpoint, const char* subEndpoint)
         _publisher->connect(zmqSubEndpoint);  // Publisher connects to SUB endpoint (XSUB socket)
         _subscriber->connect(zmqPubEndpoint);  // Subscriber connects to PUB endpoint (XPUB socket)
     } catch (const zmq::error_t& e) {
-        std::cerr << "ZeroMQ connection error: " << e.what() << std::endl;
+        Logger::Error(std::string("ZeroMQ connection error: ") + e.what());
         throw;
     }
 }
@@ -181,16 +152,7 @@ void AModule::sendMessage(const std::string& topic, const std::string& message) 
     memcpy(zmqMessage.data(), fullMessage.c_str(), fullMessage.size());
     auto result = _publisher->send(zmqMessage, zmq::send_flags::none);
 
-    if (debugEnabled()) {
-        bool isBinary = (topic == "ImageRendered" || message.size() > 200);
-        std::cout << "[Module->] " << moduleName(this) << " " << topic << " | ";
-        if (isBinary) {
-            std::cout << "[Binary Data / Payload too large: " << message.size() << " bytes]";
-        } else {
-            std::cout << message;
-        }
-        std::cout << std::endl;
-    }
+    Logger::LogTraffic("->", moduleName(this), topic, message);
 }
 
 std::string AModule::getMessage(const std::string& topic) {
@@ -225,6 +187,7 @@ void AModule::setSubscriberBufferLength(int length) {
 }
 
 void AModule::subscribe(const std::string& topic, MessageHandler handler) {
+    Logger::Debug(moduleName(this) + " subscribing to topic: '" + topic + "'");
     _subscriptions.push_back({topic, handler});
     _subscriber->set(zmq::sockopt::subscribe, topic);
 }
@@ -260,16 +223,9 @@ void AModule::processMessages() {
                     if (fullMessage.length() > topic.length() + 1) {
                         payload = fullMessage.substr(topic.length() + 1);
                     }
-                    if (debugEnabled()) {
-                        bool isBinary = (topic == "ImageRendered" || payload.size() > 200);
-                        std::cout << "[Module<-] " << moduleName(this) << " " << topic << " | ";
-                        if (isBinary) {
-                            std::cout << "[Binary Data / Payload too large: " << payload.size() << " bytes]";
-                        } else {
-                            std::cout << payload;
-                        }
-                        std::cout << std::endl;
-                    }
+                    
+                    Logger::LogTraffic("<-", moduleName(this), topic, payload);
+                    
                     handler(payload);
                 }
             }

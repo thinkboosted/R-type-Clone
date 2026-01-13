@@ -8,16 +8,11 @@
 #include <cstdlib>
 #include <mutex>
 #include <thread>
+#include "Logger.hpp"
 
 using json = nlohmann::json;
 
 namespace {
-    // Helper: Check if debug mode is enabled
-    bool isDebugEnabled() {
-        static bool enabled = (std::getenv("RTYPE_DEBUG") != nullptr);
-        return enabled;
-    }
-
     // Helper: Format elapsed time
     std::string formatTime(double seconds) {
         std::ostringstream oss;
@@ -35,9 +30,12 @@ GameEngine::GameEngine(const std::string& configPath)
     _lastFrameTime = std::chrono::high_resolution_clock::now();
     _lastRenderTime = _lastFrameTime;
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] Constructing with config: " << configPath << std::endl;
+    // Enable debug logging if env var is set (initial check)
+    if (std::getenv("RTYPE_DEBUG") != nullptr) {
+        Logger::setDebugEnabled(true);
     }
+
+    Logger::Info("[GameEngine] Constructing with config: " + configPath);
 }
 
 GameEngine::~GameEngine() {
@@ -59,26 +57,21 @@ GameEngine::~GameEngine() {
     cleanupMessageBroker();
 }
 void GameEngine::init() {
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] ======== INITIALIZATION START ========" << std::endl;
-    }
+    Logger::Debug("[GameEngine] ======== INITIALIZATION START ========");
 
     // Phase 1: Load and validate configuration
     try {
         loadConfiguration(_configPath);
         validateConfiguration();
     } catch (const std::exception& e) {
-        std::cerr << "[GameEngine] FATAL: Configuration error: " << e.what() << std::endl;
+        Logger::Error(std::string("[GameEngine] FATAL: Configuration error: ") + e.what());
         throw;
     }
 
     // Phase 2: Calculate frame timing constraints
     if (_config.maxFPS > 0) {
         _minFrameTime = 1.0 / static_cast<double>(_config.maxFPS);
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Frame cap: " << _config.maxFPS
-                      << " FPS (" << formatTime(_minFrameTime) << "/frame)" << std::endl;
-        }
+        Logger::Debug("[GameEngine] Frame cap: " + std::to_string(_config.maxFPS) + " FPS (" + formatTime(_minFrameTime) + "/frame)");
     }
 
     // Phase 3: Setup message broker (ZeroMQ)
@@ -97,13 +90,9 @@ void GameEngine::init() {
 
         setupBroker(brokerEndpoint, isServer);
 
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Message broker active (mode: "
-                      << _config.networkMode << ")" << std::endl;
-        }
+        Logger::Debug("[GameEngine] Message broker active (mode: " + _config.networkMode + ")");
     } catch (const std::exception& e) {
-        std::cerr << "[GameEngine] FATAL: Failed to initialize message broker: "
-                  << e.what() << std::endl;
+        Logger::Error(std::string("[GameEngine] FATAL: Failed to initialize message broker: ") + e.what());
         throw;
     }
 
@@ -111,7 +100,7 @@ void GameEngine::init() {
     try {
         initializeLua();
     } catch (const std::exception& e) {
-        std::cerr << "[GameEngine] FATAL: Lua initialization failed: " << e.what() << std::endl;
+        Logger::Error(std::string("[GameEngine] FATAL: Lua initialization failed: ") + e.what());
         throw;
     }
 
@@ -119,30 +108,25 @@ void GameEngine::init() {
     try {
         loadModules();
     } catch (const std::exception& e) {
-        std::cerr << "[GameEngine] FATAL: Module loading failed: " << e.what() << std::endl;
+        Logger::Error(std::string("[GameEngine] FATAL: Module loading failed: ") + e.what());
         throw;
     }
 
     // Phase 7: Subscribe to critical engine events
     subscribe("ExitApplication", [this](const std::string&) {
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Exit requested" << std::endl;
-        }
+        Logger::Info("[GameEngine] Exit requested");
         _running = false;
     });
 
     subscribe("ReloadConfig", [this](const std::string&) {
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Config reload requested (not yet implemented)" << std::endl;
-        }
+        Logger::Info("[GameEngine] Config reload requested (not yet implemented)");
         // TODO: Hot-reload configuration
     });
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] ======== INITIALIZATION COMPLETE ========" << std::endl;
-        std::cout << "[GameEngine] Loaded " << _modules.size() << " modules, "
-                  << _loadedScripts.size() << " scripts" << std::endl;
-    }
+    Logger::Debug("[GameEngine] ======== INITIALIZATION COMPLETE ========");
+    std::stringstream ss;
+    ss << "[GameEngine] Loaded " << _modules.size() << " modules, " << _loadedScripts.size() << " scripts";
+    Logger::Info(ss.str());
 }
 
 void GameEngine::run() {
@@ -156,9 +140,7 @@ void GameEngine::run() {
     // Standard initialization (config, broker, Lua state, load modules, subscribe events)
     init();
 
-    if (isDebugEnabled()) {
-        std::cout << "[App] Starting " << _modules.size() << " modules" << std::endl;
-    }
+    Logger::Info("[App] Starting " + std::to_string(_modules.size()) + " modules");
 
     // Start all modules (their own threads will call init() and begin processing messages)
     for (const auto &module : _modules) {
@@ -170,9 +152,7 @@ void GameEngine::run() {
     for (const auto& scriptPath : _config.startupScripts) {
         // Dispatch through message bus so LuaECSManager handles loading (it owns the ECS global)
         sendMessage("LoadScript", scriptPath);
-        if (isDebugEnabled()) {
-            std::cout << "=== Loading Unified GameLoop ===" << std::endl;
-        }
+        Logger::Info("=== Loading Unified GameLoop ===");
     }
 
     bool windowReady = false;
@@ -183,12 +163,10 @@ void GameEngine::run() {
             bool isOpen = static_cast<IWindowManager*>(_windowModule.get())->isOpen();
             if (!windowReady && isOpen) {
                 windowReady = true;
-                if (isDebugEnabled()) {
-                    std::cout << "[GameEngine] Window is ready" << std::endl;
-                }
+                Logger::Info("[GameEngine] Window is ready");
             }
             if (windowReady && !isOpen) {
-                std::cout << "[GameEngine] Window closed detected - initiating shutdown" << std::endl;
+                Logger::Info("[GameEngine] Window closed detected - initiating shutdown");
                 _running = false;
                 break;
             }
@@ -198,21 +176,18 @@ void GameEngine::run() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    std::cout << "[GameEngine] Main loop exited - stopping all modules..." << std::endl;
+    Logger::Info("[GameEngine] Main loop exited - stopping all modules...");
 
     auto startShutdown = std::chrono::steady_clock::now();
     for (size_t i = 0; i < _modules.size(); ++i) {
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Stopping module " << (i+1) << "/" << _modules.size() << "..." << std::endl;
-        }
+        Logger::Debug("[GameEngine] Stopping module " + std::to_string(i+1) + "/" + std::to_string(_modules.size()) + "...");
         _modules[i]->stop();
     }
 
     auto shutdownDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - startShutdown);
 
-    std::cout << "[GameEngine] All modules stopped in " << shutdownDuration.count()
-              << "ms - shutdown complete" << std::endl;
+    Logger::Info("[GameEngine] All modules stopped in " + std::to_string(shutdownDuration.count()) + "ms - shutdown complete");
 
     cleanupMessageBroker();
 }
@@ -226,11 +201,7 @@ void GameEngine::loop() {
 
     // Clamp excessive frame times (prevents "spiral of death" after debugger pause)
     if (frameTime > _config.maxFrameTime) {
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] WARNING: Frame time clamped from "
-                      << formatTime(frameTime) << " to "
-                      << formatTime(_config.maxFrameTime) << std::endl;
-        }
+        Logger::Debug("[GameEngine] WARNING: Frame time clamped from " + formatTime(frameTime) + " to " + formatTime(_config.maxFrameTime));
         frameTime = _config.maxFrameTime;
     }
 
@@ -243,10 +214,7 @@ void GameEngine::loop() {
 
     while (_accumulator >= _config.fixedTimestep) {
         if (fixedUpdateCount >= MAX_FIXED_UPDATES) {
-            if (isDebugEnabled()) {
-                std::cout << "[GameEngine] WARNING: Fixed update limit reached (slow frame)"
-                          << std::endl;
-            }
+            Logger::Debug("[GameEngine] WARNING: Fixed update limit reached (slow frame)");
             _accumulator = 0.0; // Reset to prevent spiral
             break;
         }
@@ -277,7 +245,7 @@ void GameEngine::loop() {
     }
 
     // Publish frame metrics (for profiling/debugging)
-    if (_frameCount % 60 == 0 && isDebugEnabled()) {
+    if (_frameCount % 60 == 0) {
         publishFrameMetrics();
     }
 
@@ -285,6 +253,48 @@ void GameEngine::loop() {
 
     // Process ZeroMQ messages (dequeue pending messages)
     processMessages();
+}
+
+void GameEngine::executeFixedUpdate() {
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED FIXED TIMESTEP PIPELINE (Deterministic, 60 Hz)
+    // ═══════════════════════════════════════════════════════════════
+    const double fixedDt = _config.fixedTimestep;
+
+    // Phase 1: Input processing (window events)
+    if (_windowModule) {
+        _windowModule->fixedUpdate(fixedDt);
+    }
+
+    // Phase 2: Network receive (download state updates from server)
+    if (_networkModule) {
+        _networkModule->fixedUpdate(fixedDt);
+    }
+
+    // Phase 3: Physics simulation (Bullet3 stepSimulation)
+    if (_physicsModule) {
+        _physicsModule->fixedUpdate(fixedDt);
+    }
+
+    // Phase 4: ECS/Lua gameplay logic (collision handlers, AI, spawning)
+    if (_ecsModule) {
+        _ecsModule->fixedUpdate(fixedDt);
+    }
+}
+
+void GameEngine::executeRenderUpdate(double alpha) {
+    // ═══════════════════════════════════════════════════════════════
+    // HARD-WIRED VARIABLE TIMESTEP RENDER (Smooth, interpolated)
+    // ═══════════════════════════════════════════════════════════════
+    // Phase 1: Render module generates pixel buffer (OpenGL/GLEW)
+    if (_renderModule) {
+        _renderModule->render(alpha);
+    }
+
+    // Phase 2: Window module displays frame (SFML window.display())
+    if (_windowModule) {
+        _windowModule->render(alpha);
+    }
 }
 
 void GameEngine::loadConfiguration(const std::string& path) {
@@ -362,23 +372,24 @@ void GameEngine::loadConfiguration(const std::string& path) {
 
         if (luaCfg.contains("debug")) {
             _config.enableLuaDebug = luaCfg["debug"].get<bool>();
+            Logger::setDebugEnabled(_config.enableLuaDebug);
         }
     }
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] Configuration loaded:" << std::endl;
-        std::cout << "  - Fixed timestep: " << formatTime(_config.fixedTimestep) << std::endl;
-        std::cout << "  - Max FPS: " << (_config.maxFPS > 0 ? std::to_string(_config.maxFPS) : "unlimited") << std::endl;
-        std::cout << "  - Modules: " << _config.modules.size() << std::endl;
-        std::cout << "  - Scripts: " << _config.startupScripts.size() << std::endl;
-        std::cout << "  - Network mode: " << _config.networkMode << std::endl;
+    if (_config.enableLuaDebug) {
+        Logger::Debug("[GameEngine] Configuration loaded:");
+        Logger::Debug("  - Fixed timestep: " + formatTime(_config.fixedTimestep));
+        Logger::Debug("  - Max FPS: " + (_config.maxFPS > 0 ? std::to_string(_config.maxFPS) : "unlimited"));
+        Logger::Debug("  - Modules: " + std::to_string(_config.modules.size()));
+        Logger::Debug("  - Scripts: " + std::to_string(_config.startupScripts.size()));
+        Logger::Debug("  - Network mode: " + _config.networkMode);
     }
 }
 
 void GameEngine::validateConfiguration() {
     // Check if at least one module is specified (allow empty for local/test mode)
     if (_config.modules.empty() && _config.networkMode != "local") {
-        std::cerr << "[GameEngine] WARNING: No modules specified (only valid for local mode testing)" << std::endl;
+        Logger::Error("[GameEngine] WARNING: No modules specified (only valid for local mode testing)");
     }
 
     // Validate fixed timestep range
@@ -393,9 +404,7 @@ void GameEngine::validateConfiguration() {
         throw std::runtime_error("Configuration error: network.mode must be 'client', 'server', or 'local'");
     }
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] Configuration validated successfully" << std::endl;
-    }
+    Logger::Debug("[GameEngine] Configuration validated successfully");
 }
 
 void GameEngine::initializeLua() {
@@ -413,9 +422,7 @@ void GameEngine::initializeLua() {
     // Setup Lua bindings for engine functions
     setupLuaBindings();
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] Lua state initialized (Sol2)" << std::endl;
-    }
+    Logger::Debug("[GameEngine] Lua state initialized (Sol2)");
 }
 
 void GameEngine::setupLuaBindings() {
@@ -450,7 +457,7 @@ void GameEngine::setupLuaBindings() {
     });
 
     if (_config.enableLuaDebug) {
-        std::cout << "[GameEngine] Lua bindings registered (debug mode enabled)" << std::endl;
+        Logger::Debug("[GameEngine] Lua bindings registered (debug mode enabled)");
     }
 }
 
@@ -483,9 +490,7 @@ void GameEngine::loadModules() {
             }
 
             try {
-                if (isDebugEnabled()) {
-                    std::cout << "[GameEngine] Loading module: " << modulePath << std::endl;
-                }
+                Logger::Debug("[GameEngine] Loading module: " + modulePath);
 
                 addModule(modulePath, _pubBrokerEndpoint, _subBrokerEndpoint, &_zmqContext);
 
@@ -501,8 +506,7 @@ void GameEngine::loadModules() {
                     _networkModule = _modules.back();
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[GameEngine] ERROR: Failed to load module '"
-                          << moduleName << "': " << e.what() << std::endl;
+                Logger::Error(std::string("[GameEngine] ERROR: Failed to load module '") + moduleName + "': " + e.what());
                 throw;
             }
         }
@@ -512,9 +516,7 @@ void GameEngine::loadModules() {
 void GameEngine::loadLuaScript(const std::string& scriptPath) {
     // Check if already loaded (prevent duplicate loading)
     if (std::find(_loadedScripts.begin(), _loadedScripts.end(), scriptPath) != _loadedScripts.end()) {
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Script already loaded: " << scriptPath << std::endl;
-        }
+        Logger::Debug("[GameEngine] Script already loaded: " + scriptPath);
         return;
     }
 
@@ -522,69 +524,10 @@ void GameEngine::loadLuaScript(const std::string& scriptPath) {
         _lua.script_file(scriptPath);
         _loadedScripts.push_back(scriptPath);
 
-        if (isDebugEnabled()) {
-            std::cout << "[GameEngine] Loaded Lua script: " << scriptPath << std::endl;
-        }
+        Logger::Info("[GameEngine] Loaded Lua script: " + scriptPath);
     } catch (const sol::error& e) {
         std::string errorMsg = "Lua script error in '" + scriptPath + "': " + e.what();
         throw std::runtime_error(errorMsg);
-    }
-}
-
-void GameEngine::executeFixedUpdate() {
-    // ═══════════════════════════════════════════════════════════════
-    // HARD-WIRED FIXED TIMESTEP PIPELINE (Deterministic, 60 Hz)
-    // ═══════════════════════════════════════════════════════════════
-    // Direct virtual calls replace ZeroMQ messages for performance
-    // Order is CRITICAL for correct dependency flow!
-    //
-    // INPUT → NETWORK (recv) → PHYSICS → ECS → NETWORK (send)
-    //
-    // Performance: ~10-50x faster than message passing
-    // ═══════════════════════════════════════════════════════════════
-
-    const double fixedDt = _config.fixedTimestep;
-
-    // Phase 1: Input processing (window events)
-    if (_windowModule) {
-        _windowModule->fixedUpdate(fixedDt);
-    }
-
-    // Phase 2: Network receive (download state updates from server)
-    if (_networkModule) {
-        _networkModule->fixedUpdate(fixedDt);
-    }
-
-    // Phase 3: Physics simulation (Bullet3 stepSimulation)
-    if (_physicsModule) {
-        _physicsModule->fixedUpdate(fixedDt);
-    }
-
-    // Phase 4: ECS/Lua gameplay logic (collision handlers, AI, spawning)
-    if (_ecsModule) {
-        _ecsModule->fixedUpdate(fixedDt);
-    }
-
-    // Note: RENDER phase is in executeRenderUpdate (variable timestep)
-}
-
-void GameEngine::executeRenderUpdate(double alpha) {
-    // ═══════════════════════════════════════════════════════════════
-    // HARD-WIRED VARIABLE TIMESTEP RENDER (Smooth, interpolated)
-    // ═══════════════════════════════════════════════════════════════
-    // Alpha factor: [0.0 - 1.0] interpolation between physics states
-    // This prevents stuttering when render FPS != physics FPS
-    // Direct virtual calls for minimal latency
-    // ═══════════════════════════════════════════════════════════════
-
-    // Phase 1: Render module generates pixel buffer (OpenGL/GLEW)
-    if (_renderModule) {
-        _renderModule->render(alpha);
-    }
-
-    // Phase 2: Window module displays frame (SFML window.display())
-    if (_windowModule) {
-        _windowModule->render(alpha);
     }
 }
 
@@ -593,43 +536,18 @@ void GameEngine::publishFrameMetrics() {
     metrics << "Frame:" << _frameCount
             << " Accumulator:" << (_accumulator * 1000.0) << "ms";
 
-    if (isDebugEnabled()) {
-        std::cout << "[GameEngine] " << metrics.str() << std::endl;
-    }
+    // Logger::Debug("[GameEngine] " + metrics.str()); // Too verbose? Filtered by Logger blacklisting anyway
 
     sendMessage("FrameMetrics", metrics.str());
 }
 
 bool GameEngine::invokeModulePhase(const std::string& phase) {
-    // ═══════════════════════════════════════════════════════════════
-    // THREAD-SAFE MODULE INVOCATION
-    // ═══════════════════════════════════════════════════════════════
-    // Uses shared_lock for concurrent reads (modules don't modify
-    // the module list during execution, only during init/cleanup)
-    //
-    // Fallback: If direct module access fails, use message bus
-    // ═══════════════════════════════════════════════════════════════
-
     try {
-        // Acquire shared lock (allows multiple readers)
         std::shared_lock<std::shared_mutex> lock(_moduleMutex);
-
-        // Publish phase message (modules subscribe via ZeroMQ)
-        // This is the PRIMARY mechanism (existing modules use this)
         sendMessage("PipelinePhase", phase);
-
-        // Future enhancement: Direct module->update() calls
-        // for (auto& module : _modules) {
-        //     if (module->supportsPhase(phase)) {
-        //         module->executePhase(phase);
-        //     }
-        // }
-
         return true;
-
     } catch (const std::exception& e) {
-        std::cerr << "[GameEngine] ERROR in phase '" << phase << "': "
-                  << e.what() << std::endl;
+        Logger::Error(std::string("[GameEngine] ERROR in phase '") + phase + "': " + e.what());
         return false;
     }
 }
