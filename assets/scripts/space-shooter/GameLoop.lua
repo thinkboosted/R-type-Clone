@@ -28,13 +28,18 @@ dofile("assets/scripts/space-shooter/components/Components.lua")
 -- will have already set the correct capabilities.
 
 if ECS.capabilities then
-    -- If capabilities are all false, this is likely a client that hasn't
-    -- received NetworkStatus yet. Set client defaults.
-    if not ECS.capabilities.hasRendering and not ECS.capabilities.hasAuthority then
-        print("[GameLoop] Setting initial CLIENT capabilities (pre-network)")
-        ECS.capabilities.hasRendering = true
-        ECS.capabilities.hasLocalInput = true
-        -- Authority and NetworkSync will be set by menu choice or NetworkStatus
+    -- Check for initialization flag to avoid fragile state checks
+    if not ECS.capabilities.isInitialized then
+        -- Unless explicitly marked as a server, ensure client capabilities are enabled.
+        -- We check isServer because checking 'not hasAuthority' would fail for Solo mode (which has authority).
+        if not ECS.capabilities.isServer then
+            if not ECS.capabilities.hasRendering then
+                print("[GameLoop] Setting initial CLIENT capabilities (pre-network)")
+                ECS.capabilities.hasRendering = true
+            end
+            ECS.capabilities.hasLocalInput = true
+        end
+        ECS.capabilities.isInitialized = true
     end
     
     print("[GameLoop] Capabilities (current):")
