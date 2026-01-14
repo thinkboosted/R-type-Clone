@@ -113,26 +113,29 @@ function Spawns.spawnEnemy(x, y, speed, type)
             name = "Monster_1",
             frames = 8,
             pattern = "sine",
-            amp = 1.0, freq = 1.0 -- Big smooth wave
+            amp = 1.0, freq = 1.0, -- Big smooth wave
+            color = Color(1.0, 0.0, 0.0)
         },
         [2] = {
             name = "Monster_2",
             frames = 3,
             pattern = "zigzag",
-            amp = 1.0, freq = 0.3 -- Sharp mechanical movement
+            amp = 1.0, freq = 0.3, -- Sharp mechanical movement
+            color = Color(0.5, 0.5, 0.5) -- gray
         },
         [3] = {
             name = "Monster_3",
             frames = 8,
             pattern = "circle",
-            amp = 1.0, freq = 1.0 -- Looping flight
+            amp = 1.0, freq = 1.0, -- Looping flight
+            color = Color(0.6, 0.4, 0.2) -- light brown
         }
     }
     
     local cfg = configType[mType] or configType[1]
 
     -- Core
-    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, 1, 1, 1))
+    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, 1.5, 1.5, 1.5))
     ECS.addComponent(e, "Tag", Tag({"Enemy"}))
     ECS.addComponent(e, "Enemy", Enemy(speed))
     ECS.addComponent(e, "Life", Life(config.enemy.life))
@@ -153,13 +156,13 @@ function Spawns.spawnEnemy(x, y, speed, type)
         local texturePath = "assets/textures/Ennemies/" .. cfg.name .. "/motion_"
         
         -- Start with Frame 1
-        ECS.addComponent(e, "Mesh", Mesh(basePath .. "1.obj", texturePath .. "1.png"))
-        ECS.addComponent(e, "Color", Color(1.0, 1.0, 1.0))
+        ECS.addComponent(e, "Mesh", Mesh(basePath .. "1.obj", nil)) --texturePath .. "1.png"))
+        ECS.addComponent(e, "Color", cfg.color)
         
         -- Animate
         ECS.addComponent(e, "Animation", Animation(
             cfg.frames,    -- per type
-            0.1,  -- 10 FPS
+            0.2,  -- 10 FPS
             true, -- Loop
             basePath
             --texturePath
@@ -200,10 +203,10 @@ function Spawns.spawnBullet(x, y, z, isEnemy)
     -- Visuals
     if hasRendering() then
         if isEnemy then
-             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", nil))
+             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
              ECS.addComponent(e, "Color", Color(1.0, 0.5, 0.0)) -- Orange
         else
-            ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", nil))
+            ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
              -- ECS.addComponent(e, "Mesh", Mesh("assets/models/laser.obj", nil)) -- Laser
              ECS.addComponent(e, "Color", Color(0.0, 1.0, 1.0)) -- Cyan
         end

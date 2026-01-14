@@ -159,6 +159,10 @@ function EnemySystem.update(dt)
                 end
                 ECS.addComponent(scoreEntities[1], "Score", scoreComp)
             end
+            -- Broadcast destruction to clients in multiplayer
+            if ECS.capabilities.hasNetworkSync then
+                ECS.broadcastNetworkMessage("ENTITY_DESTROY", tostring(id))
+            end
             ECS.destroyEntity(id)
         end
     end
@@ -166,7 +170,7 @@ end
 
 function EnemySystem.spawnEnemy()
     local y = math.random(-5, 5)
-    local x = 25 
+    local x = 25
 
     local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0)
     local speed = EnemySystem.baseSpeed * difficultyMultiplier

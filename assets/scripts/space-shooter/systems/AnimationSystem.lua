@@ -51,17 +51,17 @@ function AnimationSystem.update(dt)
                         local newModel = anim.modelBase .. math.floor(anim.currentFrame) .. ".obj"
                         local newTexture = ""
                         
-                        --if anim.textureBase and anim.textureBase ~= "" then
-                        --    newTexture = anim.textureBase .. math.floor(anim.currentFrame) .. ".png"
-                        --end
+                        if anim.textureBase and anim.textureBase ~= "" then
+                            newTexture = anim.textureBase .. math.floor(anim.currentFrame) .. ".png"
+                        end
                         
                         -- Update the component
                         local mesh = ECS.getComponent(entityId, "Mesh")
                         
                         mesh.modelPath = newModel
-                        --if newTexture ~= "" then
-                        --    mesh.texturePath = newTexture
-                        --end
+                        if newTexture ~= "" then
+                            mesh.texturePath = newTexture
+                        end
                         
                         -- Force update
                         ECS.addComponent(entityId, "Mesh", mesh)
