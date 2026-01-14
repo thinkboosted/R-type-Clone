@@ -59,10 +59,88 @@ function ecs.setTexture(id, path) end
 function ecs.playSound(path) end
 
 ---
+--- @function playMusic
+--- @param musicId string
+--- @param path string
+--- @param volume number
+--- @param loop boolean
+function ecs.playMusic(musicId, path, volume, loop) end
+
+---
+--- @function stopMusic
+--- @param musicId string
+function ecs.stopMusic(musicId) end
+
+---
+--- @function pauseMusic
+--- @param musicId string
+function ecs.pauseMusic(musicId) end
+
+---
+--- @function resumeMusic
+--- @param musicId string
+function ecs.resumeMusic(musicId) end
+
+---
+--- @function setMusicVolume
+--- @param musicId string
+--- @param volume number
+function ecs.setMusicVolume(musicId, volume) end
+
+---
 --- @function createMesh
 --- @param id string
 --- @param path string
 function ecs.createMesh(id, path) end
+
+---
+--- @function setCollider
+--- @param id string
+--- @param type string
+--- @param sx number
+--- @param sy number
+--- @param sz number
+function ecs.setCollider(id, type, sx, sy, sz) end
+
+---
+--- @function getCollider
+--- @param id string
+function ecs.getCollider(id) end
+
+---
+--- @function removeCollider
+--- @param id string
+function ecs.removeCollider(id) end
+
+---
+--- @function setEntityOwner
+--- @param id string
+--- @param clientId integer
+function ecs.setEntityOwner(id, clientId) end
+
+---
+--- @function getEntityOwner
+--- @param id string
+function ecs.getEntityOwner(id) end
+
+---
+--- @function isEntityOwned
+--- @param id string
+function ecs.isEntityOwned(id) end
+
+---
+--- @function canModifyEntity
+--- @param id string
+function ecs.canModifyEntity(id) end
+
+---
+--- @function setClientId
+--- @param clientId integer
+function ecs.setClientId(clientId) end
+
+---
+--- @function getClientId
+function ecs.getClientId() end
 
 ---
 --- @function isKeyPressed
@@ -73,7 +151,7 @@ function ecs.isKeyPressed(keyName) end
 --- @function addComponent
 --- @param entityId string
 --- @param componentName string
---- @param componentData table
+--- @param componentData any
 function ecs.addComponent(entityId, componentName, componentData) end
 
 ---
@@ -129,6 +207,19 @@ function ecs.broadcastNetworkMessage(topic, payload) end
 --- @param topic string
 --- @param payload string
 function ecs.sendToClient(clientId, topic, payload) end
+
+---
+--- @function syncEntityState
+--- @param entityId string
+--- @param x number
+--- @param y number
+--- @param z number
+function ecs.syncEntityState(entityId, x, y, z) end
+
+---
+--- @function broadcastPhysicsUpdate
+--- @param message string
+function ecs.broadcastPhysicsUpdate(message) end
 
 ---
 --- @function sendBinary
@@ -191,4 +282,13 @@ function ecs.removeSystems() end
 ---
 --- @function removeEntities
 function ecs.removeEntities() end
+
+---
+--- @function loadScene
+--- @param sceneName string
+function ecs.loadScene(sceneName) end
+
+---
+--- @function getCurrentScene
+function ecs.getCurrentScene() end
 
