@@ -57,8 +57,6 @@ void Logger::LogTraffic(const std::string& direction, const std::string& source,
 void Logger::Log(Level level, const std::string& message) {
     std::lock_guard<std::mutex> lock(_mutex);
 
-    auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    
     std::string levelStr;
     std::string colorCode;
 
