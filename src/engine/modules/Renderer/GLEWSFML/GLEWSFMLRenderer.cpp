@@ -31,7 +31,7 @@ namespace rtypeEngine
 {
 
 namespace {
-float safeParseFloat(const std::string& str, float fallback = 0.0f) noexcept {
+[[nodiscard]] inline float safeParseFloat(const std::string& str, float fallback = 0.0f) noexcept {
     errno = 0;
     char* end = nullptr;
     const float value = std::strtof(str.c_str(), &end);
@@ -39,12 +39,17 @@ float safeParseFloat(const std::string& str, float fallback = 0.0f) noexcept {
     return value;
 }
 
-int safeParseInt(const std::string& str, int fallback = 0) noexcept {
+[[nodiscard]] inline int safeParseInt(const std::string& str, int fallback = 0) noexcept {
     errno = 0;
     char* end = nullptr;
     const long value = std::strtol(str.c_str(), &end, 10);
     if (end == str.c_str() || errno == ERANGE) return fallback;
     return static_cast<int>(value);
+}
+
+template<typename T>
+[[nodiscard]] inline constexpr T clamp(T val, T min, T max) noexcept {
+    return val < min ? min : (val > max ? max : val);
 }
 } // namespace
 
@@ -76,26 +81,18 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::init()
     {
-        // DEBUG: Listen to EVERYTHING to check if messages arrive
-        subscribe("", [this](const std::string &msg) {
-            // Filter out noisy messages
-            if (msg.find("FrameMetrics") == std::string::npos) {
+        subscribe("", [this](const auto& msg) {
+            if (msg.find("FrameMetrics") == std::string::npos)
                 std::cout << "[GLEW-ALL] " << msg << std::endl;
-            }
         });
 
-        subscribe("RenderEntityCommand", [this](const std::string &msg)
-                  { this->onRenderEntityCommand(msg); });
-        subscribe("CreateText", [this](const std::string &msg)
-                  { this->loadText(msg); });
-        subscribe("WindowResized", [this](const std::string &msg)
-                  { this->handleWindowResized(msg); });
+        subscribe("RenderEntityCommand", [this](const auto& msg) { onRenderEntityCommand(msg); });
+        subscribe("CreateText", [this](const auto& msg) { loadText(msg); });
+        subscribe("WindowResized", [this](const auto& msg) { handleWindowResized(msg); });
 
         initContext();
-
         ensureGLEWInitialized();
         createFramebuffer();
-
         glEnable(GL_DEPTH_TEST);
 
         std::cout << "[GLEWSFMLRenderer] Initialized" << std::endl;
@@ -103,20 +100,15 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::ensureGLEWInitialized()
     {
-        if (!_glewInitialized)
-        {
-            glewExperimental = GL_TRUE;
-            GLenum err = glewInit();
-            if (GLEW_OK != err)
-            {
-                std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
-            }
-            else
-            {
-                _glewInitialized = true;
-                glGetError(); // Clear any error from glewInit
-            }
+        if (_glewInitialized) return;
+
+        glewExperimental = GL_TRUE;
+        if (const auto err = glewInit(); GLEW_OK != err) {
+            std::cerr << "Error: " << glewGetErrorString(err) << std::endl;
+            return;
         }
+        _glewInitialized = true;
+        glGetError(); // Clear any error from glewInit
     }
 
     void GLEWSFMLRenderer::loop()
@@ -323,7 +315,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.color = {1.0f, 0.5f, 0.2f};
                         _renderObjects[id] = obj;
 
-                        if (_meshCache.find(obj.meshPath) == _meshCache.end())
+                        if (!_meshCache.count(obj.meshPath))
                         {
                             loadMesh(obj.meshPath);
                         }
@@ -1022,32 +1014,24 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             }
         }
 
-        for (const auto &v : tempVertices)
-        {
-            meshData.vertices.push_back(v.x);
-            meshData.vertices.push_back(v.y);
-            meshData.vertices.push_back(v.z);
+        for (const auto& [x, y, z] : tempVertices) {
+            meshData.vertices.insert(meshData.vertices.end(), {x, y, z});
         }
 
-        for (const auto &v : tempTextures)
-        {
-            meshData.uvs.push_back(v.x);
-            meshData.uvs.push_back(v.y);
+        for (const auto& [x, y] : tempTextures) {
+            meshData.uvs.insert(meshData.uvs.end(), {x, y});
         }
         std::cout << "[GLEWSFMLRenderer] Loaded mesh " << path << " with " << meshData.vertices.size() / 3 << " vertices, " << meshData.uvs.size() / 2 << " UVs, and " << meshData._textureIndices.size() << " UV indices." << std::endl; // debug
         _meshCache[path] = meshData;
     }
 
-    GLuint GLEWSFMLRenderer::loadTexture(const std::string &path)
+    [[nodiscard]] GLuint GLEWSFMLRenderer::loadTexture(const std::string &path)
     {
-        if (_textureCache.find(path) != _textureCache.end())
-        {
-            return _textureCache[path];
-        }
+        if (const auto it = _textureCache.find(path); it != _textureCache.end())
+            return it->second;
 
         sf::Image image;
-        if (!image.loadFromFile(path))
-        {
+        if (!image.loadFromFile(path)) {
             std::cerr << "Failed to load texture: " << path << std::endl;
             return 0;
         }
@@ -1062,8 +1046,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        _textureCache[path] = textureID;
-        return textureID;
+        return _textureCache[path] = textureID;
     }
 
     GLuint GLEWSFMLRenderer::createTextTexture(const std::string &text, const std::string &fontPath, unsigned int fontSize, Vector3f color)
@@ -1287,21 +1270,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::destroyFramebuffer()
     {
-        if (_framebuffer)
-        {
-            glDeleteFramebuffers(1, &_framebuffer);
-            _framebuffer = 0;
-        }
-        if (_renderTexture)
-        {
-            glDeleteTextures(1, &_renderTexture);
-            _renderTexture = 0;
-        }
-        if (_depthBuffer)
-        {
-            glDeleteRenderbuffers(1, &_depthBuffer);
-            _depthBuffer = 0;
-        }
+        if (_framebuffer) { glDeleteFramebuffers(1, &_framebuffer); _framebuffer = 0; }
+        if (_renderTexture) { glDeleteTextures(1, &_renderTexture); _renderTexture = 0; }
+        if (_depthBuffer) { glDeleteRenderbuffers(1, &_depthBuffer); _depthBuffer = 0; }
     }
 
     void GLEWSFMLRenderer::clearBuffer()
@@ -1976,15 +1947,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 gen.particles.push_back(p);
             }
 
-            for (auto it = gen.particles.begin(); it != gen.particles.end();)
-            {
+            for (auto it = gen.particles.begin(); it != gen.particles.end();) {
                 it->life -= dt;
-                if (it->life <= 0)
-                {
+                if (it->life <= 0) {
                     it = gen.particles.erase(it);
-                }
-                else
-                {
+                } else {
                     it->position.x += it->velocity.x * dt;
                     it->position.y += it->velocity.y * dt;
                     it->position.z += it->velocity.z * dt;
@@ -2001,15 +1968,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         glDepthMask(GL_FALSE);
 
-        for (const auto &pair : _particleGenerators)
-        {
-            const auto &gen = pair.second;
-
-            for (const auto &p : gen.particles)
-            {
-                float lifeRatio = (p.maxLife > 0.0f) ? p.life / p.maxLife : 0.0f;
-                float alpha = lifeRatio;
-
+        for (const auto& [id, gen] : _particleGenerators) {
+            for (const auto& p : gen.particles) {
+                const auto alpha = (p.maxLife > 0.0f) ? p.life / p.maxLife : 0.0f;
                 glColor4f(p.color.x, p.color.y, p.color.z, alpha);
 
                 glPushMatrix();
@@ -2017,30 +1978,17 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
                 float modelview[16];
                 glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-
                 for (int i = 0; i < 3; i++)
-                {
                     for (int j = 0; j < 3; j++)
-                    {
-                        if (i == j)
-                            modelview[i * 4 + j] = 1.0f;
-                        else
-                            modelview[i * 4 + j] = 0.0f;
-                    }
-                }
-
+                        modelview[i * 4 + j] = (i == j) ? 1.0f : 0.0f;
                 glLoadMatrixf(modelview);
 
-                float s = p.size;
+                const auto s = p.size;
                 glBegin(GL_QUADS);
-                glTexCoord2f(0, 0);
-                glVertex3f(-s, -s, 0);
-                glTexCoord2f(1, 0);
-                glVertex3f(s, -s, 0);
-                glTexCoord2f(1, 1);
-                glVertex3f(s, s, 0);
-                glTexCoord2f(0, 1);
-                glVertex3f(-s, s, 0);
+                glTexCoord2f(0, 0); glVertex3f(-s, -s, 0);
+                glTexCoord2f(1, 0); glVertex3f(s, -s, 0);
+                glTexCoord2f(1, 1); glVertex3f(s, s, 0);
+                glTexCoord2f(0, 1); glVertex3f(-s, s, 0);
                 glEnd();
 
                 glPopMatrix();
