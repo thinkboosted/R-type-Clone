@@ -34,6 +34,15 @@ public:
   std::string serializeState();
   void deserializeState(const std::string &state);
 
+  // PUBLIC ACCESSORS FOR TESTING & DEBUGGING
+  sol::state& getLuaState() { return _lua; }
+  std::weak_ptr<LuaECSManager> getWeakSelfRef() const { return _selfRef; }
+  size_t getEntityCount() const { return _entities.size(); }
+  const ComponentPool* getComponentPool(const std::string& name) const {
+    auto it = _pools.find(name);
+    return it != _pools.end() ? &it->second : nullptr;
+  }
+
 private:
   // Thread safety
   std::mutex _eventQueueMutex;

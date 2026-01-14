@@ -16,6 +16,9 @@
 #include <vector>
 #include "../../../core/Logger.hpp"
 #include "../../../types/Vec3.hpp"
+#include "../../../types/Transform.hpp"
+#include "../../../types/Collider.hpp"
+#include "../../../types/Mesh.hpp"
 
 namespace {
     void serializeToMsgPack(const sol::object& obj, msgpack::packer<msgpack::sbuffer>& pk) {
@@ -401,6 +404,82 @@ void LuaECSManager::setupLuaBindings() {
       sol::meta_function::to_string, &Vec3::toString
   );
 
+  // Register Transform UserType
+  _lua.new_usertype<Transform>("Transform",
+      sol::constructors<
+          Transform(),
+          Transform(float, float, float),
+          Transform(float, float, float, float, float, float),
+          Transform(float, float, float, float, float, float, float, float, float)
+      >(),
+      "x", &Transform::x,
+      "y", &Transform::y,
+      "z", &Transform::z,
+      "rx", &Transform::rx,
+      "ry", &Transform::ry,
+      "rz", &Transform::rz,
+      "sx", &Transform::sx,
+      "sy", &Transform::sy,
+      "sz", &Transform::sz,
+      "setPosition", &Transform::setPosition,
+      "setRotation", &Transform::setRotation,
+      "setScale", &Transform::setScale,
+      "getDistance", &Transform::getDistance,
+      sol::meta_function::to_string, [](const Transform& self) -> std::string {
+          std::stringstream ss;
+          ss << "Transform(" << self.x << ", " << self.y << ", " << self.z
+             << " | rx=" << self.rx << ", ry=" << self.ry << ", rz=" << self.rz
+             << " | sx=" << self.sx << ", sy=" << self.sy << ", sz=" << self.sz << ")";
+          return ss.str();
+      }
+  );
+
+  // Register Collider UserType
+  _lua.new_usertype<Collider>("Collider",
+      sol::constructors<
+          Collider(),
+          Collider(const std::string&),
+          Collider(const std::string&, float, float, float)
+      >(),
+      "type", sol::property(
+          [](const Collider& self) { return self.getTypeString(); },
+          [](Collider& self, const std::string& str) { self.type = Collider::parseType(str); }
+      ),
+      "size", &Collider::size,
+      "setSize", [](Collider& self, float x, float y, float z) { self.size = {x, y, z}; },
+      "isValid", &Collider::isValid,
+      "getTypeString", &Collider::getTypeString,
+      sol::meta_function::to_string, [](const Collider& self) -> std::string {
+          std::stringstream ss;
+          ss << "Collider(" << self.getTypeString() << ", "
+             << self.size[0] << ", " << self.size[1] << ", " << self.size[2] << ")";
+          return ss.str();
+      }
+  );
+
+  // Register Mesh UserType
+  _lua.new_usertype<Mesh>("Mesh",
+      sol::constructors<
+          Mesh(),
+          Mesh(const std::string&),
+          Mesh(const std::string&, const std::string&)
+      >(),
+      "modelPath", &Mesh::modelPath,
+      "texturePath", &Mesh::texturePath,
+      "validatePaths", &Mesh::validatePaths,
+      "isModelLoaded", &Mesh::isModelLoaded,
+      "isTextureLoaded", &Mesh::isTextureLoaded,
+      sol::meta_function::to_string, [](const Mesh& self) -> std::string {
+          std::stringstream ss;
+          ss << "Mesh(\"" << self.modelPath << "\"";
+          if (!self.texturePath.empty()) {
+              ss << ", \"" << self.texturePath << "\"";
+          }
+          ss << ")";
+          return ss.str();
+      }
+  );
+
   auto ecs = _lua.create_named_table("ECS");
 
   _capabilities = _lua.create_named_table("capabilities");
@@ -533,7 +612,7 @@ void LuaECSManager::setupLuaBindings() {
 
   ecs.set_function("addComponent", [this](const std::string &entityId,
                                           const std::string &componentName,
-                                          sol::table componentData) {
+                                          sol::object componentData) {
     // std::cout << "[LuaECSManager] Adding component " << componentName << " to " << entityId << std::endl;
     if (_pools.find(componentName) == _pools.end()) {
       _pools[componentName] = ComponentPool();
@@ -550,7 +629,8 @@ void LuaECSManager::setupLuaBindings() {
 
         // Automatic Renderer Sync: Create Sprite
         if (componentName == "Sprite") {
-            std::string texturePath = componentData.get_or<std::string>("texture", "");
+            sol::table componentTable = componentData.as<sol::table>();
+            std::string texturePath = componentTable.get_or<std::string>("texture", "");
             if (!texturePath.empty()) {
                 // Command: CreateEntity:Sprite:texturePath:entityId
                 std::stringstream ss;

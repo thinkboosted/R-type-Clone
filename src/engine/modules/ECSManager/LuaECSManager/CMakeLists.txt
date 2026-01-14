@@ -42,3 +42,6 @@ install(TARGETS LuaECSManager
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# Include tests subdirectory
+add_subdirectory(tests)
