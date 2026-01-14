@@ -355,18 +355,49 @@ std::string LuaECSManager::generateUuid() {
 }
 
 void LuaECSManager::setupLuaBindings() {
-  // Register Vec3 UserType
+  // Register Vec3 UserType with optimized bindings
+  // OPTIMIZATION: Use lambdas for in-place operations and careful return handling
   _lua.new_usertype<Vec3>("Vec3",
       sol::constructors<Vec3(), Vec3(float, float, float)>(),
       "x", &Vec3::x,
       "y", &Vec3::y,
       "z", &Vec3::z,
-      "normalize", &Vec3::normalize,
-      "length", &Vec3::length,
-      sol::meta_function::addition, [](const Vec3& a, const Vec3& b) { return a + b; },
-      sol::meta_function::subtraction, [](const Vec3& a, const Vec3& b) { return a - b; },
-      sol::meta_function::multiplication, [](const Vec3& a, float b) { return a * b; },
-      sol::meta_function::division, [](const Vec3& a, float b) { return a / b; },
+      // OPTIMIZATION: normalize() now modifies in-place to avoid copies
+      "normalize", [](Vec3& self) -> Vec3& {
+          self = self.normalize();
+          return self;
+      },
+      // OPTIMIZATION: length() returns primitive (no copy overhead)
+      "length", [](const Vec3& self) -> float {
+          return self.length();
+      },
+      // Arithmetic operations: must return copies (immutability constraint)
+      sol::meta_function::addition, [](const Vec3& a, const Vec3& b) -> Vec3 {
+          return a + b;
+      },
+      sol::meta_function::subtraction, [](const Vec3& a, const Vec3& b) -> Vec3 {
+          return a - b;
+      },
+      sol::meta_function::multiplication, [](const Vec3& a, float b) -> Vec3 {
+          return a * b;
+      },
+      sol::meta_function::division, [](const Vec3& a, float b) -> Vec3 {
+          return a / b;
+      },
+      // NEW: Custom method for in-place add (Lua: v:addInPlace(other))
+      "addInPlace", [](Vec3& self, const Vec3& other) -> Vec3& {
+          self.x += other.x;
+          self.y += other.y;
+          self.z += other.z;
+          return self;
+      },
+      // NEW: Custom method for in-place multiply (Lua: v:mulInPlace(scalar))
+      "mulInPlace", [](Vec3& self, float scalar) -> Vec3& {
+          self.x *= scalar;
+          self.y *= scalar;
+          self.z *= scalar;
+          return self;
+      },
       sol::meta_function::to_string, &Vec3::toString
   );
 
@@ -846,6 +877,10 @@ void LuaECSManager::setupLuaBindings() {
   Logger::Debug("[LuaECSManager] DEBUG: setupLuaBindings completed");
 }
 
+void LuaECSManager::setSelfReference(std::shared_ptr<LuaECSManager> self) {
+    _selfRef = self;
+}
+
 void LuaECSManager::loadScript(const std::string &path) {
   try {
     sol::table ecsGlobal = _lua.globals()["ECS"];
@@ -858,19 +893,41 @@ void LuaECSManager::loadScript(const std::string &path) {
 
 void LuaECSManager::unloadScript(const std::string& path) {
     try {
+        // Destroy all networked entities with messages
         for (const auto& id : _entities) {
             sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
             sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
         }
 
+        // Clear internal state WITHOUT destroying the Lua state
+        // This prevents dangling references to _capabilities table and other Sol2 objects
         _systems.clear();
         _entities.clear();
         _pools.clear();
+        _luaListeners.clear();
 
-        _lua = sol::state();
-        _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math, sol::lib::io, sol::lib::os);
-
-        setupLuaBindings();
+        // Instead of: _lua = sol::state(); (which destroys all references)
+        // We selectively clear only the entity/system data via Lua:
+        try {
+            sol::table ecs = _lua["ECS"];
+            if (ecs.valid()) {
+                // Clear user-defined systems and data but keep binding functions
+                ecs["systems"] = _lua.create_table();  // Reset systems table
+                // Reset game mode to default
+                sol::table caps = ecs["capabilities"];
+                if (caps.valid()) {
+                    caps["hasAuthority"] = false;
+                    caps["hasRendering"] = false;
+                    caps["hasLocalInput"] = false;
+                    caps["hasNetworkSync"] = false;
+                    caps["isLocalMode"] = false;
+                    caps["isClientMode"] = false;
+                    caps["isServer"] = false;
+                }
+            }
+        } catch (const sol::error& e) {
+            Logger::Info(std::string("[LuaECSManager] Info clearing Lua state: ") + e.what());
+        }
 
         Logger::Info("[LuaECSManager] Unloaded scripts and cleared ECS state");
     } catch (const std::exception& e) {

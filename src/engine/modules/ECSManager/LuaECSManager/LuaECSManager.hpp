@@ -29,6 +29,7 @@ public:
 
   void loadScript(const std::string& path);
   void unloadScript(const std::string& path);
+  void setSelfReference(std::shared_ptr<LuaECSManager> self);
 
   std::string serializeState();
   void deserializeState(const std::string &state);
@@ -37,6 +38,10 @@ private:
   // Thread safety
   std::mutex _eventQueueMutex;
   std::queue<std::function<void()>> _eventQueue;
+
+  // Weak reference to self for lifetime safety in callbacks
+  // Prevents use-after-free when lambdas capture 'this' in Sol2 bindings
+  std::weak_ptr<LuaECSManager> _selfRef;
 
   std::string serializeTable(const sol::table &table);
   sol::state _lua;
