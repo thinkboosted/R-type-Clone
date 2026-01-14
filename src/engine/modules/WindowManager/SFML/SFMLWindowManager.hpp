@@ -21,8 +21,17 @@ class SFMLWindowManager : public IWindowManager {
 
   private:
     void handleImageRendered(const std::string& message);
+    void handleSetFullscreen(const std::string& message);
+    void handleSetWindowSize(const std::string& message);
+    void handleGetWindowInfo(const std::string& message);
+    void recreateWindow(bool fullscreen);
+    
     std::unique_ptr<sf::RenderWindow> _window;
     sf::Texture _texture;
     sf::Sprite _sprite;
+    
+    std::string _windowTitle = "R-Type Clone";
+    Vector2u _windowedSize = {800, 600};
+    bool _isFullscreen = false;
 };
 }  // namespace rtypeEngine

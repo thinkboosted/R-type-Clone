@@ -5,6 +5,8 @@ function FollowSystem.init()
 end
 
 function FollowSystem.update(dt)
+    if ECS.isPaused then return end
+
     local followers = ECS.getEntitiesWith({"Transform", "Follow"})
     for _, id in ipairs(followers) do
         local follow = ECS.getComponent(id, "Follow")

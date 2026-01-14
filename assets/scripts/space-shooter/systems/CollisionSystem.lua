@@ -14,6 +14,8 @@ function CollisionSystem.init()
 end
 
 function CollisionSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- ⚠️ AUTHORITY CHECK: Seul le serveur (ou mode solo) gère la physique
     if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end
