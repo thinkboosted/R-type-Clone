@@ -5,7 +5,7 @@
 -- Server instances skip all rendering to save resources.
 -- ============================================================================
 local RenderSystem = {}
-local CameraInitialized = false
+local activeCameraId = nil  -- Track the currently active camera
 RenderSystem.initializedEntities = {}
 
 function RenderSystem.init()
@@ -17,20 +17,32 @@ function RenderSystem.update(dt)
     if not ECS.capabilities.hasRendering then
         return
     end
-    -- Handle Camera
+    
+    -- Handle Camera - find and activate the first active camera
     local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
+    local foundActiveCamera = false
+    
     for _, id in ipairs(cameras) do
         local cam = ECS.getComponent(id, "Camera")
-        if cam.isActive and not CameraInitialized then
-            print("RenderSystem: Activating Camera " .. id)
-            ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
-            CameraInitialized = true
-
+        if cam and cam.isActive then
+            foundActiveCamera = true
+            -- If this is a new camera or different from current, activate it
+            if activeCameraId ~= id then
+                print("[RenderSystem] Activating Camera " .. id)
+                ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
+                activeCameraId = id
+            end
+            
             local t = ECS.getComponent(id, "Transform")
             ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
             ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
             break
         end
+    end
+    
+    -- If active camera was destroyed, reset tracking
+    if not foundActiveCamera then
+        activeCameraId = nil
     end
 
     -- Handle Mesh Entities
@@ -98,14 +110,6 @@ function RenderSystem.update(dt)
              ECS.setText(id, text.text)
              RenderSystem.lastText[id] = text.text
         end
-    end
-
-    -- Update Camera Position (if it moves)
-    local cameras = ECS.getEntitiesWith({"Transform", "Camera"})
-    for _, id in ipairs(cameras) do
-        local transform = ECS.getComponent(id, "Transform")
-        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
-        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
     end
 end
 

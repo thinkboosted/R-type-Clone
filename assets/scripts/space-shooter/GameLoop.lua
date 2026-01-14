@@ -20,18 +20,44 @@ dofile("assets/scripts/space-shooter/components/Components.lua")
 -- ============================================================================
 -- CAPABILITY FLAGS SYSTEM
 -- ============================================================================
--- Capabilities are now managed by the C++ engine and exposed via ECS.capabilities.
--- We do NOT overwrite them here to maintain the reference.
+-- For CLIENT instances (which load this script), we need to ensure rendering
+-- and input capabilities are enabled by default. The C++ side may not have
+-- set them yet if NetworkStatus hasn't arrived.
+--
+-- If this is a SERVER loading the script, the NetworkStatus "Bound" message
+-- will have already set the correct capabilities.
 
--- Debug: Print current capabilities
 if ECS.capabilities then
-    print("[GameLoop] Capabilities (from C++):")
+    -- Check for initialization flag to avoid fragile state checks
+    if not ECS.capabilities.isInitialized then
+        -- Unless explicitly marked as a server, ensure client capabilities are enabled.
+        -- We check isServer because checking 'not hasAuthority' would fail for Solo mode (which has authority).
+        if not ECS.capabilities.isServer then
+            if not ECS.capabilities.hasRendering then
+                print("[GameLoop] Setting initial CLIENT capabilities (pre-network)")
+                ECS.capabilities.hasRendering = true
+            end
+            ECS.capabilities.hasLocalInput = true
+        end
+        ECS.capabilities.isInitialized = true
+    end
+    
+    print("[GameLoop] Capabilities (current):")
     print("  - Authority (Simulation): " .. tostring(ECS.capabilities.hasAuthority))
     print("  - Rendering (Visuals):    " .. tostring(ECS.capabilities.hasRendering))
     print("  - Network Sync:           " .. tostring(ECS.capabilities.hasNetworkSync))
     print("  - Local Input:            " .. tostring(ECS.capabilities.hasLocalInput))
 else
-    print("[GameLoop] ERROR: ECS.capabilities is nil!")
+    print("[GameLoop] ERROR: ECS.capabilities is nil! Creating defaults...")
+    ECS.capabilities = {
+        hasAuthority = false,
+        hasRendering = true,
+        hasNetworkSync = false,
+        hasLocalInput = true,
+        isLocalMode = false,
+        isClientMode = false,
+        isServer = false
+    }
 end
 
 -- ============================================================================
@@ -84,11 +110,10 @@ if ECS.capabilities.hasRendering then
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
     dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
 
-    -- Setup Camera (only needed for rendering instances)
-    local camera = ECS.createEntity()
-    ECS.addComponent(camera, "Transform", Transform(0, 0, 20))
-    ECS.addComponent(camera, "Camera", Camera(90))
-    print("[GameLoop] Camera created")
+    -- NOTE: Camera is now created by MenuSystem when menu is rendered,
+    -- and by the game when transitioning to gameplay.
+    -- We don't create a default camera here to avoid conflicts.
+    print("[GameLoop] Visual systems loaded (camera managed by MenuSystem)")
 end
 
 -- ============================================================================

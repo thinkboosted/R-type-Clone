@@ -130,20 +130,9 @@ foreach(MOD ${ALL_MODULES})
     endif()
 endforeach()
 
-# Bulk copy for non-Windows (legacy support or if other libs are present)
-if(NOT WIN32)
-    add_custom_command(TARGET prepare_game_env POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_BINARY_DIR}/lib
-            ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-        COMMENT "Copying all libs to runtime directory"
-    )
-endif()
-
-# Make executables depend on the preparation target
-foreach(EXECUTABLE_TARGET r-type_client r-type_server)
-    add_dependencies(${EXECUTABLE_TARGET} prepare_game_env)
-endforeach()
+# Add dependencies for both executables on prepare_game_env
+add_dependencies(r-type_client prepare_game_env)
+add_dependencies(r-type_server prepare_game_env)
 
 # Install rules
 install(TARGETS r-type_client r-type_server

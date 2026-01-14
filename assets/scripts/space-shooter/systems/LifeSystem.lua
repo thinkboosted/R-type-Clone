@@ -20,6 +20,7 @@ end
 function LifeSystem.update(dt)
     -- Allow running on clients for visual effects (explosions), but authority logic only on server/solo
     if not ECS.capabilities.hasAuthority and not ECS.isGameRunning then return end
+    if ECS.isPaused then return end
 
     local entities = ECS.getEntitiesWith({"Life", "Transform"})
 

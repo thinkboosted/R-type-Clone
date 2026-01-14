@@ -8,6 +8,9 @@ function PhysicSystem.init()
 end
 
 function PhysicSystem.update(dt)
+    -- Stop updates if game is paused
+    if ECS.isPaused then return end
+
     -- GUARD : Si je ne suis pas le serveur (Local ou Distant), je ne touche pas à la physique.
     if not ECS.capabilities.hasAuthority then return end
 
