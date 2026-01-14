@@ -20,7 +20,7 @@ function Spawns.createPlayer(x, y, z, clientId)
     print("[Spawns] Creating Player Entity ID: " .. e)
 
     -- 1. Core Components
-    local s = config.player.scale or 0.7
+    local s = config.player.scale
     ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, s, s, s))
     ECS.addComponent(e, "Tag", Tag({"Player"}))
     -- Physic(mass, friction, fixedRotation, useGravity)
@@ -135,7 +135,7 @@ function Spawns.spawnEnemy(x, y, speed, type)
     local cfg = configType[mType] or configType[1]
 
     -- Core
-    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, 1.5, 1.5, 1.5))
+    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, config.enemy.scale, config.enemy.scale, config.enemy.scale))
     ECS.addComponent(e, "Tag", Tag({"Enemy"}))
     ECS.addComponent(e, "Enemy", Enemy(speed))
     ECS.addComponent(e, "Life", Life(config.enemy.life))
@@ -169,6 +169,7 @@ function Spawns.spawnEnemy(x, y, speed, type)
         ))
     end
 
+    ECS.addComponent(e, "EnemyType", { type = 2 + mType })
     -- Network
     ECS.addComponent(e, "NetworkIdentity", NetworkIdentity(e, -1, false)) -- -1 = Server owned
     if hasAuthority() then

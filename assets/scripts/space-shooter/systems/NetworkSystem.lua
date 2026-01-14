@@ -40,6 +40,8 @@ local function extractVelocity(phys)
 end
 
 local function buildStateData(id, transform, phys, typeNum)
+    local enemyTypeComp = ECS.getComponent(id, "EnemyType")
+    local actualType = enemyTypeComp and enemyTypeComp.type or typeNum  -- Use EnemyType for enemies, else passed typeNum
     local vx, vy, vz = extractVelocity(phys)
     return {
         id = id,
@@ -52,7 +54,7 @@ local function buildStateData(id, transform, phys, typeNum)
         vx = vx,
         vy = vy,
         vz = vz,
-        t = typeNum
+        t = actualType
     }
 end
 
@@ -466,6 +468,12 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
 
              ECS.addComponent(localId, "Color", Color(col[1], col[2], col[3]))
 
+             local t = ECS.getComponent(localId, "Transform")
+                if t then
+                    t.sx = config.player.scale
+                    t.sy = config.player.scale
+                    t.sz = config.player.scale
+                end
              -- Reactor Particles (Blue Trail) for ALL players (Local and Remote)
              ECS.addComponent(localId, "ParticleGenerator", ParticleGenerator(
                 -1.0, 0, 0,   -- Offset (Behind)
@@ -493,9 +501,20 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              ECS.addComponent(localId, "Color", Color(0.0, 1.0, 1.0))
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
-        elseif nType == 3 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/Monster_1/motion_1.obj", nil))
-             ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0))
+        elseif nType >= 3 then
+            local configIndex = nType - 2
+            print("Ennemeis type " .. configIndex)
+            local enemyConfigs = {
+                [1] = { mesh = "assets/models/Monster_1/motion_1.obj", color = Color(1.0, 0.0, 0.0), frames = 8},
+                [2] = { mesh = "assets/models/Monster_2/motion_1.obj", color = Color(0.5, 0.5, 0.5), frames = 3},
+                [3] = { mesh = "assets/models/Monster_3/motion_1.obj", color = Color(0.6, 0.4, 0.2), frames = 8}
+            }
+            local cfg = enemyConfigs[configIndex] or enemyConfigs[3]
+            ECS.addComponent(localId, "Mesh", Mesh(cfg.mesh, nil))
+            ECS.addComponent(localId, "Color", cfg.color)
+
+            local animBase = "assets/models/Monster_" .. configIndex .. "/motion_"
+            ECS.addComponent(localId, "Animation", Animation(cfg.frames, 0.2, true, animBase))
         end
         NetworkSystem.serverEntities[serverId] = localId
     else
@@ -506,6 +525,9 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
             t.targetRX, t.targetRY, t.targetRZ = nrx, nry, nrz
             t.netVX, t.netVY, t.netVZ = nvx, nvy, nvz
             t.netAge = 0
+            t.sx = config.enemy.scale
+            t.sy = config.enemy.scale
+            t.sz = config.enemy.scale
             if t.x == 0 and t.y == 0 and t.targetX ~= 0 then t.x, t.y, t.z = nx, ny, nz end
         end
     end
