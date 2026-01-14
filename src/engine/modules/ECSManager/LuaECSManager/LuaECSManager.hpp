@@ -44,13 +44,21 @@ public:
   }
 
 private:
-  // Thread safety
+  // Thread safety & Event Queue Management
   std::mutex _eventQueueMutex;
   std::queue<std::function<void()>> _eventQueue;
+  static constexpr size_t MAX_EVENT_QUEUE_SIZE = 1000;  // Prevent unbounded growth
+  static constexpr size_t EVENT_QUEUE_WARN_THRESHOLD = 800;  // Log warning when approaching limit
 
   // Weak reference to self for lifetime safety in callbacks
   // Prevents use-after-free when lambdas capture 'this' in Sol2 bindings
   std::weak_ptr<LuaECSManager> _selfRef;
+  
+  // Asset Cache Management
+  struct CacheEntry {
+    std::chrono::steady_clock::time_point lastUsed;
+  };
+  std::unordered_map<std::string, CacheEntry> _assetAccessTimes;
 
   std::string serializeTable(const sol::table &table);
   sol::state _lua;
@@ -66,6 +74,13 @@ private:
   double _accumulator = 0.0;
   const double FIXED_DT = 1.0 / 60.0;
   const double MAX_FRAME_TIME = 0.25;
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER AUTHORITY MODEL (Multiplayer Support)
+  // ═══════════════════════════════════════════════════════════════
+  // Track which client owns which entity for authority checks
+  std::unordered_map<std::string, int> _entityOwnership;  // entityId -> clientId (0 = server)
+  int _clientId = 0;  // This client's ID (0 if server, > 0 if client)
 
   void setupLuaBindings();
   std::string generateUuid();

@@ -589,16 +589,138 @@ void LuaECSManager::setupLuaBindings() {
         sendMessage("RenderEntityCommand", "SetTexture:" + id + ":" + path);
   });
 
-  ecs.set_function("playSound", [this](const std::string &path) {
-      // Fire & Forget sound
+    ecs.set_function("playSound", [this](const std::string &path) {
+      // Fire & Forget sound effect
       sendMessage("PlaySound", path);
-  });
+    });
 
-  ecs.set_function("createMesh", [this](const std::string &id, const std::string &path) {
+    // ═══════════════════════════════════════════════════════════════
+    // MUSIC PLAYBACK (Background music with control)
+    // ═══════════════════════════════════════════════════════════════
+    ecs.set_function("playMusic", [this](const std::string &musicId, 
+                      const std::string &path, 
+                      float volume, bool loop) {
+      std::stringstream ss;
+      ss << musicId << ":" << path << ":" << volume << ":" << (loop ? "1" : "0");
+      sendMessage("MusicPlay", ss.str());
+      Logger::Info("[LuaECSManager] Playing music: " + musicId + " from " + path);
+    });
+
+    ecs.set_function("stopMusic", [this](const std::string &musicId) {
+      sendMessage("MusicStop", musicId);
+    });
+
+    ecs.set_function("pauseMusic", [this](const std::string &musicId) {
+      sendMessage("MusicPause", musicId);
+    });
+
+    ecs.set_function("resumeMusic", [this](const std::string &musicId) {
+      sendMessage("MusicResume", musicId);
+    });
+
+    ecs.set_function("setMusicVolume", [this](const std::string &musicId, float volume) {
+      std::stringstream ss;
+      ss << musicId << ":" << volume;
+      sendMessage("MusicSetVolume", ss.str());
+    });
+
+    ecs.set_function("createMesh", [this](const std::string &id, const std::string &path) {
       sendMessage("RenderEntityCommand", "CreateEntity:MESH:" + path + ":" + id + ":0:0:0:0");
-  });
+    });
 
-  ecs.set_function("isKeyPressed", [this](const std::string &keyName) -> bool {
+    // ═══════════════════════════════════════════════════════════════
+    // CRITICAL: Collider binding for physics (Bullet integration)
+    // ═══════════════════════════════════════════════════════════════
+    ecs.set_function("setCollider", [this](const std::string &id, 
+                        const std::string &type,
+                        float sx, float sy, float sz) {
+      // Create physics body in Bullet
+      std::stringstream ss;
+      // Format expected by Bullet: CreateBody:<id>:<type>:<sx,sy,sz,mass,friction>;
+      ss << "CreateBody:" << id << ":" << type << ":" << sx << "," << sy << "," << sz << ",1.0,0" << ";";
+      sendMessage("PhysicCommand", ss.str());
+      Logger::Debug("[LuaECSManager] Created collider for entity " + id + " of type " + type);
+    });
+
+    ecs.set_function("getCollider", [this](const std::string &id) -> sol::table {
+      // Query collider component from pool
+      sol::table result = _lua.create_table();
+      if (_pools.find("Collider") != _pools.end()) {
+        ComponentPool &pool = _pools["Collider"];
+        if (pool.sparse.count(id)) {
+          return pool.dense[pool.sparse[id]];
+        }
+      }
+      return result;  // Empty if not found
+    });
+
+    ecs.set_function("removeCollider", [this](const std::string &id) {
+      // Destroy physics body
+      sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+      // Remove component
+      if (_pools.find("Collider") != _pools.end()) {
+        ComponentPool &pool = _pools["Collider"];
+        if (pool.sparse.count(id)) {
+          size_t index = pool.sparse[id];
+          size_t lastIndex = pool.dense.size() - 1;
+          if (index != lastIndex) {
+            std::string lastEntity = pool.entities[lastIndex];
+            std::swap(pool.dense[index], pool.dense[lastIndex]);
+            std::swap(pool.entities[index], pool.entities[lastIndex]);
+            pool.sparse[lastEntity] = index;
+          }
+          pool.dense.pop_back();
+          pool.entities.pop_back();
+          pool.sparse.erase(id);
+        }
+      }
+    });
+
+      // ═══════════════════════════════════════════════════════════════
+      // MULTIPLAYER AUTHORITY CONTROL
+      // ═══════════════════════════════════════════════════════════════
+      ecs.set_function("setEntityOwner", [this](const std::string &id, int clientId) {
+        _entityOwnership[id] = clientId;
+        Logger::Debug("[LuaECSManager] Entity " + id + " owned by client " + std::to_string(clientId));
+      });
+
+      ecs.set_function("getEntityOwner", [this](const std::string &id) -> int {
+        auto it = _entityOwnership.find(id);
+        if (it != _entityOwnership.end()) {
+          return it->second;
+        }
+        return 0;  // Default to server
+      });
+
+      ecs.set_function("isEntityOwned", [this](const std::string &id) -> bool {
+        return _entityOwnership.find(id) != _entityOwnership.end();
+      });
+
+      ecs.set_function("canModifyEntity", [this](const std::string &id) -> bool {
+        // AUTHORITY: Check if this client can modify entity
+        // Server (clientId=0) can always modify
+        if (_clientId == 0 && _capabilities["isServer"]) return true;
+      
+        // Client can only modify own entities
+        auto it = _entityOwnership.find(id);
+        if (it != _entityOwnership.end()) {
+          return it->second == _clientId;
+        }
+      
+        // If not owned, only server modifies
+        return false;
+      });
+
+      ecs.set_function("setClientId", [this](int clientId) {
+        _clientId = clientId;
+        Logger::Info("[LuaECSManager] Client ID set to " + std::to_string(clientId));
+      });
+
+      ecs.set_function("getClientId", [this]() -> int {
+        return _clientId;
+      });
+
+      ecs.set_function("isKeyPressed", [this](const std::string &keyName) -> bool {
       // Convert typical Lua keys (Z, Space) to Uppercase to match KeysMap (Z, SPACE)
       std::string upperKey = keyName;
       std::transform(upperKey.begin(), upperKey.end(), upperKey.begin(), ::toupper);
@@ -832,6 +954,25 @@ void LuaECSManager::setupLuaBindings() {
     sendMessage("RequestNetworkSendTo", std::to_string(clientId) + " " + topic + " " + payload);
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // NETWORK STATE SYNCHRONIZATION
+  // ═══════════════════════════════════════════════════════════════
+  ecs.set_function("syncEntityState", [this](const std::string &entityId, float x, float y, float z) {
+      // Server broadcasts entity position to all clients
+      if (_capabilities["isServer"] || _clientId == 0) {
+          std::stringstream ss;
+          ss << entityId << ":" << x << "," << y << "," << z;
+          sendMessage("RequestNetworkBroadcast", "EntityStateSync " + ss.str());
+      }
+  });
+
+  ecs.set_function("broadcastPhysicsUpdate", [this](const std::string &message) {
+      // Server broadcasts physics events (collisions, forces)
+      if (_capabilities["isServer"] || _clientId == 0) {
+          sendMessage("RequestNetworkBroadcast", "PhysicsUpdate " + message);
+      }
+  });
+
   // Binary Protocol Bindings
   auto buildBinaryPayload = [](const std::string &topic, const msgpack::sbuffer &sbuf) {
       if (topic.size() > 1024) {
@@ -941,18 +1082,68 @@ void LuaECSManager::setupLuaBindings() {
     sendMessage("GetSaves", saveName);
   });
 
-  ecs.set_function("removeSystems", [this]() {
+    ecs.set_function("removeSystems", [this]() {
     _systems.clear();
-  });
+    });
 
-  ecs.set_function("removeEntities", [this]() {
+    ecs.set_function("removeEntities", [this]() {
       for (const auto& id : _entities) {
-          sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
-          sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
+        sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+        sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
       }
       _entities.clear();
       _pools.clear();
-  });
+      _entityOwnership.clear();
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // SCENE MANAGEMENT (Level transitions)
+    // ═══════════════════════════════════════════════════════════════
+    ecs.set_function("loadScene", [this](const std::string &sceneName) {
+      Logger::Info("[LuaECSManager] Loading scene: " + sceneName);
+      
+      // 1. Clean up current scene
+      {
+        for (const auto& id : _entities) {
+          sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+          sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
+        }
+        _entities.clear();
+        _pools.clear();
+        _entityOwnership.clear();
+        _systems.clear();
+        _luaListeners.clear();
+      }
+      
+      // 2. Load new scene script
+      std::string scenePath = "assets/scripts/" + sceneName + ".lua";
+      try {
+        _lua.script_file(scenePath);
+        Logger::Info("[LuaECSManager] Scene loaded: " + scenePath);
+          
+        // 3. Call init if exists
+        sol::function global_init = _lua["Game"]["init"];
+        if (global_init && global_init.valid()) {
+          global_init();
+        }
+      } catch (const sol::error &e) {
+        Logger::Error("[LuaECSManager] Failed to load scene " + sceneName + ": " + e.what());
+      }
+    });
+
+    ecs.set_function("getCurrentScene", [this]() -> std::string {
+      // Return current scene name (stored in Game table if available)
+      try {
+        sol::table gameTable = _lua["Game"];
+        if (gameTable.valid()) {
+          sol::object sceneName = gameTable["_sceneName"];
+          if (sceneName.valid()) {
+            return sceneName.as<std::string>();
+          }
+        }
+      } catch (...) {}
+      return "unknown";
+    });
 
   Logger::Debug("[LuaECSManager] DEBUG: setupLuaBindings completed");
 }
@@ -1020,17 +1211,48 @@ void LuaECSManager::unloadScript(const std::string& path) {
 // ═══════════════════════════════════════════════════════════════
 void LuaECSManager::fixedUpdate(double dt) {
   // 1. Process queued events (e.g. Input, Script Load) from Main Thread
+  // OPTIMIZATION: Limit queue processing per frame to prevent frame stalls
   {
       std::lock_guard<std::mutex> lock(_eventQueueMutex);
-      while (!_eventQueue.empty()) {
+      
+      // Log warning if queue is growing (potential backlog)
+      size_t queueSize = _eventQueue.size();
+      if (queueSize > EVENT_QUEUE_WARN_THRESHOLD) {
+          Logger::Info("[LuaECSManager] WARNING: Event queue size = " + std::to_string(queueSize) + 
+                      "/" + std::to_string(MAX_EVENT_QUEUE_SIZE));
+      }
+      
+      // Process at most 32 events per frame to prevent stalling
+      const int MAX_EVENTS_PER_FRAME = 32;
+      int processed = 0;
+      while (!_eventQueue.empty() && processed < MAX_EVENTS_PER_FRAME) {
           auto func = _eventQueue.front();
           _eventQueue.pop();
-          if (func) func();
+          if (func) {
+              try {
+                  func();
+              } catch (const std::exception& e) {
+                  Logger::Error("[LuaECSManager] Error processing queued event: " + std::string(e.what()));
+              }
+          }
+          ++processed;
+      }
+      
+      // SAFETY: If queue still growing, discard oldest to prevent memory leak
+      if (queueSize >= MAX_EVENT_QUEUE_SIZE) {
+          Logger::Error("[LuaECSManager] Event queue FULL! Discarding " + 
+                       std::to_string(queueSize - MAX_EVENT_QUEUE_SIZE + 1) + " oldest events");
+          while (_eventQueue.size() > MAX_EVENT_QUEUE_SIZE - 100) {
+              _eventQueue.pop();  // Discard oldest
+          }
       }
   }
 
   // 2. Execute all Lua systems with fixed timestep (deterministic)
-  for (auto &system : _systems) {
+  // OPTIMIZATION: Cache number of systems to avoid repeated .size() calls
+  const size_t systemCount = _systems.size();
+  for (size_t i = 0; i < systemCount; ++i) {
+    auto &system = _systems[i];
     if (system["update"].valid()) {
       try {
         system["update"](dt);  // Pass GameEngine's fixed dt directly
