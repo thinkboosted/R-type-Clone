@@ -2,6 +2,10 @@
 -- R-TYPE 3D - FINAL GAME LOOP (With Vec3 & Sound)
 -- ========================================================
 
+-- ECS is expected to be a global object provided by the game engine
+local ECS = ECS or {}
+local Vec3 = Vec3 or {}
+
 local Game = {
     playerID = -1,
     bullets = {},
