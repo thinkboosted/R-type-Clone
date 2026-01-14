@@ -377,22 +377,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posSize, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 4 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -417,12 +417,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string params = data.substr(split + 1);
-                    
+
                     std::stringstream pss(params);
                     std::string val;
                     std::vector<float> v;
                     while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
-                    
+
                     if (v.size() >= 4 && _renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
@@ -439,7 +439,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float alpha = safeParseFloat(data.substr(split + 1), 1.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         // Clamp alpha between 0.0 and 1.0
@@ -455,7 +455,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     int zorder = safeParseInt(data.substr(split + 1), 0);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         _renderObjects[id].zOrder = zorder;
@@ -470,23 +470,23 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posRadius, colorStr, isScreenSpaceStr, segmentsStr;
                     std::getline(ss2, posRadius, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr, ':');
                     std::getline(ss2, segmentsStr);
-                    
+
                     std::stringstream pss(posRadius);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 3 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -513,22 +513,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posSize, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 5 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -557,22 +557,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posStr, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posStr, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posStr);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 5 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -597,19 +597,19 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string texturePath, posSize, isScreenSpaceStr, zOrderStr;
                     std::getline(ss2, texturePath, ':');
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, isScreenSpaceStr, ':');
                     std::getline(ss2, zOrderStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 4)
                     {
                         RenderObject obj;
@@ -634,20 +634,20 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string enabledStr, widthStr, colorStr;
                     std::getline(ss2, enabledStr, ':');
                     std::getline(ss2, widthStr, ':');
                     std::getline(ss2, colorStr);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
                         obj.outlined = (enabledStr == "1" || enabledStr == "true");
                         float rawWidth = safeParseFloat(widthStr, 2.0f);
                         obj.outlineWidth = std::max(1.0f, std::min(rawWidth, 50.0f));
-                        
+
                         std::stringstream css(colorStr);
                         std::string val;
                         std::vector<float> col;
@@ -667,7 +667,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float radius = safeParseFloat(data.substr(split + 1), 10.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         _renderObjects[id].radius = radius;
@@ -682,7 +682,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float radius = safeParseFloat(data.substr(split + 1), 5.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
@@ -1164,12 +1164,6 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 return 0;
             }
         }
-#else
-        // On Linux, make our GL context current for texture creation
-        if (_hdc && _hwnd && _hglrc)
-        {
-            glXMakeCurrent(display, (Window)_hwnd, (GLXContext)_hglrc);
-        }
 #endif
 
         // Create texture in the main context (NOW ACTIVE)
@@ -1379,11 +1373,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         {
             _cameraPos = _renderObjects[_activeCameraId].position;
             _cameraRot = _renderObjects[_activeCameraId].rotation;
-            
+
             // DEBUG: Log camera pos occasionally
             static auto lastCamLog = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastCamLog).count() >= 2) {
-                std::cout << "[GLEW] Camera Pos: " << _cameraPos.x << ", " << _cameraPos.y << ", " << _cameraPos.z 
+                std::cout << "[GLEW] Camera Pos: " << _cameraPos.x << ", " << _cameraPos.y << ", " << _cameraPos.z
                           << " ActiveID: " << _activeCameraId << std::endl;
                 lastCamLog = now;
             }
@@ -1604,31 +1598,31 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 sortedHUD.push_back({pair.second.zOrder, &pair.second});
             }
         }
-        std::sort(sortedHUD.begin(), sortedHUD.end(), 
+        std::sort(sortedHUD.begin(), sortedHUD.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
         for (const auto &sortedPair : sortedHUD)
         {
             const auto &obj = *sortedPair.second;
-            
+
             // Render rectangles (button backgrounds, panels, etc.)
             if (obj.isRect)
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float x = obj.position.x;
                 float y = obj.position.y;
                 float w = obj.scale.x;  // width
                 float h = obj.scale.y;  // height
-                
+
                 glBegin(GL_QUADS);
                 glVertex2f(x, y);
                 glVertex2f(x + w, y);
                 glVertex2f(x + w, y + h);
                 glVertex2f(x, y + h);
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1648,12 +1642,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float cx = obj.position.x;
                 float cy = obj.position.y;
                 float r = obj.radius;
                 int segments = obj.segments;
-                
+
                 glBegin(GL_TRIANGLE_FAN);
                 glVertex2f(cx, cy);  // Center
                 for (int i = 0; i <= segments; i++)
@@ -1662,7 +1656,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
                 }
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1683,7 +1677,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float x = obj.position.x;
                 float y = obj.position.y;
                 float w = obj.scale.x;
@@ -1691,7 +1685,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 float r = obj.cornerRadius;  // Already clamped when set
                 // Use user-provided segments when available, fallback to 8 for compatibility
                 int cornerSegments = (obj.segments > 0) ? obj.segments : 8;  // segments per corner
-                
+
                 // Draw central body (3 distinct quads to avoid overdraw/artifacts)
                 glBegin(GL_QUADS);
                 // Center vertical strip (top to bottom)
@@ -1747,7 +1741,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
                 }
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1785,12 +1779,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 glDisable(GL_TEXTURE_2D);
                 glLineWidth(obj.lineWidth);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 glBegin(GL_LINES);
                 glVertex2f(obj.position.x, obj.position.y);
                 glVertex2f(obj.endPosition.x, obj.endPosition.y);
                 glEnd();
-                
+
                 glLineWidth(1.0f);
             }
             // Render sprites and text
@@ -1820,7 +1814,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     // Use explicit scale if provided, otherwise use texture size
                     float w = (obj.scale.x > 0) ? obj.scale.x : (float)texW;
                     float h = (obj.scale.y > 0) ? obj.scale.y : (float)texH;
-                    
+
                     // For text, scale is typically 1.0, so use texture size
                     if (obj.isText)
                     {
