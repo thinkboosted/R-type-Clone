@@ -5,6 +5,8 @@ function PlayerSystem.init()
 end
 
 function PlayerSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- La logique de jeu (tir, cooldown) ne s'exécute que si on a l'autorité
     if not ECS.capabilities.hasAuthority then return end
 

@@ -18,6 +18,8 @@ function LifeSystem.init()
 end
 
 function LifeSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- ⚠️ AUTHORITY CHECK: Only server/solo can modify life
     if not ECS.capabilities.hasAuthority then return end
     if not ECS.isGameRunning then return end

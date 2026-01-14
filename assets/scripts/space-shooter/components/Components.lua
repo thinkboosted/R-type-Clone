@@ -75,14 +75,6 @@ function Weapon(cooldown)
     }
 end
 
-function Button(action, width, height)
-    return {
-        action = action or "",
-        width = width or 100,
-        height = height or 50,
-        hovered = false
-    }
-end
 
 function Enemy(speed)
     return {
