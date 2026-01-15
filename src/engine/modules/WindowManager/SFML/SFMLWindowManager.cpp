@@ -28,21 +28,17 @@ void SFMLWindowManager::init() {
         this->close();
     });
     subscribe("SetFullscreen", [this](const std::string& message) {
-        std::cout << "[SFMLWindowManager] Received SetFullscreen: " << message << std::endl;
         this->handleSetFullscreen(message);
     });
     subscribe("SetWindowSize", [this](const std::string& message) {
-        std::cout << "[SFMLWindowManager] Received SetWindowSize: " << message << std::endl;
         this->handleSetWindowSize(message);
     });
     subscribe("ToggleFullscreen", [this](const std::string&) {
-        std::cout << "[SFMLWindowManager] Received ToggleFullscreen" << std::endl;
         this->recreateWindow(!_isFullscreen);
     });
     subscribe("GetWindowInfo", [this](const std::string& message) {
         this->handleGetWindowInfo(message);
     });
-    std::cout << "[SFMLWindowManager] Initialized" << std::endl;
 }
 
 void SFMLWindowManager::loop() {
@@ -74,15 +70,40 @@ void SFMLWindowManager::loop() {
                 }
             }
             if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+                // OPTIMIZATION: Only process if size actually changed
+                static unsigned int lastWidth = 0;
+                static unsigned int lastHeight = 0;
+                static auto lastResizeTime = std::chrono::steady_clock::now();
+                
+                // Skip duplicate events
+                if (resized->size.x == lastWidth && resized->size.y == lastHeight) {
+                    continue;
+                }
+                
+                // Throttle rapid resize events (< 16ms = faster than 60fps)
+                auto currentTime = std::chrono::steady_clock::now();
+                auto timeSinceLastResize = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastResizeTime).count();
+                
+                if (timeSinceLastResize < 16 && lastWidth != 0) {
+                    continue;
+                }
+                
+                lastWidth = resized->size.x;
+                lastHeight = resized->size.y;
+                lastResizeTime = currentTime;
+                
                 std::stringstream ss;
                 ss << resized->size.x << "," << resized->size.y;
                 sendMessage("WindowResized", ss.str());
 
-                _texture = sf::Texture(sf::Vector2u(resized->size.x, resized->size.y));
-                _sprite = sf::Sprite(_texture);
-                _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(resized->size.x), static_cast<int>(resized->size.y))));
-                _sprite.setPosition(sf::Vector2f(0, 0));
-                _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+                // Only recreate texture if size actually changed
+                if (_texture.getSize().x != resized->size.x || _texture.getSize().y != resized->size.y) {
+                    _texture = sf::Texture(sf::Vector2u(resized->size.x, resized->size.y));
+                    _sprite = sf::Sprite(_texture);
+                    _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(resized->size.x), static_cast<int>(resized->size.y))));
+                    _sprite.setPosition(sf::Vector2f(0, 0));
+                    _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+                }
 
                 sf::FloatRect visibleArea(sf::Vector2f(0, 0), sf::Vector2f(static_cast<float>(resized->size.x), static_cast<float>(resized->size.y)));
                 _window->setView(sf::View(visibleArea));
@@ -174,10 +195,9 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
         return;
     }
 
-    // If texture size doesn't match incoming image, recreate texture/sprite so update will succeed
+    // If texture size doesn't match incoming image, recreate texture/sprite
     sf::Vector2u texSize = _texture.getSize();
     if (texSize.x != width || texSize.y != height) {
-        std::cout << "[SFMLWindowManager] handleImageRendered: resizing texture from " << texSize.x << "x" << texSize.y << " to " << width << "x" << height << std::endl;
         _texture = sf::Texture(sf::Vector2u(width, height));
         _sprite = sf::Sprite(_texture);
         _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0,0), sf::Vector2i(static_cast<int>(width), static_cast<int>(height))));
@@ -206,20 +226,41 @@ void SFMLWindowManager::handleSetWindowSize(const std::string& message) {
             unsigned int width = std::stoul(widthStr);
             unsigned int height = std::stoul(heightStr);
             
-            std::cout << "[SFMLWindowManager] SetWindowSize requested: " << width << "x" << height << std::endl;
+            // Skip if already at this size
+            if (_window && _window->getSize().x == width && _window->getSize().y == height) {
+                return;
+            }
             
-            if (width > 0 && height > 0) {
+            if (width > 0 && height > 0 && _window) {
                 _windowedSize = {width, height};
                 
-                // If in fullscreen, exit fullscreen first
+                // If in fullscreen, need to recreate for mode change
                 if (_isFullscreen) {
                     _isFullscreen = false;
+                    recreateWindow(false);
+                    return;
                 }
                 
-                // Recreate window with new size (SFML 3 requires this for reliable resizing)
-                recreateWindow(false);
+                // OPTIMIZATION: Use setSize instead of recreating window
+                _window->setSize(sf::Vector2u(width, height));
                 
-                std::cout << "[SFMLWindowManager] Window resized to " << width << "x" << height << std::endl;
+                // Only recreate texture if size changed
+                if (_texture.getSize().x != width || _texture.getSize().y != height) {
+                    _texture = sf::Texture(sf::Vector2u(width, height));
+                    _sprite = sf::Sprite(_texture);
+                    _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(width), static_cast<int>(height))));
+                    _sprite.setPosition(sf::Vector2f(0, 0));
+                    _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+                }
+                
+                // Update view for new size
+                sf::FloatRect visibleArea(sf::Vector2f(0, 0), sf::Vector2f(static_cast<float>(width), static_cast<float>(height)));
+                _window->setView(sf::View(visibleArea));
+                
+                // Notify renderer of size change
+                std::stringstream resizeMsg;
+                resizeMsg << width << "," << height;
+                sendMessage("WindowResized", resizeMsg.str());
             }
         } catch (...) {
             std::cerr << "[SFMLWindowManager] Error parsing window size" << std::endl;
@@ -266,8 +307,6 @@ void SFMLWindowManager::recreateWindow(bool fullscreen) {
         std::stringstream resizeMsg;
         resizeMsg << size.x << "," << size.y;
         sendMessage("WindowResized", resizeMsg.str());
-        
-        std::cout << "[SFMLWindowManager] Switched to fullscreen: " << size.x << "x" << size.y << std::endl;
     } else {
         // Windowed mode
         _window = std::make_unique<sf::RenderWindow>(
@@ -288,8 +327,6 @@ void SFMLWindowManager::recreateWindow(bool fullscreen) {
         std::stringstream resizeMsg;
         resizeMsg << _windowedSize.x << "," << _windowedSize.y;
         sendMessage("WindowResized", resizeMsg.str());
-        
-        std::cout << "[SFMLWindowManager] Switched to windowed: " << _windowedSize.x << "x" << _windowedSize.y << std::endl;
     }
     
     // Send fullscreen state change notification
