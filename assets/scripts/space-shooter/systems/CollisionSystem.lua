@@ -124,15 +124,24 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
 
     -- ⚠️ AUTHORITY: Only server/solo modifies life (guaranteed by update() check)
     local life = ECS.getComponent(playerId, "Life")
+    local color = ECS.getComponent(playerId, "Color")
+
     if life then
         if life.invulnerableTime and life.invulnerableTime > 0 then
             return
         end
-        -- DAMAGE APPLICATION: Kill player instantly on collision with enemy
-        life.amount = 0
-        
+        -- DAMAGE APPLICATION: Kill player after 4 collision with a enemy or bullet
+        life.amount = life.amount - 25
+        -- Set invulnerability to prevent rapid repeated damage
+        life.invulnerableTime = 0.7 -- seconds of invulnerability
         -- Broadcast hit sound to all clients
-        ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100")
+        ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100") -- change the sound
+        if color then
+            color.r = 1.0
+            color.g = 0.0
+            color.b = 0.0
+        ECS.addComponent(playerId, "Color", color)
+        end
     end
 end
 

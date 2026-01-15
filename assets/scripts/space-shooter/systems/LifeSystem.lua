@@ -36,7 +36,19 @@ function LifeSystem.update(dt)
 
         if life.invulnerableTime and life.invulnerableTime > 0 then
             life.invulnerableTime = math.max(0, life.invulnerableTime - dt)
-            -- Skip death while invulnerable (for all entities)
+
+        -- Skip death while invulnerable (for all entities)
+        if life.invulnerableTime <= 0 then
+            if ECS.hasComponent(id, "Player") then
+                local color = ECS.getComponent(id, "Color")
+                    if color then
+                        color.r = 1.0
+                        color.g = 1.0
+                        color.b = 1.0
+                        ECS.addComponent(id, "Color", color) -- color back to white after hit
+                    end
+                end
+            end
         else
             if life.amount <= 0 then
                 -- Authority-required logic (damage, broadcasts, etc.) only for authoritative entities
