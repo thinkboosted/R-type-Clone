@@ -255,9 +255,8 @@ function Spawns.createScore(value)
     local sc = value or 0
 
     local scoreEntity = ECS.createEntity()
-    ECS.addComponent(scoreEntity, "Score", Score(sc))
     ECS.addComponent(scoreEntity, "Transform", Transform(50, 50, 0, 0, 0, 0, 5, 5, 1))
-    ECS.addComponent(scoreEntity, "Text", Text("Score: " .. sc, "assets/fonts/NewakeFont-Demo.otf", 100, true))
+    ECS.addComponent(scoreEntity, "Text", Text("Score  " .. sc, "assets/fonts/arial.ttf", 10, true))
     ECS.addComponent(scoreEntity, "Color", Color(1.0, 1.0, 1.0))
 end
 
@@ -272,7 +271,7 @@ function Spawns.createCoreEntities(level, backgroundTexture)
         local cameraEntities = ECS.getEntitiesWith({"Camera"})
         if #cameraEntities == 0 then
             local camera = ECS.createEntity()
-            ECS.addComponent(camera, "Transform", Transform(0, 0, 20))
+            ECS.addComponent(camera, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
             ECS.addComponent(camera, "Camera", Camera(90))
         end
     end

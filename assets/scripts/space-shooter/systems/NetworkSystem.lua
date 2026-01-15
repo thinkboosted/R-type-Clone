@@ -1,5 +1,6 @@
 local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
 local config = dofile("assets/scripts/space-shooter/config.lua")
+local ScoreSystem = dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 
 -- Expose globally so other systems (MenuSystem) can read connection state.
 local NetworkSystem = {}
@@ -326,6 +327,7 @@ function NetworkSystem.init()
         ECS.subscribe("LEVEL_CHANGE", function(level)
         local levelNum = tonumber(level) or 1
             dofile("assets/scripts/space-shooter/levels/Level-" .. levelNum .. ".lua")
+            ScoreSystem.adjustToScreenSize(_G.SCREEN_WIDTH, _G.SCREEN_HEIGHT)
         end)
 
         ECS.subscribe("PLAYER_ASSIGN", function(msg)
