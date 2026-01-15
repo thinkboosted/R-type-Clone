@@ -195,7 +195,7 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
         return;
     }
 
-    // If texture size doesn't match incoming image, recreate texture/sprite
+    // If the texture size doesn't match the incoming image, recreate the texture and sprite
     sf::Vector2u texSize = _texture.getSize();
     if (texSize.x != width || texSize.y != height) {
         _texture = sf::Texture(sf::Vector2u(width, height));
