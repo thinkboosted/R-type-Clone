@@ -80,11 +80,12 @@ void SFMLWindowManager::loop() {
                     continue;
                 }
                 
-                // Throttle rapid resize events (< 16ms = faster than 60fps)
+                // Throttle rapid resize events to ~60fps (16ms interval)
+                constexpr auto MIN_RESIZE_INTERVAL_MS = 16; // ~60fps throttling interval in milliseconds
                 auto currentTime = std::chrono::steady_clock::now();
                 auto timeSinceLastResize = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastResizeTime).count();
                 
-                if (timeSinceLastResize < 16 && lastWidth != 0) {
+                if (timeSinceLastResize < MIN_RESIZE_INTERVAL_MS && lastWidth != 0) {
                     continue;
                 }
                 
