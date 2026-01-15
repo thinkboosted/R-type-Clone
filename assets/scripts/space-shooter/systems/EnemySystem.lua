@@ -6,6 +6,8 @@ local EnemySystem = {}
 EnemySystem.spawnTimer = 0
 EnemySystem.spawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.gameTime = 0
+EnemySystem.enemyShootTimers = {}
+EnemySystem.shootInterval = 3.0
 EnemySystem.baseSpawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.baseSpeed = config.enemy.speed or 5.0
 
@@ -147,6 +149,16 @@ function EnemySystem.update(dt)
             end
             
             ECS.addComponent(id, "MovementPattern", movement)
+        end
+
+        -- Enemy Shooting
+        if not EnemySystem.enemyShootTimers[id] then
+            EnemySystem.enemyShootTimers[id] = 0
+        end
+        EnemySystem.enemyShootTimers[id] = EnemySystem.enemyShootTimers[id] + dt
+        if EnemySystem.enemyShootTimers[id] >= EnemySystem.shootInterval then
+            EnemySystem.enemyShootTimers[id] = 0
+            Spawns.spawnBullet(t.x - 1.0, t.y, t.z, true)
         end
 
         -- Check Bounds

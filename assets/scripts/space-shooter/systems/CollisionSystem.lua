@@ -111,10 +111,17 @@ function CollisionSystem.onCollision(id1, id2)
         CollisionSystem.handleEnemyBullet(id2, id1)
     end
 
+    -- Check Player vs Enemy attack
+    if CollisionSystem.hasTag(id1, "Player") and (CollisionSystem.hasTag(id2, "Enemy") or CollisionSystem.hasTag(id2, "EnemyBullet")) then
+            CollisionSystem.handlePlayerEnemy(id1, id2)
+    elseif CollisionSystem.hasTag(id2, "Player") and (CollisionSystem.hasTag(id1, "Enemy") or CollisionSystem.hasTag(id1, "EnemyBullet")) then
+        CollisionSystem.handlePlayerEnemy(id2, id1)
+    end
+
     -- Check Player vs Bonus
     if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "Bonus") then
         CollisionSystem.handlePlayerBonus(id1, id2)
-    elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "Bonus") then
+elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "Bonus") then
         CollisionSystem.handlePlayerBonus(id2, id1)
     end
 end
@@ -126,21 +133,30 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
     local life = ECS.getComponent(playerId, "Life")
     local color = ECS.getComponent(playerId, "Color")
 
+    if CollisionSystem.hasTag(enemyId, "EnemyBullet") then
+        local bLife = ECS.getComponent(enemyId, "Life")
+        if bLife then bLife.amount = 0 end
+    end
+
     if life then
         if life.invulnerableTime and life.invulnerableTime > 0 then
             return
         end
-        -- DAMAGE APPLICATION: Kill player after 4 collision with a enemy or bullet
-        life.amount = life.amount - 25
+        
+        local damage = CollisionSystem.hasTag(enemyId, "EnemyBullet") and 10 or 25  -- Bullets do less damage
         -- Set invulnerability to prevent rapid repeated damage
-        life.invulnerableTime = 0.7 -- seconds of invulnerability
+        local invulnTime = CollisionSystem.hasTag(enemyId, "EnemyBullet") and 0.3 or 0.6  -- Shorter invuln for bullets
+        
+        life.amount = life.amount - damage
+        life.invulnerableTime = invulnTime
+        
         -- Broadcast hit sound to all clients
         ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100") -- change the sound
-        if color then
-            color.r = 1.0
-            color.g = 0.0
-            color.b = 0.0
-        ECS.addComponent(playerId, "Color", color)
+            if color then
+                color.r = 1.0
+                color.g = 0.0
+                color.b = 0.0
+            ECS.addComponent(playerId, "Color", color)
         end
     end
 end
