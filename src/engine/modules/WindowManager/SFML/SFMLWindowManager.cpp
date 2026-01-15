@@ -71,9 +71,9 @@ void SFMLWindowManager::loop() {
             }
             if (const auto* resized = event->getIf<sf::Event::Resized>()) {
                 // OPTIMIZATION: Only process if size actually changed
-                static unsigned int lastWidth = 0;
-                static unsigned int lastHeight = 0;
-                static auto lastResizeTime = std::chrono::steady_clock::now();
+                thread_local unsigned int lastWidth = 0;
+                thread_local unsigned int lastHeight = 0;
+                thread_local auto lastResizeTime = std::chrono::steady_clock::now();
                 
                 // Skip duplicate events
                 if (resized->size.x == lastWidth && resized->size.y == lastHeight) {
