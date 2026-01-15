@@ -645,6 +645,8 @@ function MenuSystem.onWindowResized(msg)
             print("[MenuSystem] Window resized to " .. newWidth .. "x" .. newHeight)
             SCREEN_WIDTH = newWidth
             SCREEN_HEIGHT = newHeight
+            _G.SCREEN_WIDTH = newWidth
+            _G.SCREEN_HEIGHT = newHeight
             
             -- Update settings state to reflect actual resolution
             for i, res in ipairs(settingsState.resolutions) do

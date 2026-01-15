@@ -7,7 +7,7 @@ EnemySystem.spawnTimer = 0
 EnemySystem.spawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.gameTime = 0
 EnemySystem.enemyShootTimers = {}
-EnemySystem.shootInterval = 3.0
+EnemySystem.shootInterval = 5.0
 EnemySystem.baseSpawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.baseSpeed = config.enemy.speed or 5.0
 
@@ -25,6 +25,7 @@ end
 
 function EnemySystem.init()
     print("[EnemySystem] Initialized")
+
     EnemySystem.resetDifficulty() -- Clear state on init
 end
 
@@ -162,7 +163,8 @@ function EnemySystem.update(dt)
         end
 
         -- Check Bounds
-        if t.x < -20 then
+        if t.x < -_G.SCREEN_WIDTH * 0.5 or
+            t.y < -_G.SCREEN_HEIGHT * 0.5 or t.y > _G.SCREEN_HEIGHT * 0.5 then
             -- Decrease score when enemy escapes
             local scoreEntities = ECS.getEntitiesWith({"Score"})
             if #scoreEntities > 0 then
@@ -185,8 +187,10 @@ end
 function EnemySystem.spawnEnemy()
     local y = math.random(-5, 5)
     local x = 25
+    print("DEBUG: Spawning enemy at x=" .. x .. ", y=" .. y .. ", SCREEN_WIDTH=" .. _G.SCREEN_WIDTH)
 
-    local difficultyMultiplier = 1.0 + (EnemySystem.gameTime / 30.0)
+    local level = _G.CurrentLevel or 1
+    local difficultyMultiplier = (1.0 + (EnemySystem.gameTime / 30.0)) * level
     local speed = EnemySystem.baseSpeed * difficultyMultiplier
     if config.enemy.maxSpeed and speed > config.enemy.maxSpeed then speed = config.enemy.maxSpeed end
     
@@ -202,6 +206,11 @@ function EnemySystem.resetDifficulty()
     EnemySystem.gameTime = 0
     EnemySystem.spawnTimer = 0
     EnemySystem.spawnInterval = EnemySystem.baseSpawnInterval
+
+    local level = _G.CurrentLevel or 1
+    -- Decrease spawn interval for higher levels (faster spawns), but cap at 0.5s minimum
+    EnemySystem.spawnInterval = math.max(0.5, EnemySystem.baseSpawnInterval / (level ^ 0.5))
+    EnemySystem.shootInterval = math.max(1.0, 6.0 - level)
 end
 
 -- Subscribe to global event if possible, or poll?

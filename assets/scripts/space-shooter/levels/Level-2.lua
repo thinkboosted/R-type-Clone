@@ -2,8 +2,6 @@
 
 CurrentLevel = 2
 
-print("[DEBUG] Arriving here??")
-
 local file = io.open("current_level.txt", "w")
 if file then
     file:write("2")

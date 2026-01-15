@@ -9,11 +9,13 @@ if file then
     file:close()
 end
 
+
+local backgroundTexture = "assets/textures/Background/SinglePlay3.png"
+
 local Spawns = require("assets/scripts/space-shooter/spawns")
 
--- Create Backgrounds for this specific level
-Spawns.createBackground("assets/textures/Background/SinglePlay3.png")
 
-Spawns.createScore(0)
+Spawns.createCoreEntities(CurrentLevel, backgroundTexture, CurrentScore)
+
 
 print("[Level-3] Level 3 entities loaded!")

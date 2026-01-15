@@ -26,7 +26,7 @@ function ScoreSystem.update(dt)
     local textEntities = ECS.getEntitiesWith({"Text"})
     if #textEntities == 0 then return end
     local textEntity = textEntities[1]
-    
+
     local textComp = ECS.getComponent(textEntity, "Text")
 
     -- Get player's score
@@ -40,9 +40,11 @@ function ScoreSystem.update(dt)
         ECS.addComponent(textEntity, "Text", textComp)
         CurrentScore = playerScoreComp.value
         print("[SCORE] " .. CurrentScore)
+
     end
 
 end
+
 
 function ScoreSystem.adjustToScreenSize(width, height)
     local textEntities = ECS.getEntitiesWith({"Text"})
