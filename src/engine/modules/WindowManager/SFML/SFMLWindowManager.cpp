@@ -19,6 +19,18 @@ SFMLWindowManager::SFMLWindowManager(const char* pubEndpoint, const char* subEnd
     : IWindowManager(pubEndpoint, subEndpoint), _window(nullptr), _texture(sf::Vector2u(1, 1)), _sprite(_texture),
       _windowTitle("R-Type Clone"), _windowedSize{800, 600}, _isFullscreen(false) {}
 
+bool SFMLWindowManager::needsTextureResize(unsigned int width, unsigned int height) const {
+    return _texture.getSize().x != width || _texture.getSize().y != height;
+}
+
+void SFMLWindowManager::resizeTextureAndSprite(unsigned int width, unsigned int height) {
+    _texture = sf::Texture(sf::Vector2u(width, height));
+    _sprite = sf::Sprite(_texture);
+    _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(width), static_cast<int>(height))));
+    _sprite.setPosition(sf::Vector2f(0, 0));
+    _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+}
+
 void SFMLWindowManager::init() {
     createWindow(_windowTitle, _windowedSize);
     subscribe("ImageRendered", [this](const std::string& message) {
@@ -97,12 +109,8 @@ void SFMLWindowManager::loop() {
                 sendMessage("WindowResized", ss.str());
 
                 // Only recreate texture if size actually changed
-                if (_texture.getSize().x != resized->size.x || _texture.getSize().y != resized->size.y) {
-                    _texture = sf::Texture(sf::Vector2u(resized->size.x, resized->size.y));
-                    _sprite = sf::Sprite(_texture);
-                    _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(resized->size.x), static_cast<int>(resized->size.y))));
-                    _sprite.setPosition(sf::Vector2f(0, 0));
-                    _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+                if (needsTextureResize(resized->size.x, resized->size.y)) {
+                    resizeTextureAndSprite(resized->size.x, resized->size.y);
                 }
 
                 sf::FloatRect visibleArea(sf::Vector2f(0, 0), sf::Vector2f(static_cast<float>(resized->size.x), static_cast<float>(resized->size.y)));
@@ -245,12 +253,8 @@ void SFMLWindowManager::handleSetWindowSize(const std::string& message) {
                 _window->setSize(sf::Vector2u(width, height));
                 
                 // Only recreate texture if size changed
-                if (_texture.getSize().x != width || _texture.getSize().y != height) {
-                    _texture = sf::Texture(sf::Vector2u(width, height));
-                    _sprite = sf::Sprite(_texture);
-                    _sprite.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(static_cast<int>(width), static_cast<int>(height))));
-                    _sprite.setPosition(sf::Vector2f(0, 0));
-                    _sprite.setScale(sf::Vector2f(1.0f, 1.0f));
+                if (needsTextureResize(width, height)) {
+                    resizeTextureAndSprite(width, height);
                 }
                 
                 // Update view for new size

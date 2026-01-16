@@ -1206,11 +1206,18 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             destroyFramebuffer();
             createFramebuffer();
             _pendingResize = false;
+            // Reset frame time after resize to prevent dt spike
+            _lastFrameTime = std::chrono::steady_clock::now();
             std::cout << "[GLEWSFMLRenderer] Resized to " << _resolution.x << "x" << _resolution.y << std::endl;
         }
 
         auto now = std::chrono::steady_clock::now();
         float dt = std::chrono::duration<float>(now - _lastFrameTime).count();
+        
+        // Clamp dt to prevent huge jumps after resize or other delays
+        if (dt > 0.1f) {
+            dt = 0.016f; // Cap at ~60fps equivalent
+        }
         _lastFrameTime = now;
 
         updateParticles(dt);

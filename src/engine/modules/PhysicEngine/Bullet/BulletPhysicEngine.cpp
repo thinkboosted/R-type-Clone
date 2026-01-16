@@ -87,16 +87,28 @@ void BulletPhysicEngine::stepSimulation() {
 
     float deltaTime = elapsedTime.count();
 
+    // If frame took too long (e.g., during resize), reset to prevent lag spiral
     if (deltaTime > _maxDeltaTime) {
-        deltaTime = _maxDeltaTime;
+        deltaTime = 1.0f / 60.0f;  // Use single fixed step
+        _timeAccumulator = 0.0f;   // Reset accumulator
     }
 
     _timeAccumulator += deltaTime;
     const float fixedTimeStep = 1.0f / 60.0f;
+    
+    // Limit max iterations to prevent freeze
+    int maxIterations = 3;
+    int iterations = 0;
 
-    while (_timeAccumulator >= fixedTimeStep) {
+    while (_timeAccumulator >= fixedTimeStep && iterations < maxIterations) {
         _dynamicsWorld->stepSimulation(fixedTimeStep, 10);
         _timeAccumulator -= fixedTimeStep;
+        iterations++;
+    }
+    
+    // Discard excess accumulator to prevent permanent lag
+    if (iterations >= maxIterations && _timeAccumulator >= fixedTimeStep) {
+        _timeAccumulator = 0.0f;
     }
 }
 

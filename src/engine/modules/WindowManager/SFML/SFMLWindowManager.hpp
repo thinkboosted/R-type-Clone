@@ -25,6 +25,8 @@ class SFMLWindowManager : public IWindowManager {
     void handleSetWindowSize(const std::string& message);
     void handleGetWindowInfo(const std::string& message);
     void recreateWindow(bool fullscreen);
+    bool needsTextureResize(unsigned int width, unsigned int height) const;
+    void resizeTextureAndSprite(unsigned int width, unsigned int height);
     
     std::unique_ptr<sf::RenderWindow> _window;
     sf::Texture _texture;

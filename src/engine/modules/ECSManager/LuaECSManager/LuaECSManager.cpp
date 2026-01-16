@@ -1027,13 +1027,21 @@ void LuaECSManager::loop() {
   _lastFrameTime = currentTime;
 
   double deltaTime = frameTime.count();
+  
+  // If frame took too long (e.g., during resize), clamp and reset accumulator
+  // to prevent "catch-up" lag spiral
   if (deltaTime > MAX_FRAME_TIME) {
-    deltaTime = MAX_FRAME_TIME;
+    deltaTime = FIXED_DT;  // Use single fixed step instead of MAX_FRAME_TIME
+    _accumulator = 0.0;    // Reset accumulator to prevent buildup
   }
 
   _accumulator += deltaTime;
 
-  while (_accumulator >= FIXED_DT) {
+  // Limit max iterations per frame to prevent freeze during catch-up
+  const int MAX_ITERATIONS = 3;
+  int iterations = 0;
+  
+  while (_accumulator >= FIXED_DT && iterations < MAX_ITERATIONS) {
     for (auto &system : _systems) {
       if (system["update"].valid()) {
         try {
@@ -1045,6 +1053,12 @@ void LuaECSManager::loop() {
     }
 
     _accumulator -= FIXED_DT;
+    iterations++;
+  }
+  
+  // If we hit max iterations, discard remaining accumulator to prevent permanent lag
+  if (iterations >= MAX_ITERATIONS && _accumulator >= FIXED_DT) {
+    _accumulator = 0.0;
   }
 
   auto sleepTime = std::chrono::milliseconds(10);
