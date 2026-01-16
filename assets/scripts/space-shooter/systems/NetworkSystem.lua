@@ -201,6 +201,7 @@ function NetworkSystem.init()
                     file:close()
                 end
                 ECS.broadcastNetworkMessage("LEVEL_CHANGE", tostring(level))
+                
             end
         end)
 
@@ -511,13 +512,18 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              end
 
         elseif nType == 2 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", nil))
+             ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
              ECS.addComponent(localId, "Color", Color(0.0, 1.0, 1.0))
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
-        elseif nType >= 3 then
-            local configIndex = nType - 2
-            print("Ennemeis type " .. configIndex)
+        elseif nType == 3 then
+            print("GONNA ATTACK")
+            ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
+            ECS.addComponent(localId, "Color", Color(1.0, 0.5, 0.0)) -- Orange
+            local t = ECS.getComponent(localId, "Transform")
+            t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
+        elseif nType >= 4 then
+            local configIndex = nType - 3
             local enemyConfigs = {
                 [1] = { mesh = "assets/models/Monster_1/motion_1.obj", color = Color(1.0, 0.0, 0.0), frames = 8},
                 [2] = { mesh = "assets/models/Monster_2/motion_1.obj", color = Color(0.5, 0.5, 0.5), frames = 3},
@@ -529,6 +535,7 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
 
             local animBase = "assets/models/Monster_" .. configIndex .. "/motion_"
             ECS.addComponent(localId, "Animation", Animation(cfg.frames, 0.2, true, animBase))
+            t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         end
         NetworkSystem.serverEntities[serverId] = localId
     else
@@ -661,8 +668,19 @@ function NetworkSystem.update(dt)
         for _, id in ipairs(bullets) do
             local t = ECS.getComponent(id, "Transform")
             local phys = ECS.getComponent(id, "Physic")
+            local tagComp = ECS.getComponent(id, "Tag")
+            local isEnemyBullet = false
+            if tagComp and tagComp.tags then
+                for _, tag in ipairs(tagComp.tags) do
+                    if tag == "EnemyBullet" then
+                        isEnemyBullet = true
+                        break
+                    end
+                end
+            end
+            local typeNum = isEnemyBullet and 3 or 2
             if ECS.broadcastBinary then
-                ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 2))
+                ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, typeNum))
             end
             NetworkSystem.debugSentBullets = NetworkSystem.debugSentBullets + 1
         end
@@ -674,7 +692,7 @@ function NetworkSystem.update(dt)
              local t = ECS.getComponent(id, "Transform")
              local phys = ECS.getComponent(id, "Physic")
              if ECS.broadcastBinary then
-                 ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 3))
+                 ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 4))
              end
              NetworkSystem.debugSentEnemies = NetworkSystem.debugSentEnemies + 1
         end

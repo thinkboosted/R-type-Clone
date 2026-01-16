@@ -169,7 +169,7 @@ function Spawns.spawnEnemy(x, y, speed, type)
         ))
     end
 
-    ECS.addComponent(e, "EnemyType", { type = 2 + mType })
+    ECS.addComponent(e, "EnemyType", { type = 3 + mType })
     -- Network
     ECS.addComponent(e, "NetworkIdentity", NetworkIdentity(e, -1, false)) -- -1 = Server owned
     if hasAuthority() then
