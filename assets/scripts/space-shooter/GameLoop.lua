@@ -109,6 +109,7 @@ if ECS.capabilities.hasRendering then
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
     dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/HitFlashSystem.lua")
 
     -- NOTE: Camera is now created by MenuSystem when menu is rendered,
     -- and by the game when transitioning to gameplay.

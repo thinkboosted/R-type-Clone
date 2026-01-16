@@ -201,7 +201,6 @@ function NetworkSystem.init()
                     file:close()
                 end
                 ECS.broadcastNetworkMessage("LEVEL_CHANGE", tostring(level))
-                
             end
         end)
 
@@ -351,6 +350,20 @@ function NetworkSystem.init()
                 if #scoreEntities > 0 then
                     local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
                     scoreComp.value = scoreVal
+                end
+            end
+        end)
+
+        ECS.subscribe("ENTITY_HIT", function(msg)
+        local id = string.match(msg, "([^%s]+)")
+            if id and NetworkSystem.serverEntities[id] then
+                local localId = NetworkSystem.serverEntities[id]
+                local colorComp = ECS.getComponent(localId, "Color")
+                if colorComp then
+                    ECS.addComponent(localId, "HitFlash", { timer = 0.5, originalR = colorComp.r, originalG = colorComp.g, originalB = colorComp.b })
+                    colorComp.r = 1.0
+                    colorComp.g = 0.0
+                    colorComp.b = 0.0
                 end
             end
         end)
@@ -517,7 +530,6 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         elseif nType == 3 then
-            print("GONNA ATTACK")
             ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
             ECS.addComponent(localId, "Color", Color(1.0, 0.5, 0.0)) -- Orange
             local t = ECS.getComponent(localId, "Transform")

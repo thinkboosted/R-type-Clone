@@ -158,6 +158,8 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
                 color.b = 0.0
             ECS.addComponent(playerId, "Color", color)
         end
+        -- Broadcast hit event for multiplayer visuals
+        ECS.broadcastNetworkMessage("ENTITY_HIT", playerId)
     end
 end
 
