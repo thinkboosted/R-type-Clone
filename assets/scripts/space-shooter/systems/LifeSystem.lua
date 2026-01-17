@@ -18,38 +18,51 @@ function LifeSystem.init()
 end
 
 function LifeSystem.update(dt)
+    -- Allow running on clients for visual effects (explosions), but authority logic only on server/solo
+    if not ECS.capabilities.hasAuthority and not ECS.isGameRunning then return end
     if ECS.isPaused then return end
-
-    -- ⚠️ AUTHORITY CHECK: Only server/solo can modify life
-    if not ECS.capabilities.hasAuthority then return end
-    if not ECS.isGameRunning then return end
 
     local entities = ECS.getEntitiesWith({"Life", "Transform"})
 
     for _, id in ipairs(entities) do
         local life = ECS.getComponent(id, "Life")
         local t = ECS.getComponent(id, "Transform")
+        local hasAuthority = ECS.hasComponent(id, "ServerAuthority")
 
-        -- Boundary Check (Optimization): Destroy entities that go too far off-screen
-        if t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30 then
+        -- Boundary Check (Optimization): Destroy entities that go too far off-screen (only on authority)
+        if hasAuthority and t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30 then
             life.amount = 0
         end
 
         if life.invulnerableTime and life.invulnerableTime > 0 then
             life.invulnerableTime = math.max(0, life.invulnerableTime - dt)
-            -- Skip death while invulnerable
+
+        -- Skip death while invulnerable (for all entities)
+        if life.invulnerableTime <= 0 then
+            if ECS.hasComponent(id, "Player") then
+                local color = ECS.getComponent(id, "Color")
+                    if color then
+                        color.r = 1.0
+                        color.g = 1.0
+                        color.b = 1.0
+                        ECS.addComponent(id, "Color", color) -- color back to white after hit
+                    end
+                end
+            end
         else
             if life.amount <= 0 then
-                local player = ECS.getComponent(id, "Player")
-                local enemy = ECS.getComponent(id, "Enemy")
+                -- Authority-required logic (damage, broadcasts, etc.) only for authoritative entities
+                if hasAuthority then
+                    local player = ECS.getComponent(id, "Player")
+                    local enemy = ECS.getComponent(id, "Enemy")
 
-                -- In multiplayer server mode, broadcast enemy death to clients
-                if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
-                    local phys = ECS.getComponent(id, "Physic")
-                    local vx, vy, vz = 0, 0, 0
-                    if phys then
-                        vx, vy, vz = phys.vx or 0, phys.vy or 0, phys.vz or 0
-                    end
+                    -- In multiplayer server mode, broadcast enemy death to clients
+                    if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
+                        local phys = ECS.getComponent(id, "Physic")
+                        local vx, vy, vz = 0, 0, 0
+                        if phys then
+                            vx, vy, vz = phys.vx or 0, phys.vy or 0, phys.vz or 0
+                        end
                     if t then
                         local msg = string.format("%s %f %f %f %f %f %f", id, t.x, t.y, t.z, vx, vy, vz)
                         ECS.broadcastNetworkMessage("ENEMY_DEAD", msg)
@@ -84,16 +97,20 @@ function LifeSystem.update(dt)
                         ECS.sendMessage("SERVER_PLAYER_DEAD", tostring(netId.id))
                     end
                 end
+                end  -- Close the if hasAuthority
 
+                -- Destroy entity for all (authoritative and non-authoritative)
                 ECS.destroyEntity(id)
 
-                -- Notify clients or trigger local game over
-                if ECS.capabilities.hasNetworkSync then
-                    -- Multiplayer server: Broadcast entity destruction
-                    ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
-                elseif ECS.capabilities.hasLocalMode and player and finalScore then -- Changed from isServer() to capabilities.isLocalMode
-                    -- Solo mode: Trigger local game over
-                    ECS.sendMessage("GAME_OVER", tostring(finalScore))
+                -- Notify clients or trigger local game over (only for authoritative deaths)
+                if hasAuthority then
+                    if ECS.capabilities.hasNetworkSync then
+                        -- Multiplayer server: Broadcast entity destruction
+                        ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
+                    elseif ECS.capabilities.hasLocalMode and player and finalScore then -- Changed from isServer() to capabilities.isLocalMode
+                        -- Solo mode: Trigger local game over
+                        ECS.sendMessage("GAME_OVER", tostring(finalScore))
+                    end
                 end
             end
         end

@@ -6,6 +6,7 @@
 
 local MenuSystem = {}
 local Spawns = require("assets/scripts/space-shooter/spawns")
+local ScoreSystem = require("assets/scripts/space-shooter/systems/ScoreSystem")
 
 -- ============================================================================
 -- STATE
@@ -126,6 +127,8 @@ function MenuSystem.init()
     ECS.subscribe("PAUSE_GAME", MenuSystem.showPauseMenu)
     ECS.subscribe("RESUME_GAME", MenuSystem.hidePauseMenu)
     ECS.subscribe("WindowResized", MenuSystem.onWindowResized)
+    _G.SCREEN_WIDTH = SCREEN_WIDTH
+    _G.SCREEN_HEIGHT = SCREEN_HEIGHT
 
     -- Create GameState entity
     local gs = ECS.createEntity()
@@ -277,16 +280,22 @@ function MenuSystem.executeAction(action)
         if #gsEntities > 0 then
             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
         end
-        
         ECS.isGameRunning = true
+
         Spawns.createPlayer(-8, 0, 0, nil)
+        local file = io.open("current_level.txt", "r")
+        local level = 1
+        if file then
+            local content = file:read("*all")
+            level = tonumber(content) or 1
+            file:close()
+        end
+        print("[MenuSystem] Loading Level " .. level .. " for solo mode")
+        dofile("assets/scripts/space-shooter/levels/Level-" .. level .. ".lua")
         
-        local gameCam = ECS.createEntity()
-        ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
-        ECS.addComponent(gameCam, "Camera", Camera(90))
-        
+        ScoreSystem.adjustToScreenSize(SCREEN_WIDTH, SCREEN_HEIGHT)
         ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
-        
+
     elseif action == "MULTI" then
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
@@ -296,11 +305,6 @@ function MenuSystem.executeAction(action)
         MenuSystem.hideMenu()
         ECS.setGameMode("MULTI_CLIENT")
         ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
-        
-        -- Create game camera for client rendering
-        local gameCam = ECS.createEntity()
-        ECS.addComponent(gameCam, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
-        ECS.addComponent(gameCam, "Camera", Camera(90))
         
         print("[MenuSystem] Sending REQUEST_GAME_START to server...")
         ECS.sendNetworkMessage("REQUEST_GAME_START", "1")
@@ -641,6 +645,8 @@ function MenuSystem.onWindowResized(msg)
             print("[MenuSystem] Window resized to " .. newWidth .. "x" .. newHeight)
             SCREEN_WIDTH = newWidth
             SCREEN_HEIGHT = newHeight
+            _G.SCREEN_WIDTH = newWidth
+            _G.SCREEN_HEIGHT = newHeight
             
             -- Update settings state to reflect actual resolution
             for i, res in ipairs(settingsState.resolutions) do

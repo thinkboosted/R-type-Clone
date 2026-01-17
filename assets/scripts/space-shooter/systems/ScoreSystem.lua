@@ -4,10 +4,14 @@
 -- Updates score text UI only on instances with rendering capability.
 -- Score logic itself is managed by authority (Server/Solo).
 -- ============================================================================
+
 local ScoreSystem = {}
 
+
 ScoreSystem.lastScore = 0
-ScoreSystem.levelChanged = false
+
+-- Global variable to persist score across levels
+CurrentScore = CurrentScore or 0
 
 function ScoreSystem.init()
     print("[ScoreSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
@@ -18,27 +22,50 @@ function ScoreSystem.update(dt)
 
     -- Only update text rendering on instances with rendering capability
     if not ECS.capabilities.hasRendering then return end
-    
-    local scoreEntities = ECS.getEntitiesWith({"Score", "Text"})
+
+    local textEntities = ECS.getEntitiesWith({"Text"})
+    if #textEntities == 0 then return end
+    local textEntity = textEntities[1]
+
+    local textComp = ECS.getComponent(textEntity, "Text")
+
+    -- Get player's score
+    local playerEntities = ECS.getEntitiesWith({"Player", "Score"})
+    if #playerEntities == 0 then return end
+    local playerScoreComp = ECS.getComponent(playerEntities[1], "Score")
+
+    if playerScoreComp.value ~= ScoreSystem.lastScore then
+        ScoreSystem.lastScore = playerScoreComp.value
+        textComp.text = "Score: " .. playerScoreComp.value
+        ECS.addComponent(textEntity, "Text", textComp)
+        CurrentScore = playerScoreComp.value
+        print("[SCORE] " .. CurrentScore)
+
+    end
+
+end
+
+
+function ScoreSystem.adjustToScreenSize(width, height)
+    local textEntities = ECS.getEntitiesWith({"Text"})
+    if #textEntities == 0 then return end
+    local textId = textEntities[1]
+    local scoreEntities = ECS.getEntitiesWith({"Score", "Transform", "Text"})
     if #scoreEntities == 0 then return end
-
-    local scoreEntity = scoreEntities[1]
-    local scoreComp = ECS.getComponent(scoreEntity, "Score")
-    local textComp = ECS.getComponent(scoreEntity, "Text")
-
-    if scoreComp.value ~= ScoreSystem.lastScore then
-        ScoreSystem.lastScore = scoreComp.value
-        textComp.text = "Score: " .. scoreComp.value
-    end
-
-    if scoreComp.value >= 100 and not ScoreSystem.levelChanged then
-        ScoreSystem.levelChanged = true
-        print("Level Complete! Switching to Level 2...")
-        ECS.saveState("space-shooter-save-level-1-complete")
-        ECS.removeEntities()
-        ECS.removeSystems()
-        dofile("assets/scripts/space-shooter/levels/Level-2.lua")
-    end
+    
+    local scoreId = scoreEntities[1]
+    local t = ECS.getComponent(scoreId, "Transform")
+    -- Position at 5% from top-left corner
+    t.x = width * 0.03
+    t.y = height * 0.03
+    ECS.addComponent(scoreId, "Transform", t)
+    
+    local textComp = ECS.getComponent(scoreId, "Text")
+    -- Scale font size to ~8% of screen height
+    textComp.size = math.floor(height * 0.08)
+    ECS.addComponent(scoreId, "Text", textComp)
+    
+    print("[ScoreSystem] Score adjusted to screen size: " .. width .. "x" .. height)
 end
 
 ECS.registerSystem(ScoreSystem)

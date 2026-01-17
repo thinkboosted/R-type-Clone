@@ -10,16 +10,12 @@ if file then
     file:close()
 end
 
+
+local backgroundTexture = "assets/textures/Background/SinglePlay1.png"
+
 local Spawns = require("assets/scripts/space-shooter/spawns")
 
--- Create Backgrounds (Parallax)
-Spawns.createBackground("assets/textures/SinglePlay1.png")
 
--- Create Score Entity
-local scoreEntity = ECS.createEntity()
-ECS.addComponent(scoreEntity, "Score", Score(0))
-ECS.addComponent(scoreEntity, "Transform", Transform(650, 550, 0))
-ECS.addComponent(scoreEntity, "Text", Text("Score: 0", "assets/fonts/arial.ttf", 24, true))
-ECS.addComponent(scoreEntity, "Color", Color(1.0, 1.0, 1.0))
+Spawns.createCoreEntities(CurrentLevel, backgroundTexture, CurrentScore)
 
 print("[Level-1] Level 1 entities loaded!")

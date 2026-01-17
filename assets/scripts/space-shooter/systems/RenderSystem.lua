@@ -52,25 +52,29 @@ function RenderSystem.update(dt)
         local mesh = ECS.getComponent(id, "Mesh")
         local color = ECS.getComponent(id, "Color")
 
+        -- Initialize state tracking if needed
         if not RenderSystem.initializedEntities[id] then
-            local type = mesh.modelPath
-            ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. id)
-            ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
-            
-            if mesh.texturePath then
-                print("[RenderSystem] Sending SetTexture for " .. id .. " (Model: " .. tostring(mesh.modelPath) .. ") with path: " .. mesh.texturePath) -- debug
-                ECS.sendMessage("RenderEntityCommand", "SetTexture:" .. id .. ":" .. mesh.texturePath)
-            else
-                if mesh.modelPath ~= "assets/models/cube.obj" then
-                    print("[RenderSystem] No texture path for " .. id .. " (Model: " .. tostring(mesh.modelPath) .. ")")
-                    -- Debug: print keys
-                    for k, v in pairs(mesh) do
-                        print("  Key: " .. tostring(k) .. ", Value: " .. tostring(v))
-                    end
-                end
-            end
+            RenderSystem.initializedEntities[id] = { model = nil, texture = nil }
+        end
+        local cached = RenderSystem.initializedEntities[id]
 
-            RenderSystem.initializedEntities[id] = true
+        -- Check for Model Change (Re-create entity if model changes)
+        if cached.model ~= mesh.modelPath then
+             local type = mesh.modelPath
+             ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. id)
+             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+             cached.model = mesh.modelPath
+             
+             -- Force texture update after model change
+             cached.texture = nil 
+        end
+
+        -- Check for Texture Change
+        if cached.texture ~= mesh.texturePath then
+            if mesh.texturePath then
+                ECS.sendMessage("RenderEntityCommand", "SetTexture:" .. id .. ":" .. mesh.texturePath)
+            end
+            cached.texture = mesh.texturePath
         end
 
         if color then
@@ -89,7 +93,6 @@ function RenderSystem.update(dt)
         local color = ECS.getComponent(id, "Color")
 
         if not RenderSystem.initializedEntities[id] then
-            print("RenderSystem: Creating Text '" .. text.text .. "' for Entity " .. id)
             ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
             RenderSystem.initializedEntities[id] = true

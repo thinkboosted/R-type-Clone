@@ -1,5 +1,6 @@
 local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
 local config = dofile("assets/scripts/space-shooter/config.lua")
+local ScoreSystem = dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
 
 -- Expose globally so other systems (MenuSystem) can read connection state.
 local NetworkSystem = {}
@@ -40,6 +41,8 @@ local function extractVelocity(phys)
 end
 
 local function buildStateData(id, transform, phys, typeNum)
+    local enemyTypeComp = ECS.getComponent(id, "EnemyType")
+    local actualType = enemyTypeComp and enemyTypeComp.type or typeNum  -- Use EnemyType for enemies, else passed typeNum
     local vx, vy, vz = extractVelocity(phys)
     return {
         id = id,
@@ -52,7 +55,7 @@ local function buildStateData(id, transform, phys, typeNum)
         vx = vx,
         vy = vy,
         vz = vz,
-        t = typeNum
+        t = actualType
     }
 end
 
@@ -131,7 +134,7 @@ function NetworkSystem.init()
                 NetworkSystem.pendingClients[clientId] = true
             end
         end)
-
+        
         ECS.subscribe("CLIENT_READY", function(msg)
             local clientId = string.match(msg, "^(%d+)")
             if not clientId then return end
@@ -189,6 +192,15 @@ function NetworkSystem.init()
                 end
                 NetworkSystem.pendingClients = {}
                 ECS.isGameRunning = true
+                -- Read current level from file
+                local file = io.open("current_level.txt", "r")
+                local level = 1
+                if file then
+                    local content = file:read("*all")
+                    level = tonumber(content) or 1
+                    file:close()
+                end
+                ECS.broadcastNetworkMessage("LEVEL_CHANGE", tostring(level))
             end
         end)
 
@@ -252,7 +264,7 @@ function NetworkSystem.init()
         ECS.subscribe("INPUT", function(msg)
             local clientId, payload = ECS.splitClientIdAndMessage(msg)
             local data = ECS.unpackMsgPack(payload)
-            
+
             local key, state = nil, nil
             if data then
                 -- Binary format {k="KEY", s=1/0}
@@ -260,7 +272,7 @@ function NetworkSystem.init()
                 state = data.s
             else
                 -- Legacy text format fallback: "UP 1"
-                -- msg contains "clientId key state" if it wasn't stripped? 
+                -- msg contains "clientId key state" if it wasn't stripped?
                 -- Actually splitClientIdAndMessage returns (id, rest).
                 -- So payload is "key state".
                 local k, s = string.match(payload, "(%w+) (%d)")
@@ -312,12 +324,18 @@ function NetworkSystem.init()
             ECS.sendMessage("MusicStop", msg)
         end)
 
+        ECS.subscribe("LEVEL_CHANGE", function(level)
+        local levelNum = tonumber(level) or 1
+            dofile("assets/scripts/space-shooter/levels/Level-" .. levelNum .. ".lua")
+            ScoreSystem.adjustToScreenSize(_G.SCREEN_WIDTH, _G.SCREEN_HEIGHT)
+        end)
+
         ECS.subscribe("PLAYER_ASSIGN", function(msg)
             local id = string.match(msg, "([^%s]+)")
             if id then
                 print(">> Assigned Player ID: " .. id)
                 NetworkSystem.myServerId = id
-                NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, -90, 0, 0, 0, "1")
+                NetworkSystem.updateLocalEntity(id, -8, 0, 0, 0, 0, 0, 0, 0, 0, "1")
                 -- Send a ready ping; network layer will prefix client id.
                 ECS.sendNetworkMessage("CLIENT_READY", "ready")
                 ECS.isGameRunning = true
@@ -332,6 +350,20 @@ function NetworkSystem.init()
                 if #scoreEntities > 0 then
                     local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
                     scoreComp.value = scoreVal
+                end
+            end
+        end)
+
+        ECS.subscribe("ENTITY_HIT", function(msg)
+        local id = string.match(msg, "([^%s]+)")
+            if id and NetworkSystem.serverEntities[id] then
+                local localId = NetworkSystem.serverEntities[id]
+                local colorComp = ECS.getComponent(localId, "Color")
+                if colorComp then
+                    ECS.addComponent(localId, "HitFlash", { timer = 0.5, originalR = colorComp.r, originalG = colorComp.g, originalB = colorComp.b })
+                    colorComp.r = 1.0
+                    colorComp.g = 0.0
+                    colorComp.b = 0.0
                 end
             end
         end)
@@ -445,16 +477,9 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              end
 
              -- Unique Mesh per Player
-             local meshes = {
-                "assets/models/aircraft.obj",
-                "assets/models/delta_wing.obj",
-                "assets/models/fighter.obj",
-                "assets/models/bomber.obj"
-             }
-             -- Use a different modulus for mesh to mix it up
-             -- Add a prime number offset to desync mesh and color cycles
-             local meshIndex = ((pid * 3) % #meshes) + 1
-             ECS.addComponent(localId, "Mesh", Mesh(meshes[meshIndex]))
+             local meshe = "assets/models/simple_plane.obj"
+
+             ECS.addComponent(localId, "Mesh", Mesh(meshe))
              -- Unique Color per Player
              local colors = {
                 {1.0, 0.0, 0.0}, -- Red
@@ -471,6 +496,12 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
 
              ECS.addComponent(localId, "Color", Color(col[1], col[2], col[3]))
 
+             local t = ECS.getComponent(localId, "Transform")
+                if t then
+                    t.sx = config.player.scale
+                    t.sy = config.player.scale
+                    t.sz = config.player.scale
+                end
              -- Reactor Particles (Blue Trail) for ALL players (Local and Remote)
              ECS.addComponent(localId, "ParticleGenerator", ParticleGenerator(
                 -1.0, 0, 0,   -- Offset (Behind)
@@ -494,13 +525,29 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
              end
 
         elseif nType == 2 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
-             ECS.addComponent(localId, "Color", Color(1.0, 1.0, 0.0))
+             ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
+             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 1.0))
              local t = ECS.getComponent(localId, "Transform")
              t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         elseif nType == 3 then
-             ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj"))
-             ECS.addComponent(localId, "Color", Color(1.0, 0.0, 0.0))
+            ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
+            ECS.addComponent(localId, "Color", Color(1.0, 0.5, 0.0)) -- Orange
+            local t = ECS.getComponent(localId, "Transform")
+            t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
+        elseif nType >= 4 then
+            local configIndex = nType - 3
+            local enemyConfigs = {
+                [1] = { mesh = "assets/models/Monster_1/motion_1.obj", color = Color(1.0, 0.0, 0.0), frames = 8},
+                [2] = { mesh = "assets/models/Monster_2/motion_1.obj", color = Color(0.5, 0.5, 0.5), frames = 3},
+                [3] = { mesh = "assets/models/Monster_3/motion_1.obj", color = Color(0.6, 0.4, 0.2), frames = 8}
+            }
+            local cfg = enemyConfigs[configIndex] or enemyConfigs[3]
+            ECS.addComponent(localId, "Mesh", Mesh(cfg.mesh, nil))
+            ECS.addComponent(localId, "Color", cfg.color)
+
+            local animBase = "assets/models/Monster_" .. configIndex .. "/motion_"
+            ECS.addComponent(localId, "Animation", Animation(cfg.frames, 0.2, true, animBase))
+            t.sx = 0.2; t.sy = 0.2; t.sz = 0.2
         end
         NetworkSystem.serverEntities[serverId] = localId
     else
@@ -511,6 +558,9 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
             t.targetRX, t.targetRY, t.targetRZ = nrx, nry, nrz
             t.netVX, t.netVY, t.netVZ = nvx, nvy, nvz
             t.netAge = 0
+            t.sx = config.enemy.scale
+            t.sy = config.enemy.scale
+            t.sz = config.enemy.scale
             if t.x == 0 and t.y == 0 and t.targetX ~= 0 then t.x, t.y, t.z = nx, ny, nz end
         end
     end
@@ -630,8 +680,19 @@ function NetworkSystem.update(dt)
         for _, id in ipairs(bullets) do
             local t = ECS.getComponent(id, "Transform")
             local phys = ECS.getComponent(id, "Physic")
+            local tagComp = ECS.getComponent(id, "Tag")
+            local isEnemyBullet = false
+            if tagComp and tagComp.tags then
+                for _, tag in ipairs(tagComp.tags) do
+                    if tag == "EnemyBullet" then
+                        isEnemyBullet = true
+                        break
+                    end
+                end
+            end
+            local typeNum = isEnemyBullet and 3 or 2
             if ECS.broadcastBinary then
-                ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 2))
+                ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, typeNum))
             end
             NetworkSystem.debugSentBullets = NetworkSystem.debugSentBullets + 1
         end
@@ -643,7 +704,7 @@ function NetworkSystem.update(dt)
              local t = ECS.getComponent(id, "Transform")
              local phys = ECS.getComponent(id, "Physic")
              if ECS.broadcastBinary then
-                 ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 3))
+                 ECS.broadcastBinary("ENTITY_POS", buildStateData(id, t, phys, 4))
              end
              NetworkSystem.debugSentEnemies = NetworkSystem.debugSentEnemies + 1
         end

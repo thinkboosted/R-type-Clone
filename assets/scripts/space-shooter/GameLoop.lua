@@ -74,6 +74,7 @@ print("[GameLoop] Loading Core Gameplay Systems...")
 dofile("assets/scripts/space-shooter/systems/CollisionSystem.lua")
 dofile("assets/scripts/space-shooter/systems/PhysicSystem.lua")
 dofile("assets/scripts/space-shooter/systems/LifeSystem.lua")
+dofile("assets/scripts/space-shooter/systems/WinSystem.lua")
 dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/PlayerSystem.lua")
 dofile("assets/scripts/space-shooter/systems/GameStateManager.lua")
@@ -104,9 +105,11 @@ dofile("assets/scripts/space-shooter/systems/MenuSystem.lua")
 if ECS.capabilities.hasRendering then
     print("[GameLoop] Loading Visual & UI Systems...")
     dofile("assets/scripts/space-shooter/systems/RenderSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/AnimationSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
     dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/HitFlashSystem.lua")
 
     -- NOTE: Camera is now created by MenuSystem when menu is rendered,
     -- and by the game when transitioning to gameplay.
