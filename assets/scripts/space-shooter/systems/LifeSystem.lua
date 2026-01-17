@@ -76,7 +76,7 @@ function LifeSystem.update(dt)
                     
                     -- Play enemy death sound
                     if not ECS.capabilities.hasNetworkSync then
-                        ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/enemy_death.wav:90")
+                        ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/explosion.wav:90")
                     end
                 end
 

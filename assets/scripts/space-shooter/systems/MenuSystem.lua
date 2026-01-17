@@ -267,9 +267,25 @@ end
 function MenuSystem.executeAction(action)
     print("[MenuSystem] Executing action: " .. action)
     
+    -- Helper function for clean start
+    local function cleanStart()
+        ECS.isGameRunning = false
+        isPaused = false
+        ECS.isPaused = false
+        ECS.sendMessage("MusicStop", "bgm")
+        -- Destroy game entities
+        local allEntities = ECS.getEntitiesWith({"Transform"})
+        for _, id in ipairs(allEntities) do
+            if not ECS.hasComponent(id, "GameState") then
+                ECS.destroyEntity(id)
+            end
+        end
+    end
+    
     local gsEntities = ECS.getEntitiesWith({"GameState"})
     
     if action == "SOLO" then
+        cleanStart()
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
             gs.state = "PLAYING"
@@ -298,6 +314,7 @@ function MenuSystem.executeAction(action)
         ScoreSystem.adjustToScreenSize(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     elseif action == "MULTI" then
+        cleanStart()
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
             gs.state = "PLAYING"
