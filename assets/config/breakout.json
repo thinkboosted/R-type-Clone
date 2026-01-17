@@ -1,0 +1,28 @@
+{
+  "engine": {
+    "max_fps": 144,
+    "fixed_step": 0.016666666,
+    "max_frame_time": 0.25
+  },
+  "modules": [
+    "../lib/SFMLWindowManager.so",
+    "../lib/GLEWSFMLRenderer.so",
+    "../lib/SFMLSoundManager.so",
+    "../lib/LuaECSManager.so"
+  ],
+  "module_order": [
+    "LuaECSManager",
+    "RenderModule",
+    "WindowModule"
+  ],
+  "startup_scripts": [
+    "assets/scripts/breakout/GameLoop.lua"
+  ],
+  "network": {
+    "mode": "local",
+    "server_address": ""
+  },
+  "lua": {
+    "debug": true
+  }
+}

@@ -10,6 +10,8 @@ add_executable(r-type_client
     ../engine/app/AApplication.cpp
     ../engine/app/AApplication.hpp
     ../engine/app/IApplication.hpp
+    ../engine/core/Logger.cpp
+    ../engine/core/Logger.hpp
     ../engine/modulesManager/IModulesManager.hpp
     ../engine/modulesManager/AModulesManager.cpp
     ../engine/modulesManager/AModulesManager.hpp
@@ -27,6 +29,8 @@ add_executable(r-type_server
     ../engine/app/AApplication.cpp
     ../engine/app/AApplication.hpp
     ../engine/app/IApplication.hpp
+    ../engine/core/Logger.cpp
+    ../engine/core/Logger.hpp
     ../engine/modulesManager/IModulesManager.hpp
     ../engine/modulesManager/AModulesManager.cpp
     ../engine/modulesManager/AModulesManager.hpp

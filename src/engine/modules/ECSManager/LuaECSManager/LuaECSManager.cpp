@@ -175,15 +175,15 @@ void LuaECSManager::init() {
     });
   });
 
-  subscribe("LoadScript", [this, queueEvent](const std::string &msg) { 
-      queueEvent([this, msg]() { this->loadScript(msg); }); 
+  subscribe("LoadScript", [this, queueEvent](const std::string &msg) {
+      queueEvent([this, msg]() { this->loadScript(msg); });
   });
-  subscribe("UnloadScript", [this, queueEvent](const std::string &msg) { 
-      queueEvent([this, msg]() { this->unloadScript(msg); }); 
+  subscribe("UnloadScript", [this, queueEvent](const std::string &msg) {
+      queueEvent([this, msg]() { this->unloadScript(msg); });
   });
 
-  subscribe("ECSStateLoadedEvent", [this, queueEvent](const std::string &msg) { 
-      queueEvent([this, msg]() { this->deserializeState(msg); }); 
+  subscribe("ECSStateLoadedEvent", [this, queueEvent](const std::string &msg) {
+      queueEvent([this, msg]() { this->deserializeState(msg); });
   });
 
   subscribe("SavesListEvent", [this, queueEvent](const std::string &msg) {
@@ -219,8 +219,8 @@ void LuaECSManager::init() {
   std::vector<std::string> inputEvents = {"KeyPressed", "KeyReleased", "MousePressed", "MouseReleased", "MouseMoved", "WindowResized"};
   for (const auto& topic : inputEvents) {
       // Create empty entry so subsequent ECS.subscribe calls don't trigger AModule::subscribe
-      _luaListeners[topic] = {}; 
-      
+      _luaListeners[topic] = {};
+
       subscribe(topic, [this, topic](const std::string &msg) {
           if (_luaListeners.find(topic) != _luaListeners.end()) {
               for (auto &func : _luaListeners[topic]) {
@@ -554,11 +554,93 @@ void LuaECSManager::setupLuaBindings() {
       Logger::Info("[Lua] " + message);
   });
 
-  ecs.set_function("createEntity", [this]() -> std::string {
-    std::string id = generateUuid();
-    _entities.push_back(id);
-    return id;
-  });
+  ecs.set_function("createEntity", sol::overload(
+      [this]() -> std::string {
+          std::string id = generateUuid();
+          _entities.push_back(id);
+          return id;
+      },
+      [this](sol::table components) -> std::string {
+          std::string id = generateUuid();
+          _entities.push_back(id);
+
+          for (auto& kv : components) {
+              if (kv.first.is<std::string>()) {
+                  std::string compName = kv.first.as<std::string>();
+                  sol::object compData = kv.second;
+
+                  // Re-use the existing addComponent logic (which we will expose as a member helper or just call the lambda if we move it)
+                  // But since the lambda is defined BELOW, we can't easily call it directly unless we extract it.
+                  // BETTER APPROACH: duplicated minimal logic or extract helper.
+                  // Let's call the Lua function itself to ensure consistency? No, that's slow.
+                  // We'll extract the logic to a helper method in the class or just duplicate the critical parts here for now as it's cleaner than refactoring the whole file structure.
+
+                  if (_pools.find(compName) == _pools.end()) {
+                      _pools[compName] = ComponentPool();
+                  }
+                  ComponentPool &pool = _pools[compName];
+                  if (pool.sparse.count(id)) {
+                      pool.dense[pool.sparse[id]] = compData;
+                  } else {
+                      pool.dense.push_back(compData);
+                      pool.entities.push_back(id);
+                      pool.sparse[id] = pool.dense.size() - 1;
+                  }
+
+                  // Handle Side Effects (Renderer, Physics)
+                  if (compName == "Sprite") {
+                      sol::table componentTable = compData.as<sol::table>();
+                      std::string texturePath = componentTable.get_or<std::string>("texture", "");
+                      if (!texturePath.empty()) {
+                          std::stringstream ss;
+                          ss << "CreateEntity:Sprite:" << texturePath << ":" << id;
+                          sendMessage("RenderEntityCommand", ss.str());
+                      }
+                  } else if (compName == "Mesh") {
+                      sol::table componentTable = compData.as<sol::table>();
+                      std::string model = componentTable.get_or<std::string>("modelPath", "");
+                      std::string texture = componentTable.get_or<std::string>("texturePath", "");
+                       // Basic Mesh creation
+                      if (!model.empty()) {
+                          // "CreateEntity:MESH:modelPath:id:x:y:z:scale" - Simplified for now
+                          std::stringstream ss;
+                          ss << "CreateEntity:MESH:" << model << ":" << id << ":0:0:0:0"; // Pos updated by transform later
+                          sendMessage("RenderEntityCommand", ss.str());
+                          if (!texture.empty()) {
+                              std::stringstream ss2;
+                              ss2 << "SetTexture:" << id << ":" << texture;
+                              sendMessage("RenderEntityCommand", ss2.str());
+                          }
+                      }
+                  } else if (compName == "Collider") {
+                      sol::table c = compData.as<sol::table>();
+                      std::string type = c.get_or<std::string>("type", "BOX");
+                      // Support both size array and individual dimensions
+                      float sx = c.get_or("width", 1.0f);
+                      float sy = c.get_or("height", 1.0f);
+                      float sz = c.get_or("depth", 1.0f);
+
+                      // Check for 'size' array [x,y,z]
+                      sol::optional<sol::table> sizeOpt = c.get<sol::optional<sol::table>>("size");
+                      if (sizeOpt) {
+                           sol::table s = sizeOpt.value();
+                           sx = s.get_or(1, sx);
+                           sy = s.get_or(2, sy);
+                           sz = s.get_or(3, sz);
+                      }
+
+                      float m = c.get_or("mass", 1.0f);  // Default dynamic
+                      float f = c.get_or("friction", 0.0f);
+
+                      std::stringstream ss;
+                      ss << "CreateBody:" << id << ":" << type << ":" << sx << "," << sy << "," << sz << "," << m << "," << f << ";";
+                      sendMessage("PhysicCommand", ss.str());
+                  }
+              }
+          }
+          return id;
+      }
+  ));
 
   ecs.set_function("destroyEntity", [this](const std::string &id) {
     auto it = std::find(_entities.begin(), _entities.end(), id);
@@ -613,8 +695,8 @@ void LuaECSManager::setupLuaBindings() {
     // ═══════════════════════════════════════════════════════════════
     // MUSIC PLAYBACK (Background music with control)
     // ═══════════════════════════════════════════════════════════════
-    ecs.set_function("playMusic", [this](const std::string &musicId, 
-                      const std::string &path, 
+    ecs.set_function("playMusic", [this](const std::string &musicId,
+                      const std::string &path,
                       float volume, bool loop) {
       std::stringstream ss;
       ss << musicId << ":" << path << ":" << volume << ":" << (loop ? "1" : "0");
@@ -647,15 +729,38 @@ void LuaECSManager::setupLuaBindings() {
     // ═══════════════════════════════════════════════════════════════
     // CRITICAL: Collider binding for physics (Bullet integration)
     // ═══════════════════════════════════════════════════════════════
-    ecs.set_function("setCollider", [this](const std::string &id, 
+    ecs.set_function("setCollider", [this](const std::string &id,
                         const std::string &type,
-                        float sx, float sy, float sz) {
+                        float sx, float sy, float sz,
+                        sol::optional<float> mass, sol::optional<float> friction) {
       // Create physics body in Bullet
+      float m = mass.value_or(1.0f);
+      float f = friction.value_or(0.0f);
+
       std::stringstream ss;
       // Format expected by Bullet: CreateBody:<id>:<type>:<sx,sy,sz,mass,friction>;
-      ss << "CreateBody:" << id << ":" << type << ":" << sx << "," << sy << "," << sz << ",1.0,0" << ";";
+      ss << "CreateBody:" << id << ":" << type << ":" << sx << "," << sy << "," << sz << "," << m << "," << f << ";";
       sendMessage("PhysicCommand", ss.str());
       Logger::Debug("[LuaECSManager] Created collider for entity " + id + " of type " + type);
+    });
+
+    ecs.set_function("setConstraints", [this](const std::string &id, bool lockX, bool lockY, bool lockZ, bool lockRotX, bool lockRotY, bool lockRotZ) {
+        // Simple Lock Rotation helper for now (Bullet usually handles this via factors)
+        std::stringstream ss;
+        // Format: SetAngularFactor:id:x,y,z
+        ss << "SetAngularFactor:" << id << ":" << (lockRotX ? 0 : 1) << "," << (lockRotY ? 0 : 1) << "," << (lockRotZ ? 0 : 1) << ";";
+        sendMessage("PhysicCommand", ss.str());
+
+        // Also Linear Factor if needed
+        std::stringstream ss2;
+        ss2 << "SetLinearFactor:" << id << ":" << (lockX ? 0 : 1) << "," << (lockY ? 0 : 1) << "," << (lockZ ? 0 : 1) << ";";
+        sendMessage("PhysicCommand", ss2.str());
+    });
+
+    ecs.set_function("setLinearVelocity", [this](const std::string &id, float vx, float vy, float vz) {
+        std::stringstream ss;
+        ss << "SetLinearVelocity:" << id << ":" << vx << "," << vy << "," << vz << ";";
+        sendMessage("PhysicCommand", ss.str());
     });
 
     ecs.set_function("getCollider", [this](const std::string &id) -> sol::table {
@@ -716,13 +821,13 @@ void LuaECSManager::setupLuaBindings() {
         // AUTHORITY: Check if this client can modify entity
         // Server (clientId=0) can always modify
         if (_clientId == 0 && _capabilities["isServer"]) return true;
-      
+
         // Client can only modify own entities
         auto it = _entityOwnership.find(id);
         if (it != _entityOwnership.end()) {
           return it->second == _clientId;
         }
-      
+
         // If not owned, only server modifies
         return false;
       });
@@ -740,7 +845,7 @@ void LuaECSManager::setupLuaBindings() {
       // Convert typical Lua keys (Z, Space) to Uppercase to match KeysMap (Z, SPACE)
       std::string upperKey = keyName;
       std::transform(upperKey.begin(), upperKey.end(), upperKey.begin(), ::toupper);
-      
+
       auto it = _keyboardState.find(upperKey);
       if (it != _keyboardState.end()) {
           return it->second;
@@ -770,11 +875,45 @@ void LuaECSManager::setupLuaBindings() {
             sol::table componentTable = componentData.as<sol::table>();
             std::string texturePath = componentTable.get_or<std::string>("texture", "");
             if (!texturePath.empty()) {
-                // Command: CreateEntity:Sprite:texturePath:entityId
                 std::stringstream ss;
                 ss << "CreateEntity:Sprite:" << texturePath << ":" << entityId;
                 sendMessage("RenderEntityCommand", ss.str());
             }
+        } else if (componentName == "Mesh") {
+            sol::table componentTable = componentData.as<sol::table>();
+            std::string model = componentTable.get_or<std::string>("modelPath", "");
+            std::string texture = componentTable.get_or<std::string>("texturePath", "");
+            if (!model.empty()) {
+                 std::stringstream ss;
+                 ss << "CreateEntity:MESH:" << model << ":" << entityId << ":0:0:0:0";
+                 sendMessage("RenderEntityCommand", ss.str());
+                 if (!texture.empty()) {
+                     std::stringstream ss2;
+                     ss2 << "SetTexture:" << entityId << ":" << texture;
+                     sendMessage("RenderEntityCommand", ss2.str());
+                 }
+            }
+        } else if (componentName == "Collider") {
+             sol::table c = componentData.as<sol::table>();
+             std::string type = c.get_or<std::string>("type", "BOX");
+             float sx = c.get_or("width", 1.0f);
+             float sy = c.get_or("height", 1.0f);
+             float sz = c.get_or("depth", 1.0f);
+
+             sol::optional<sol::table> sizeOpt = c.get<sol::optional<sol::table>>("size");
+             if (sizeOpt) {
+                  sol::table s = sizeOpt.value();
+                  sx = s.get_or(1, sx);
+                  sy = s.get_or(2, sy);
+                  sz = s.get_or(3, sz);
+             }
+
+             float m = c.get_or("mass", 1.0f);
+             float f = c.get_or("friction", 0.0f);
+
+             std::stringstream ss;
+             ss << "CreateBody:" << entityId << ":" << type << ":" << sx << "," << sy << "," << sz << "," << m << "," << f << ";";
+             sendMessage("PhysicCommand", ss.str());
         }
         // Automatic Renderer Sync: Camera
         else if (componentName == "Camera") {
@@ -803,7 +942,11 @@ void LuaECSManager::setupLuaBindings() {
           float rx = data.get_or("rx", 0.0f);
           float ry = data.get_or("ry", 0.0f);
           float rz = data.get_or("rz", 0.0f);
+
           float s = data.get_or("scale", 1.0f);
+          float sx = data.get_or("sx", s);
+          float sy = data.get_or("sy", s);
+          float sz = data.get_or("sz", s);
 
           std::stringstream posSs;
           posSs << "SetPosition:" << id << "," << x << "," << y << "," << z;
@@ -814,7 +957,7 @@ void LuaECSManager::setupLuaBindings() {
           sendMessage("RenderEntityCommand", rotSs.str());
 
           std::stringstream scaleSs;
-          scaleSs << "SetScale:" << id << "," << s << "," << s << "," << s;
+          scaleSs << "SetScale:" << id << "," << sx << "," << sy << "," << sz;
           sendMessage("RenderEntityCommand", scaleSs.str());
       }
   });
@@ -834,9 +977,11 @@ void LuaECSManager::setupLuaBindings() {
               float rx = t.get_or("rx", 0.0f);
               float ry = t.get_or("ry", 0.0f);
               float rz = t.get_or("rz", 0.0f);
-              float sx = t.get_or("scale", 1.0f); // Simple uniform scale support
-              float sy = sx;
-              float sz = sx;
+
+              float s = t.get_or("scale", 1.0f);
+              float sx = t.get_or("sx", s);
+              float sy = t.get_or("sy", s);
+              float sz = t.get_or("sz", s);
 
               // Send Position: SetPosition:id,x,y,z
               std::stringstream posSs;
@@ -1117,7 +1262,7 @@ void LuaECSManager::setupLuaBindings() {
     // ═══════════════════════════════════════════════════════════════
     ecs.set_function("loadScene", [this](const std::string &sceneName) {
       Logger::Info("[LuaECSManager] Loading scene: " + sceneName);
-      
+
       // 1. Clean up current scene
       {
         for (const auto& id : _entities) {
@@ -1130,13 +1275,13 @@ void LuaECSManager::setupLuaBindings() {
         _systems.clear();
         _luaListeners.clear();
       }
-      
+
       // 2. Load new scene script
       std::string scenePath = "assets/scripts/" + sceneName + ".lua";
       try {
         _lua.script_file(scenePath);
         Logger::Info("[LuaECSManager] Scene loaded: " + scenePath);
-          
+
         // 3. Call init if exists
         sol::function global_init = _lua["Game"]["init"];
         if (global_init && global_init.valid()) {
@@ -1161,27 +1306,27 @@ void LuaECSManager::setupLuaBindings() {
       return "unknown";
     });
 
-  // ============================================================================ 
+  // ============================================================================
   // UI HELPER FUNCTIONS
-  // ============================================================================ 
-  
+  // ============================================================================
+
   // Create a 2D rectangle (for button backgrounds, panels, etc.)
   // Returns the entity ID
-  ecs.set_function("createRect", [this](float x, float y, float width, float height, 
+  ecs.set_function("createRect", [this](float x, float y, float width, float height,
                                          float r, float g, float b, float a, int zOrder) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     std::stringstream ss;
-    ss << "CreateRect:" << id << ":" << x << "," << y << "," << width << "," << height 
+    ss << "CreateRect:" << id << ":" << x << "," << y << "," << width << "," << height
        << ":" << r << "," << g << "," << b << "," << a << ":1";
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     // Set z-order
     std::stringstream zss;
     zss << "SetZOrder:" << id << ":" << zOrder;
     sendMessage("RenderEntityCommand", zss.str());
-    
+
     return id;
   });
 
@@ -1208,33 +1353,33 @@ void LuaECSManager::setupLuaBindings() {
 
   // Create a screen-space text element
   // Returns the entity ID
-  ecs.set_function("createUIText", [this](const std::string& text, float x, float y, 
+  ecs.set_function("createUIText", [this](const std::string& text, float x, float y,
                                            int fontSize, float r, float g, float b, int zOrder, sol::optional<std::string> fontPath) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     std::string actualFont = fontPath.value_or("assets/fonts/arial.ttf");
     if (actualFont.empty()) actualFont = "assets/fonts/arial.ttf";
-    
+
     std::stringstream ss;
     ss << "CreateText:" << id << ":" << actualFont << ":" << fontSize << ":1:" << text;
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     // Set position
     std::stringstream pss;
     pss << "SetPosition:" << id << "," << x << "," << y << ",0";
     sendMessage("RenderEntityCommand", pss.str());
-    
+
     // Set color
     std::stringstream css;
     css << "SetColor:" << id << "," << r << "," << g << "," << b;
     sendMessage("RenderEntityCommand", css.str());
-    
+
     // Set z-order
     std::stringstream zss;
     zss << "SetZOrder:" << id << ":" << zOrder;
     sendMessage("RenderEntityCommand", zss.str());
-    
+
     return id;
   });
 
@@ -1278,87 +1423,87 @@ void LuaECSManager::setupLuaBindings() {
 
   // Create a circle UI element
   // ECS.createCircle(x, y, radius, r, g, b, a, zOrder, segments)
-  ecs.set_function("createCircle", [this](float x, float y, float radius, 
-                                           float r, float g, float b, float a, 
+  ecs.set_function("createCircle", [this](float x, float y, float radius,
+                                           float r, float g, float b, float a,
                                            int zOrder, sol::optional<int> segments) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     int segs = segments.value_or(32);
-    
+
     std::stringstream ss;
     ss << "CreateCircle:" << id << ":" << x << "," << y << "," << radius << ":"
        << r << "," << g << "," << b << "," << a << ":1:" << segs;
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     std::stringstream zss;
     zss << "SetZOrder:" << id << ":" << zOrder;
     sendMessage("RenderEntityCommand", zss.str());
-    
+
     return id;
   });
 
   // Create a rounded rectangle UI element
   // ECS.createRoundedRect(x, y, width, height, cornerRadius, r, g, b, a, zOrder)
   ecs.set_function("createRoundedRect", [this](float x, float y, float width, float height,
-                                                float cornerRadius, float r, float g, float b, 
+                                                float cornerRadius, float r, float g, float b,
                                                 float a, int zOrder) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     std::stringstream ss;
-    ss << "CreateRoundedRect:" << id << ":" << x << "," << y << "," << width << "," 
+    ss << "CreateRoundedRect:" << id << ":" << x << "," << y << "," << width << ","
        << height << "," << cornerRadius << ":" << r << "," << g << "," << b << "," << a << ":1";
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     std::stringstream zss;
     zss << "SetZOrder:" << id << ":" << zOrder;
     sendMessage("RenderEntityCommand", zss.str());
-    
+
     return id;
   });
 
   // Create a line UI element
   // ECS.createLine(x1, y1, x2, y2, lineWidth, r, g, b, a, zOrder)
-  ecs.set_function("createLine", [this](float x1, float y1, float x2, float y2, 
-                                         float lineWidth, float r, float g, float b, 
+  ecs.set_function("createLine", [this](float x1, float y1, float x2, float y2,
+                                         float lineWidth, float r, float g, float b,
                                          float a, int zOrder) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     std::stringstream ss;
-    ss << "CreateLine:" << id << ":" << x1 << "," << y1 << "," << x2 << "," << y2 << "," 
+    ss << "CreateLine:" << id << ":" << x1 << "," << y1 << "," << x2 << "," << y2 << ","
        << lineWidth << ":" << r << "," << g << "," << b << "," << a << ":1";
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     std::stringstream zss;
     zss << "SetZOrder:" << id << ":" << zOrder;
     sendMessage("RenderEntityCommand", zss.str());
-    
+
     return id;
   });
 
   // Create a UI sprite (image)
   // ECS.createUISprite(texturePath, x, y, width, height, zOrder)
-  ecs.set_function("createUISprite", [this](const std::string& texturePath, float x, float y, 
+  ecs.set_function("createUISprite", [this](const std::string& texturePath, float x, float y,
                                              float width, float height, int zOrder) -> std::string {
     std::string id = generateUuid();
     _entities.push_back(id);
-    
+
     std::stringstream ss;
-    ss << "CreateUISprite:" << id << ":" << texturePath << ":" << x << "," << y << "," 
+    ss << "CreateUISprite:" << id << ":" << texturePath << ":" << x << "," << y << ","
        << width << "," << height << ":1:" << zOrder;
     sendMessage("RenderEntityCommand", ss.str());
-    
+
     return id;
   });
 
   // Set outline for a UI element (rect, circle, rounded rect)
   // ECS.setOutline(id, enabled, width, r, g, b)
-  ecs.set_function("setOutline", [this](const std::string& id, bool enabled, 
+  ecs.set_function("setOutline", [this](const std::string& id, bool enabled,
                                          float width, float r, float g, float b) {
     std::stringstream ss;
-    ss << "SetOutline:" << id << ":" << (enabled ? "1" : "0") << ":" << width << ":" 
+    ss << "SetOutline:" << id << ":" << (enabled ? "1" : "0") << ":" << width << ":"
        << r << "," << g << "," << b;
     sendMessage("RenderEntityCommand", ss.str());
   });
@@ -1395,9 +1540,9 @@ void LuaECSManager::setupLuaBindings() {
     sendMessage("RenderEntityCommand", ss.str());
   });
 
-  // ============================================================================ 
+  // ============================================================================
   // WINDOW CONTROL FUNCTIONS
-  // ============================================================================ 
+  // ============================================================================
 
   // Set fullscreen mode
   // ECS.setFullscreen(enabled)
@@ -1502,14 +1647,14 @@ void LuaECSManager::fixedUpdate(double dt) {
   // OPTIMIZATION: Limit queue processing per frame to prevent frame stalls
   {
       std::lock_guard<std::mutex> lock(_eventQueueMutex);
-      
+
       // Log warning if queue is growing (potential backlog)
       size_t queueSize = _eventQueue.size();
       if (queueSize > EVENT_QUEUE_WARN_THRESHOLD) {
-          Logger::Info("[LuaECSManager] WARNING: Event queue size = " + std::to_string(queueSize) + 
+          Logger::Info("[LuaECSManager] WARNING: Event queue size = " + std::to_string(queueSize) +
                       "/" + std::to_string(MAX_EVENT_QUEUE_SIZE));
       }
-      
+
       // Process at most 32 events per frame to prevent stalling
       const int MAX_EVENTS_PER_FRAME = 32;
       int processed = 0;
@@ -1525,10 +1670,10 @@ void LuaECSManager::fixedUpdate(double dt) {
           }
           ++processed;
       }
-      
+
       // SAFETY: If queue still growing, discard oldest to prevent memory leak
       if (queueSize >= MAX_EVENT_QUEUE_SIZE) {
-          Logger::Error("[LuaECSManager] Event queue FULL! Discarding " + 
+          Logger::Error("[LuaECSManager] Event queue FULL! Discarding " +
                        std::to_string(queueSize - MAX_EVENT_QUEUE_SIZE + 1) + " oldest events");
           while (_eventQueue.size() > MAX_EVENT_QUEUE_SIZE - 100) {
               _eventQueue.pop();  // Discard oldest

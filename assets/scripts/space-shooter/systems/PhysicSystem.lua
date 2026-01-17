@@ -8,11 +8,20 @@ function PhysicSystem.init()
 end
 
 function PhysicSystem.update(dt)
-    -- Stop updates if game is paused
-    if ECS.isPaused then return end
-
     -- GUARD : Si je ne suis pas le serveur (Local ou Distant), je ne touche pas à la physique.
     if not ECS.capabilities.hasAuthority then return end
+
+    -- Stop updates if game is paused
+    if ECS.isPaused then
+        -- CRITICAL FIX: Force stop all entities when paused
+        local entities = ECS.getEntitiesWith({"Physic"})
+        for _, id in ipairs(entities) do
+             -- Send 0 velocity to stop physics engine simulation
+            local msg = string.format("SetLinearVelocity:%s:0,0,0;", id)
+            ECS.sendMessage("PhysicCommand", msg)
+        end
+        return 
+    end
 
     local entities = ECS.getEntitiesWith({"Physic"})
 

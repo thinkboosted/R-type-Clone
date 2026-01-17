@@ -16,7 +16,12 @@ local menuElements = {}     -- All UI element IDs for cleanup
 local menuButtons = {}      -- Button data for interaction
 local selectedIndex = 1
 local menuState = "MAIN"    -- MAIN, SETTINGS, PAUSE
+local menuState = "MAIN"    -- MAIN, SETTINGS, PAUSE
 local isPaused = false
+
+-- Debounce
+local lastToggleTime = 0
+local toggleCooldown = 0.2 -- 200ms debounce
 
 ECS.isPaused = false
 
@@ -355,8 +360,8 @@ function MenuSystem.executeAction(action)
     elseif action == "BACK" then
         MenuSystem.hideMenu()
         if menuState == "PAUSE_SETTINGS" then
-            isMenuRendered = false
-            MenuSystem.showPauseMenu()
+            -- Use specialized render function that doesn't check isPaused state flag
+            MenuSystem.renderPauseMenu()
         else
             MenuSystem.renderMenu()
         end
@@ -467,16 +472,25 @@ end
 -- SHOW PAUSE MENU
 -- ============================================================================
 function MenuSystem.showPauseMenu()
-    if isPaused then return end
     
     print("[MenuSystem] Showing pause menu")
     isPaused = true
     ECS.isPaused = true -- Global pause flag for other systems
+    
+    MenuSystem.renderPauseMenu()
+    ECS.sendMessage("GAME_PAUSED", "")
+end
+
+-- Separate rendering logic to allow re-rendering without resetting state
+function MenuSystem.renderPauseMenu()
+    if isPaused and isMenuRendered and menuState == "PAUSE" then return end
+
     isMenuRendered = true
     menuElements = {}
     menuButtons = {}
     selectedIndex = 1
     menuState = "PAUSE"
+
     
     -- Semi-transparent overlay
     local bgId = ECS.createRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 0.7, 50)
@@ -532,19 +546,26 @@ function MenuSystem.onKeyPressed(key)
     end
     
     -- Handle ESC for pause
+    -- Handle ESC for pause
     if key == "ESCAPE" then
-        if ECS.isGameRunning and not isMenuRendered then
-            MenuSystem.showPauseMenu()
-            return
-        elseif isPaused then
+        local currentTime = os.clock()
+        if currentTime - lastToggleTime < toggleCooldown then
+            return 
+        end
+        lastToggleTime = currentTime
+
+        if isPaused then
             MenuSystem.hidePauseMenu()
             return
+        elseif ECS.isGameRunning and not isMenuRendered then
+            MenuSystem.showPauseMenu()
+            return
         elseif menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
-            MenuSystem.executeAction("BACK")
-            return
+             MenuSystem.executeAction("BACK")
+             return
         elseif menuState == "MAIN" then
-            MenuSystem.executeAction("QUIT")
-            return
+             MenuSystem.executeAction("QUIT")
+             return
         end
     end
     

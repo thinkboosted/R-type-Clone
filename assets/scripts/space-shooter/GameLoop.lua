@@ -1,6 +1,10 @@
 -- ────────────────────────────────────────────────────────────────────────────
 -- Core Gameplay Systems (Run on Authority: Server + Solo)
 -- ────────────────────────────────────────────────────────────────────────────
+
+-- Load Components Definitions (Critical for GameState, etc.)
+dofile("assets/scripts/space-shooter/components/Components.lua")
+
 print("[GameLoop] Loading Core Gameplay Systems...")
 
 dofile("assets/scripts/space-shooter/systems/CollisionSystem.lua")
