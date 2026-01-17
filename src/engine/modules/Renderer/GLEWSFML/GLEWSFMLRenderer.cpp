@@ -1287,14 +1287,7 @@ template<typename T>
         if (!_glewInitialized)
             return;
 
-        // 1. Periodic Log (Every 1 second)
-        static auto lastLog = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastLog).count() >= 1) {
-            std::cout << "[GLEWRenderer] Loop active. Objects: " << _renderObjects.size()
-                      << " Particles: " << _particleGenerators.size() << std::endl;
-            lastLog = now;
-        }
 
         if (_pendingResize)
         {
@@ -1344,14 +1337,6 @@ template<typename T>
         {
             _cameraPos = _renderObjects[_activeCameraId].position;
             _cameraRot = _renderObjects[_activeCameraId].rotation;
-
-            // DEBUG: Log camera pos occasionally
-            static auto lastCamLog = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastCamLog).count() >= 2) {
-                std::cout << "[GLEW] Camera Pos: " << _cameraPos.x << ", " << _cameraPos.y << ", " << _cameraPos.z
-                          << " ActiveID: " << _activeCameraId << std::endl;
-                lastCamLog = now;
-            }
         }
 
         // Apply camera rotation (convert radians to degrees)
