@@ -277,6 +277,7 @@ function MenuSystem.executeAction(action)
         local allEntities = ECS.getEntitiesWith({"Transform"})
         for _, id in ipairs(allEntities) do
             if not ECS.hasComponent(id, "GameState") then
+                ECS.sendMessage("PhysicCommand", "DestroyBody:" .. id .. ";")
                 ECS.destroyEntity(id)
             end
         end
