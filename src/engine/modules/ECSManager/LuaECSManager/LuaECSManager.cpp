@@ -221,18 +221,20 @@ void LuaECSManager::init() {
       // Create empty entry so subsequent ECS.subscribe calls don't trigger AModule::subscribe
       _luaListeners[topic] = {};
 
-      subscribe(topic, [this, topic](const std::string &msg) {
-          if (_luaListeners.find(topic) != _luaListeners.end()) {
-              for (auto &func : _luaListeners[topic]) {
-                  if (func.valid()) {
-                      try {
-                          func(msg);
-                      } catch (const sol::error &e) {
-                          std::cerr << "[LuaECSManager] Error in " << topic << " listener: " << e.what() << std::endl;
+      subscribe(topic, [this, topic, queueEvent](const std::string &msg) {
+          queueEvent([this, topic, msg]() {
+              if (_luaListeners.find(topic) != _luaListeners.end()) {
+                  for (auto &func : _luaListeners[topic]) {
+                      if (func.valid()) {
+                          try {
+                              func(msg);
+                          } catch (const sol::error &e) {
+                              Logger::Error(std::string("[LuaECSManager] Error in ") + topic + " listener: " + e.what());
+                          }
                       }
                   }
               }
-          }
+          });
       });
   }
 
@@ -242,10 +244,28 @@ void LuaECSManager::init() {
           size_t split = msg.find(':');
           if (split != std::string::npos) {
               std::string key = msg.substr(0, split);
-              std::string state = msg.substr(split + 1);
+              std::string stateStr = msg.substr(split + 1);
               // Store as uppercase for consistency
               std::transform(key.begin(), key.end(), key.begin(), ::toupper);
-              _keyboardState[key] = (state == "1");
+              bool isPressed = (stateStr == "1");
+
+              // Update State
+              _keyboardState[key] = isPressed;
+
+              // Synthesize Event for Lua Listeners (Missing on Bus)
+              std::string topic = isPressed ? "KeyPressed" : "KeyReleased";
+              if (_luaListeners.find(topic) != _luaListeners.end()) {
+                  for (auto &func : _luaListeners[topic]) {
+                      if (func.valid()) {
+                          try {
+                              // Pass the Key Name (e.g., "ESCAPE", "D")
+                              func(key);
+                          } catch (const sol::error &e) {
+                              Logger::Error(std::string("[LuaECSManager] Error in ") + topic + " listener: " + e.what());
+                          }
+                      }
+                  }
+              }
           }
       });
   });
