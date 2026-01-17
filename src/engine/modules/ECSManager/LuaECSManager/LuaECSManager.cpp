@@ -214,11 +214,27 @@ void LuaECSManager::init() {
     });
   };
 
-  subscribe("KeyPressed", [=](const std::string &msg) { forwardEvent("onKeyPressed", msg); });
-  subscribe("KeyReleased", [=](const std::string &msg) { forwardEvent("onKeyReleased", msg); });
-  subscribe("MousePressed", [=](const std::string &msg) { forwardEvent("onMousePressed", msg); });
-  subscribe("MouseReleased", [=](const std::string &msg) { forwardEvent("onMouseReleased", msg); });
-  subscribe("MouseMoved", [=](const std::string &msg) { forwardEvent("onMouseMoved", msg); });
+  // Pre-subscribe to standard events to avoid AModule iterator invalidation (crash) during LoadScript
+  // and to support explicit ECS.subscribe calls without double-dispatch.
+  std::vector<std::string> inputEvents = {"KeyPressed", "KeyReleased", "MousePressed", "MouseReleased", "MouseMoved", "WindowResized"};
+  for (const auto& topic : inputEvents) {
+      // Create empty entry so subsequent ECS.subscribe calls don't trigger AModule::subscribe
+      _luaListeners[topic] = {}; 
+      
+      subscribe(topic, [this, topic](const std::string &msg) {
+          if (_luaListeners.find(topic) != _luaListeners.end()) {
+              for (auto &func : _luaListeners[topic]) {
+                  if (func.valid()) {
+                      try {
+                          func(msg);
+                      } catch (const sol::error &e) {
+                          std::cerr << "[LuaECSManager] Error in " << topic << " listener: " << e.what() << std::endl;
+                      }
+                  }
+              }
+          }
+      });
+  }
 
   // Input Polling Decoupling - Cache key states
   subscribe("InputKey", [this, queueEvent](const std::string &msg) {

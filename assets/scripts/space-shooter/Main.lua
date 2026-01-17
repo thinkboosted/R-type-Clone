@@ -11,9 +11,9 @@ end
 
 print("Loading Level " .. level)
 
-if level == 2 then
-    dofile("assets/scripts/space-shooter/levels/Level-2.lua")
-else
+if level == 1  then
     dofile("assets/scripts/space-shooter/levels/Level-1.lua")
+else
+    dofile("assets/scripts/space-shooter/levels/Level-" .. level ..".lua")
 end
 

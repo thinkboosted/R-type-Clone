@@ -2,6 +2,7 @@ local config = {
     player = {
         speed = 10.0,
         life = 3,
+        scale = 0.7,
         weaponCooldown = 0.2,
         collider = { type = "Box", size = {1, 1, 1} },
         color = { r = 0.0, g = 1.0, b = 0.0 },
@@ -24,11 +25,13 @@ local config = {
         minSpawnInterval = 0.8,
         maxSpeed = 15.0,
         life = 1,
+        scale = 1.9,
         collider = { type = "Box", size = {1, 1, 1} },
     },
     score = {
         kill = 10,
         escapePenalty = 20,
+        levelThresholds = {700, 1900, 3350, 4500, 6000},
     }
 }
 

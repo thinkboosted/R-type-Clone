@@ -20,25 +20,23 @@ function Spawns.createPlayer(x, y, z, clientId)
     print("[Spawns] Creating Player Entity ID: " .. e)
 
     -- 1. Core Components
-    ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, 1, 1, 1))
+    local s = config.player.scale
+    ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, s, s, s))
     ECS.addComponent(e, "Tag", Tag({"Player"}))
     -- Physic(mass, friction, fixedRotation, useGravity)
     ECS.addComponent(e, "Physic", Physic(1.0, 0.0, true, false))
-    ECS.addComponent(e, "Collider", Collider("BOX", {1, 1, 1}))
+    ECS.addComponent(e, "Collider", Collider("BOX", {s, s, s}))
     ECS.addComponent(e, "Player", Player(config.player.speed))
     ECS.addComponent(e, "Weapon", Weapon(0.2))
     ECS.addComponent(e, "Life", Life(100))
     ECS.addComponent(e, "Score", Score(0))
-
     -- 2. Input & Logic
     ECS.addComponent(e, "InputState", InputState())
-
     -- 3. Visuals (Only if rendering is enabled)
     if hasRendering() then
         ECS.addComponent(e, "Mesh", Mesh("assets/models/simple_plane.obj", "assets/textures/plane_texture.png"))
         ECS.addComponent(e, "Color", Color(1.0, 1.0, 1.0)) -- White (removes default orange)
     end
-
     -- 4. Network & Architecture
     -- Default to local player if clientId is nil (Solo mode)
     local ownerId = clientId or 0
@@ -52,7 +50,6 @@ function Spawns.createPlayer(x, y, z, clientId)
     if hasAuthority() then
         ECS.addComponent(e, "ServerAuthority", ServerAuthority())
     end
-
     if isLocal or hasRendering() then
         ECS.addComponent(e, "ClientPredicted", ClientPredicted())
         ECS.addComponent(e, "InputBuffer", InputBuffer(60))
@@ -60,7 +57,7 @@ function Spawns.createPlayer(x, y, z, clientId)
         -- Reactor Particles (Blue Trail)
         -- ParticleGenerator(offsetX, offsetY, offsetZ, dirX, dirY, dirZ, spread, speed, lifeTime, rate, size, r, g, b)
         ECS.addComponent(e, "ParticleGenerator", ParticleGenerator(
-            -1.0, 0, 0,   -- Offset (Behind)
+            -1.0 * s, 0, 0,   -- Offset (Behind)
             -1, 0, 0,     -- Direction (Backwards)
             0.2,          -- Spread
             2.0,          -- Speed
@@ -70,7 +67,6 @@ function Spawns.createPlayer(x, y, z, clientId)
             0.0, 0.5, 1.0 -- Color (Blue)
         ))
     end
-
     return e
 end
 
@@ -105,11 +101,41 @@ end
 -- ============================================================================
 -- ENEMY
 -- ============================================================================
-function Spawns.spawnEnemy(x, y, speed)
+function Spawns.spawnEnemy(x, y, speed, type)
     local e = ECS.createEntity()
     
+    -- Determine Monster Type (1, 2, or 3)
+    local mType = type or math.random(1, 3)
+    
+    -- Configuration per Type
+    local configType = {
+        [1] = {
+            name = "Monster_1",
+            frames = 8,
+            pattern = "sine",
+            amp = 1.0, freq = 1.0, -- Big smooth wave
+            color = Color(1.0, 0.0, 0.0)
+        },
+        [2] = {
+            name = "Monster_2",
+            frames = 3,
+            pattern = "zigzag",
+            amp = 1.0, freq = 0.3, -- Sharp mechanical movement
+            color = Color(0.5, 0.5, 0.5) -- gray
+        },
+        [3] = {
+            name = "Monster_3",
+            frames = 8,
+            pattern = "circle",
+            amp = 1.0, freq = 1.0, -- Looping flight
+            color = Color(0.6, 0.4, 0.2) -- light brown
+        }
+    }
+    
+    local cfg = configType[mType] or configType[1]
+
     -- Core
-    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, 1, 1, 1))
+    ECS.addComponent(e, "Transform", Transform(x, y, 0, 0, 0, 0, config.enemy.scale, config.enemy.scale, config.enemy.scale))
     ECS.addComponent(e, "Tag", Tag({"Enemy"}))
     ECS.addComponent(e, "Enemy", Enemy(speed))
     ECS.addComponent(e, "Life", Life(config.enemy.life))
@@ -120,13 +146,30 @@ function Spawns.spawnEnemy(x, y, speed)
     phys.vx = -speed -- Move left by default
     ECS.addComponent(e, "Physic", phys)
     ECS.addComponent(e, "Collider", Collider(config.enemy.collider.type, config.enemy.collider.size))
+    
+    -- Movement Pattern (Linked to Type)
+    ECS.addComponent(e, "MovementPattern", MovementPattern(cfg.pattern, cfg.amp, cfg.freq, speed))
 
     -- Visuals
     if hasRendering() then
-        ECS.addComponent(e, "Mesh", Mesh("assets/models/cube.obj"))
-        ECS.addComponent(e, "Color", Color(1.0, 0.0, 0.0)) -- Red
+        local basePath = "assets/models/" .. cfg.name .. "/motion_"
+        local texturePath = "assets/textures/Ennemies/" .. cfg.name .. "/motion_"
+        
+        -- Start with Frame 1
+        ECS.addComponent(e, "Mesh", Mesh(basePath .. "1.obj", nil)) --texturePath .. "1.png"))
+        ECS.addComponent(e, "Color", cfg.color)
+        
+        -- Animate
+        ECS.addComponent(e, "Animation", Animation(
+            cfg.frames,    -- per type
+            0.2,  -- 10 FPS
+            true, -- Loop
+            basePath
+            --texturePath
+        ))
     end
 
+    ECS.addComponent(e, "EnemyType", { type = 3 + mType })
     -- Network
     ECS.addComponent(e, "NetworkIdentity", NetworkIdentity(e, -1, false)) -- -1 = Server owned
     if hasAuthority() then
@@ -160,8 +203,14 @@ function Spawns.spawnBullet(x, y, z, isEnemy)
 
     -- Visuals
     if hasRendering() then
-        ECS.addComponent(e, "Mesh", Mesh("assets/models/cube.obj"))
-        ECS.addComponent(e, "Color", color)
+        if isEnemy then
+             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
+             ECS.addComponent(e, "Color", Color(1.0, 0.5, 0.0)) -- Orange
+        else
+            ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
+             -- ECS.addComponent(e, "Mesh", Mesh("assets/models/laser.obj", nil)) -- Laser
+             ECS.addComponent(e, "Color", Color(0.0, 1.0, 1.0)) -- Cyan
+        end
     end
 
     -- Network
@@ -179,7 +228,7 @@ end
 function Spawns.createBackground(texturePath)
     if not hasRendering() then return end
 
-    local tex = texturePath or "assets/textures/PlutoImage_TutorialLevel.png"
+    local tex = texturePath or "assets/textures/Background/StartSky.jpg"
     print("[Spawns] Creating Parallax Background with texture: " .. tex)
 
     -- Layer 1 (Far Stars)
@@ -196,6 +245,43 @@ function Spawns.createBackground(texturePath)
     ECS.addComponent(bg2, "Background", Background(-2.0, 60.0, -60.0))
 
     print("[Spawns] Background entities created: " .. bg1 .. ", " .. bg2)
+end
+
+-- ============================================================================
+-- SCORE
+-- ============================================================================
+
+function Spawns.createScore(value)
+    local sc = value or 0
+
+    local scoreEntity = ECS.createEntity()
+    ECS.addComponent(scoreEntity, "Transform", Transform(50, 50, 0, 0, 0, 0, 5, 5, 1))
+    ECS.addComponent(scoreEntity, "Text", Text("Score  " .. sc, "assets/fonts/arial.ttf", 10, true))
+    ECS.addComponent(scoreEntity, "Color", Color(1.0, 1.0, 1.0))
+end
+
+
+
+-- ==========================================================================
+-- MODULAR: Create Core Entities for a Level Switch
+-- ==========================================================================
+function Spawns.createCoreEntities(level, backgroundTexture)
+    -- Create Camera (if not already present)
+    if ECS.capabilities and ECS.capabilities.hasRendering then
+        local cameraEntities = ECS.getEntitiesWith({"Camera"})
+        if #cameraEntities == 0 then
+            local camera = ECS.createEntity()
+            ECS.addComponent(camera, "Transform", Transform(0, 0, 25, 0, 0, 0, 1, 1, 1))
+            ECS.addComponent(camera, "Camera", Camera(90))
+        end
+    end
+
+    -- Create Background
+    local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
+    Spawns.createBackground(bgTex)
+
+    Spawns.createScore(CurrentScore)
+
 end
 
 return Spawns

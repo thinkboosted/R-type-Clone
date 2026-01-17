@@ -95,6 +95,35 @@ function Life(amount)
     }
 end
 
+function Animation(frameCount, frameDuration, isLooping, modelBase, textureBase)
+    return {
+        frameCount = frameCount or 1,
+        frameDuration = frameDuration or 0.1,
+        currentFrame = 1,
+        elapsedTime = 0.0,
+        isLooping = isLooping or true,
+        isActive = true,
+        modelBase = modelBase or "",
+        textureBase = textureBase or "",
+        frames = {},
+        type = "sequence"
+    }
+end
+
+function MovementPattern(patternType, amplitude, frequency, speed)
+    return {
+        patternType = patternType or "linear", -- "sine", "zigzag", "circle"
+        amplitude = amplitude or 1.0,
+        frequency = frequency or 1.0,
+        speed = speed or 1.0,
+        startX = 0,
+        startY = 0,
+        startZ = 0,
+        time = 0.0,
+        initialized = false
+    }
+end
+
 function Tag(tags)
     return {
         tags = tags or {}
