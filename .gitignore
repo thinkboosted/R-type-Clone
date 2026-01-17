@@ -13,3 +13,4 @@ CMakeFiles/
 *.user
 *.opendb
 Notes
+.cache/
