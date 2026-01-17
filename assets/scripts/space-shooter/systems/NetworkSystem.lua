@@ -239,7 +239,10 @@ function NetworkSystem.init()
              if clientId then
                  clientId = tonumber(clientId)
                  if NetworkSystem.clientEntities[clientId] then
-                     ECS.destroyEntity(NetworkSystem.clientEntities[clientId])
+                     local playerId = NetworkSystem.clientEntities[clientId]
+                     ECS.broadcastNetworkMessage("ENTITY_DESTROY", playerId)
+                     ECS.sendMessage("PhysicCommand", "DestroyBody:" .. playerId .. ";")
+                     ECS.destroyEntity(playerId)
                      NetworkSystem.clientEntities[clientId] = nil
                      NetworkSystem.readyClients[clientId] = nil
                      print("Client Disconnected: " .. clientId)
