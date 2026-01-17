@@ -52,20 +52,21 @@ function ScoreSystem.adjustToScreenSize(width, height)
     local textId = textEntities[1]
     local scoreEntities = ECS.getEntitiesWith({"Score", "Transform", "Text"})
     if #scoreEntities == 0 then return end
-    
+
     local scoreId = scoreEntities[1]
     local t = ECS.getComponent(scoreId, "Transform")
     -- Position at 5% from top-left corner
     t.x = width * 0.03
     t.y = height * 0.03
     ECS.addComponent(scoreId, "Transform", t)
-    
+
     local textComp = ECS.getComponent(scoreId, "Text")
     -- Scale font size to ~8% of screen height
     textComp.size = math.floor(height * 0.08)
     ECS.addComponent(scoreId, "Text", textComp)
-    
+
     print("[ScoreSystem] Score adjusted to screen size: " .. width .. "x" .. height)
 end
 
 ECS.registerSystem(ScoreSystem)
+return ScoreSystem
