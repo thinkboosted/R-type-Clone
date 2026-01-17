@@ -16,7 +16,7 @@
     "WindowModule"
   ],
   "startup_scripts": [
-    "assets/scripts/space-shooter/GameLoop.lua"
+    "assets/scripts/breakout/GameLoop.lua"
   ],
   "network": {
     "mode": "local",
