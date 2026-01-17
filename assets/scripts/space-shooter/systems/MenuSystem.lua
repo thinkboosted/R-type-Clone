@@ -58,7 +58,7 @@ local COLORS = {
 -- ============================================================================
 -- For Arial font, average character width is approximately 0.52 * fontSize
 -- This accounts for variable-width characters in the font
-local CHAR_WIDTH_RATIO = 0.52
+local CHAR_WIDTH_RATIO = 0.6
 
 local function estimateTextWidth(text, fontSize)
     return #text * fontSize * CHAR_WIDTH_RATIO
@@ -198,7 +198,7 @@ function MenuSystem.renderMenu()
     createCenteredLabel("CLONE", SCREEN_HEIGHT - 180, 32, COLORS.title, 20)
     
     -- Button dimensions
-    local btnWidth = 200
+    local btnWidth = 250
     local btnHeight = 50
     local btnSpacing = 20
     local startY = SCREEN_HEIGHT - 280
