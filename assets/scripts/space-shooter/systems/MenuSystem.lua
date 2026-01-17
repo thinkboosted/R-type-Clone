@@ -334,12 +334,6 @@ function MenuSystem.executeAction(action)
         MenuSystem.showSettings()
         menuState = "PAUSE_SETTINGS"
         
-    elseif action == "TOGGLE_FULLSCREEN" then
-        settingsState.isFullscreen = not settingsState.isFullscreen
-        ECS.setFullscreen(settingsState.isFullscreen)
-        print("[MenuSystem] Fullscreen: " .. tostring(settingsState.isFullscreen))
-        MenuSystem.showSettings()
-        
     elseif action == "RES_800x600" then
         settingsState.selectedResolution = 1
         ECS.setWindowSize(800, 600)
@@ -441,12 +435,6 @@ function MenuSystem.showSettings()
     
     -- ==================== DISPLAY SECTION ====================
     createCenteredLabel("DISPLAY", SCREEN_HEIGHT - 165, 24, COLORS.title, 20)
-    
-    -- Fullscreen toggle button
-    local fsLabel = settingsState.isFullscreen and "FULLSCREEN: ON" or "FULLSCREEN: OFF"
-    local fsColor = settingsState.isFullscreen and COLORS.solo or COLORS.multi
-    MenuSystem.createButton("TOGGLE_FULLSCREEN", fsLabel,
-        SCREEN_WIDTH/2 - 140, SCREEN_HEIGHT - 210, 280, 40, fsColor, 20, 10)
     
     -- Resolution Section Label (centered)
     createCenteredLabel("Window Size:", SCREEN_HEIGHT - 260, 20, COLORS.textNormal, 15)
