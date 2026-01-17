@@ -73,6 +73,11 @@ function LifeSystem.update(dt)
                 -- In Solo Mode (Authority + Rendering), spawn explosion locally
                 if enemy and ECS.capabilities.hasRendering then
                     Spawns.createExplosion(t.x, t.y, t.z)
+                    
+                    -- Play enemy death sound
+                    if not ECS.capabilities.hasNetworkSync then
+                        ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/enemy_death.wav:90")
+                    end
                 end
 
                 local finalScore = nil
@@ -87,9 +92,15 @@ function LifeSystem.update(dt)
                     end
                     print("GAME OVER: Player died! Final Score: " .. finalScore)
                     
-                    -- Broadcast stop music and gameover sound to clients
-                    ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
-                    ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
+                    -- Play stop music and gameover sound
+                    if not ECS.capabilities.hasNetworkSync then
+                        ECS.sendMessage("MusicStop", "bgm")
+                        ECS.sendMessage("SoundPlay", "gameover:effects/gameover.wav:100")
+                    else
+                        -- Broadcast stop music and gameover sound to clients
+                        ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
+                        ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
+                    end
 
                     local netId = ECS.getComponent(id, "NetworkId")
                     if netId then

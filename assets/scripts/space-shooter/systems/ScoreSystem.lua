@@ -24,7 +24,7 @@ function ScoreSystem.update(dt)
     if not ECS.capabilities.hasRendering then return end
 
     -- Don't display score in multiplayer mode
-    if ECS.gameMode == "MULTI_CLIENT" then return end
+    if ECS.capabilities.hasNetworkSync then return end
 
     local textEntities = ECS.getEntitiesWith({"Text"})
     if #textEntities == 0 then return end
@@ -34,7 +34,7 @@ function ScoreSystem.update(dt)
 
     -- Get score based on mode
     local scoreValue = 0
-    if ECS.gameMode == "SOLO" then
+    if not ECS.capabilities.hasNetworkSync then
         -- In solo, display player's individual score
         local playerEntities = ECS.getEntitiesWith({"Player", "Score"})
         if #playerEntities > 0 then

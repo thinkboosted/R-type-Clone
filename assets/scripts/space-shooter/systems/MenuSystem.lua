@@ -127,6 +127,7 @@ function MenuSystem.init()
     ECS.subscribe("PAUSE_GAME", MenuSystem.showPauseMenu)
     ECS.subscribe("RESUME_GAME", MenuSystem.hidePauseMenu)
     ECS.subscribe("WindowResized", MenuSystem.onWindowResized)
+    ECS.subscribe("SET_GAME_MODE", MenuSystem.onSetGameMode)
     _G.SCREEN_WIDTH = SCREEN_WIDTH
     _G.SCREEN_HEIGHT = SCREEN_HEIGHT
 
@@ -276,6 +277,7 @@ function MenuSystem.executeAction(action)
         
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO")
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
         
         if #gsEntities > 0 then
             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
@@ -294,7 +296,6 @@ function MenuSystem.executeAction(action)
         dofile("assets/scripts/space-shooter/levels/Level-" .. level .. ".lua")
         
         ScoreSystem.adjustToScreenSize(SCREEN_WIDTH, SCREEN_HEIGHT)
-        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
 
     elseif action == "MULTI" then
         if #gsEntities > 0 then
@@ -668,6 +669,14 @@ function MenuSystem.onWindowResized(msg)
             end
         end
     end
+end
+
+-- ============================================================================
+-- SET GAME MODE (from client)
+-- ============================================================================
+function MenuSystem.onSetGameMode(mode)
+    print("[MenuSystem] Setting game mode to: " .. mode)
+    ECS.setGameMode(mode)
 end
 
 -- ============================================================================

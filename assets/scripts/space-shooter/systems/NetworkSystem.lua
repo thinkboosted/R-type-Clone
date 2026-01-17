@@ -410,6 +410,8 @@ function NetworkSystem.init()
                 if id then
                     if x and y and z then
                         Spawns.createExplosion(tonumber(x), tonumber(y), tonumber(z))
+                        -- Play enemy death sound
+                        ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/enemy_death.wav:90")
                     end
 
                     local existing = NetworkSystem.serverEntities[id]
