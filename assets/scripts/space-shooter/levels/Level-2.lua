@@ -8,13 +8,18 @@ if file then
     file:close()
 end
 
-local backgroundTexture = "assets/textures/Background/SinglePlay2.png"
+local isSoloMode = not (ECS.capabilities and ECS.capabilities.hasNetworkSync)
+local backgroundTexture
+
+if isSoloMode then
+    backgroundTexture = "assets/textures/Background/SinglePlay2.png"
+else
+    backgroundTexture = "assets/textures/Background/Multiplayer_2.png"
+end
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
 
-
 Spawns.createCoreEntities(CurrentLevel, backgroundTexture, CurrentScore)
-
 
 -- (For Multi)
 -- -- Create Player Tag

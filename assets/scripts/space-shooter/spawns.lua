@@ -225,24 +225,25 @@ end
 -- ============================================================================
 -- BACKGROUND
 -- ============================================================================
-function Spawns.createBackground(texturePath)
+function Spawns.createBackground(texturePath, scaleX, scaleY)
     if not hasRendering() then return end
 
     local tex = texturePath or "assets/textures/Background/StartSky.jpg"
-    print("[Spawns] Creating Parallax Background with texture: " .. tex)
+    local sx = scaleX or 60
+    local sy = scaleY or 40
 
     -- Layer 1 (Far Stars)
     local bg1 = ECS.createEntity()
-    ECS.addComponent(bg1, "Transform", Transform(0, 0, -10, 3.14, 0, 0, -60, 40, 1))
+    ECS.addComponent(bg1, "Transform", Transform(0, 0, -10, 3.14, 0, 0, -sx, sy, 1))
     ECS.addComponent(bg1, "Mesh", Mesh("assets/models/quad.obj", tex))
     ECS.addComponent(bg1, "Color", Color(1.0, 1.0, 1.0))
-    ECS.addComponent(bg1, "Background", Background(-2.0, 60.0, -60.0))
+    ECS.addComponent(bg1, "Background", Background(-2.0, sx, -sx))
 
     local bg2 = ECS.createEntity()
-    ECS.addComponent(bg2, "Transform", Transform(60.0, 0, -10.01, 3.14, 0, 0, 60, 40, 1))
+    ECS.addComponent(bg2, "Transform", Transform(sx, 0, -10.01, 3.14, 0, 0, sx, sy, 1))
     ECS.addComponent(bg2, "Mesh", Mesh("assets/models/quad.obj", tex))
     ECS.addComponent(bg2, "Color", Color(1.0, 1.0, 1.0))
-    ECS.addComponent(bg2, "Background", Background(-2.0, 60.0, -60.0))
+    ECS.addComponent(bg2, "Background", Background(-2.0, sx, -sx))
 
     print("[Spawns] Background entities created: " .. bg1 .. ", " .. bg2)
 end
@@ -278,7 +279,14 @@ function Spawns.createCoreEntities(level, backgroundTexture)
 
     -- Create Background
     local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
-    Spawns.createBackground(bgTex)
+    local isMultiplayer = ECS.capabilities and ECS.capabilities.hasNetworkSync
+
+    if isMultiplayer and string.find(bgTex, "Multiplayer") then
+        -- Use larger scale for multiplayer backgrounds to ensure full screen coverage
+        Spawns.createBackground(bgTex, 80, 60)
+    else
+        Spawns.createBackground(bgTex)
+    end
 
     Spawns.createScore(CurrentScore)
 
