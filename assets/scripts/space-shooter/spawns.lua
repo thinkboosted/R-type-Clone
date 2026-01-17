@@ -182,7 +182,7 @@ end
 -- ============================================================================
 -- BULLET
 -- ============================================================================
-function Spawns.spawnBullet(x, y, z, isEnemy)
+function Spawns.spawnBullet(x, y, z, isEnemy, ownerId)
     local e = ECS.createEntity()
     
     local speed = isEnemy and -config.bullet.speed or config.bullet.speed
@@ -194,6 +194,9 @@ function Spawns.spawnBullet(x, y, z, isEnemy)
     ECS.addComponent(e, "Tag", Tag({tag}))
     ECS.addComponent(e, "Bullet", Bullet(config.bullet.damage))
     ECS.addComponent(e, "Life", Life(config.bullet.life))
+    if ownerId then
+        ECS.addComponent(e, "Owner", { id = ownerId })
+    end
 
     -- Physics
     local phys = Physic(0.1, 0.0, true, false)
@@ -281,14 +284,14 @@ function Spawns.createCoreEntities(level, backgroundTexture)
     local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
     local isMultiplayer = ECS.capabilities and ECS.capabilities.hasNetworkSync
 
-    if isMultiplayer and string.find(bgTex, "Multiplayer") then
+    if isMultiplayer then
         -- Use larger scale for multiplayer backgrounds to ensure full screen coverage
         Spawns.createBackground(bgTex, 80, 60)
     else
         Spawns.createBackground(bgTex)
+        Spawns.createScore(CurrentScore)
     end
 
-    Spawns.createScore(CurrentScore)
 
 end
 

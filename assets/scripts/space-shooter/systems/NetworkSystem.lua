@@ -326,6 +326,11 @@ function NetworkSystem.init()
 
         ECS.subscribe("LEVEL_CHANGE", function(level)
         local levelNum = tonumber(level) or 1
+            -- Destroy old background entities before loading new level
+            local backgroundEntities = ECS.getEntitiesWith({"Background"})
+            for _, id in ipairs(backgroundEntities) do
+                ECS.destroyEntity(id)
+            end
             dofile("assets/scripts/space-shooter/levels/Level-" .. levelNum .. ".lua")
             ScoreSystem.adjustToScreenSize(_G.SCREEN_WIDTH, _G.SCREEN_HEIGHT)
         end)

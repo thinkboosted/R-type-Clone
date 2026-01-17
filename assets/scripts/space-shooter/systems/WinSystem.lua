@@ -59,8 +59,8 @@ function WinSystem.checkAndAdvanceLevel(currentScore)
 end
 
 function WinSystem.update(dt)
-    -- Only run on rendering instances
-    if not ECS.capabilities.hasRendering then return end
+    -- Run on authoritative instances (server/solo) for level progression
+    if not ECS.capabilities.hasAuthority then return end
 
     if WinSystem.levelChanged then return end
 

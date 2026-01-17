@@ -174,11 +174,22 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
         ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
     end
 
-    -- Increase score (authority guaranteed)
+    -- Increase score for the player who shot the bullet
+    local ownerComp = ECS.getComponent(bulletId, "Owner")
+    if ownerComp and ownerComp.id then
+        local playerScore = ECS.getComponent(ownerComp.id, "Score")
+        if playerScore then
+            playerScore.value = playerScore.value + config.score.kill
+            print("[DEBUG] Player " .. ownerComp.id .. " score: " .. playerScore.value)
+        end
+    end
+
+    -- Increase global score
     local scoreEntities = ECS.getEntitiesWith({"Score"})
     if #scoreEntities > 0 then
         local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
         scoreComp.value = scoreComp.value + config.score.kill
+        print("[DEBUG] Global score: " .. scoreComp.value)
     end
 
     -- Destroy bullet after hit
