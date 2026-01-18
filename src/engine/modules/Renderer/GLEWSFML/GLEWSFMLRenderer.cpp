@@ -985,10 +985,10 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
 
-        GLfloat lightPos[] = {0.0f, 10.0f, 0.0f, 0.0f};
-        GLfloat lightDiffuse[] = {_lightColor.x, _lightColor.y, _lightColor.z, 1.0f};
-        GLfloat lightAmbient[] = {0.4f, 0.4f, 0.4f, 1.0f};
-        GLfloat lightSpecular[] = {0.3f, 0.3f, 0.3f, 1.0f};
+        GLfloat lightPos[] = {_lightPos.x, _lightPos.y, _lightPos.z, 1.0f};
+        GLfloat lightDiffuse[] = {_lightColor.x * _lightIntensity, _lightColor.y * _lightIntensity, _lightColor.z * _lightIntensity, 1.0f};
+        GLfloat lightAmbient[] = {0.3f, 0.3f, 0.3f, 1.0f};
+        GLfloat lightSpecular[] = {0.5f, 0.5f, 0.5f, 1.0f};
 
         glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
         glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
