@@ -5,8 +5,8 @@ function PhysicsSystem.init()
 end
 
 function PhysicsSystem.update(dt)
-    -- Manual Update (Client Prediction) to ensure visual movement
-    -- regardless of Engine feedback frequency.
+    -- Manual Update (Client Prediction) DISABLED to prevent conflict with Engine
+    -- The C++ Engine (Bullet) handles the movement via SetLinearVelocity.
     
     local entities = ECS.getEntitiesWith({"Physic", "Transform"})
     for _, id in ipairs(entities) do
@@ -15,39 +15,40 @@ function PhysicsSystem.update(dt)
         
         -- If velocity is set (by InputSystem), move the transform
         if ph.vx ~= 0 or ph.vy ~= 0 or ph.vz ~= 0 then
-            t.x = t.x + ph.vx * dt
-            t.y = t.y + ph.vy * dt
-            t.z = t.z + ph.vz * dt
+            -- Prediction disabled:
+            -- t.x = t.x + ph.vx * dt
+            -- t.y = t.y + ph.vy * dt
+            -- t.z = t.z + ph.vz * dt
             
             -- Simple Boundary Checks (Client Side Prediction)
             -- Paddle Limits
-            if ECS.hasComponent(id, "Paddle") then
-                if t.x < -20 then t.x = -20 end
-                if t.x > 20 then t.x = 20 end
-            end
+            -- if ECS.hasComponent(id, "Paddle") then
+            --     if t.x < -20 then t.x = -20 end
+            --     if t.x > 20 then t.x = 20 end
+            -- end
             
             -- Ball Bounce (Simple Prediction)
-            if ECS.hasComponent(id, "Ball") then
-                if t.x < -24 or t.x > 24 then 
-                    ph.vx = -ph.vx 
-                    -- Sync bounce to engine
-                    if ECS.setLinearVelocity then
-                        ECS.setLinearVelocity(id, ph.vx, ph.vy, ph.vz)
-                    end
-                end
-                if t.y > 24 then 
-                    ph.vy = -ph.vy
-                    if ECS.setLinearVelocity then
-                        ECS.setLinearVelocity(id, ph.vx, ph.vy, ph.vz)
-                    end
-                end
-            end
+            -- if ECS.hasComponent(id, "Ball") then
+            --     if t.x < -24 or t.x > 24 then 
+            --         ph.vx = -ph.vx 
+            --         -- Sync bounce to engine
+            --         if ECS.setLinearVelocity then
+            --             ECS.setLinearVelocity(id, ph.vx, ph.vy, ph.vz)
+            --         end
+            --     end
+            --     if t.y > 24 then 
+            --         ph.vy = -ph.vy
+            --         if ECS.setLinearVelocity then
+            --             ECS.setLinearVelocity(id, ph.vx, ph.vy, ph.vz)
+            --         end
+            --     end
+            -- end
             
             -- Update Component -> Triggers syncToRenderer -> Visual Update
-            ECS.updateComponent(id, "Transform", t)
+            -- ECS.updateComponent(id, "Transform", t)
             
             -- Keep Physic component updated for next frame logic
-            ECS.updateComponent(id, "Physic", ph)
+            -- ECS.updateComponent(id, "Physic", ph)
         end
     end
 end
@@ -61,8 +62,12 @@ function PhysicsSystem.onCollision(id1, id2)
         local ballId = isBall1 and id1 or id2
         local otherId = isBall1 and id2 or id1
         
-        -- Play sound regardless
-        ECS.playSound("effects/laser.wav")
+        -- Play sound (Debounced)
+        local now = os.clock()
+        if not PhysicsSystem.lastSoundTime or (now - PhysicsSystem.lastSoundTime > 0.1) then
+            ECS.playSound("effects/laser.wav")
+            PhysicsSystem.lastSoundTime = now
+        end
         
         -- Simple Bounce Logic on Collision (Client Side)
         local ph = ECS.getComponent(ballId, "Physic")

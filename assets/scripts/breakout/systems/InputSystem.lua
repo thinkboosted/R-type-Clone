@@ -20,10 +20,12 @@ function InputSystem.update(dt)
         if ECS.isKeyPressed("LEFT") or ECS.isKeyPressed("Q") then vx = -p.speed end
         if ECS.isKeyPressed("RIGHT") or ECS.isKeyPressed("D") then vx = p.speed end
         
-        -- Send command to engine physics
-        if ECS.setLinearVelocity then
-            ECS.setLinearVelocity(id, vx, 0, 0)
-        end
+        -- Throttling: Only send velocity if it changed
+            if ECS.setLinearVelocity then
+                ECS.setLinearVelocity(id, vx, 0, 0)
+                p.lastVx = vx
+                ECS.updateComponent(id, "Paddle", p)
+            end
     end
     
     -- Launch Ball

@@ -17,8 +17,12 @@ function RenderSystem.update(dt)
         ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. t.x .. "," .. t.y .. "," .. t.z)
         ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. t.rx .. "," .. t.ry .. "," .. t.rz)
 
-        -- Ensure it's active (ECS.addComponent("Camera") does this once, but good to be sure)
-        -- ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
+        -- Ensure it's active - Only send once per entity to avoid spam
+        if not initialized.cameras then initialized.cameras = {} end
+        if not initialized.cameras[id] then
+            ECS.sendMessage("RenderEntityCommand", "SetActiveCamera:" .. id)
+            initialized.cameras[id] = true
+        end
     end
 
     -- 2. Handle MESHES
