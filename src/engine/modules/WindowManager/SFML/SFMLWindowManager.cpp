@@ -159,7 +159,6 @@ void SFMLWindowManager::drawPixels(const std::vector<uint32_t> &pixels, const Ve
     _window->clear();
     _window->draw(_sprite);
     _window->display();
-    _window->setActive(false);
 
 }
 
