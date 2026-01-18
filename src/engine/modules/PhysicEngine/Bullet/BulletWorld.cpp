@@ -21,8 +21,8 @@ namespace rtypeEngine {
         _solver = new btSequentialImpulseConstraintSolver;
         _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
 
-        // Standard gravity
-        _dynamicsWorld->setGravity(btVector3(0, 0, 0));
+        // Standard gravity (Y-down for 3D games, disabled for 2D space-shooter)
+        _dynamicsWorld->setGravity(btVector3(0, -9.81, 0));
     }
 
     void BulletWorld::cleanup() {
