@@ -31,7 +31,7 @@ local config = {
     score = {
         kill = 10,
         escapePenalty = 20,
-        levelThresholds = {200, 1900, 3350, 4500, 6000},
+        levelThresholds = {700, 1900, 3350, 4500, 6000},
     }
 }
 
