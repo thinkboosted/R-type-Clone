@@ -85,5 +85,8 @@ add_subdirectory(src/engine/modules/NetworkManager)
 # Add subdirectory for game executable
 add_subdirectory(src/game)
 
+# Add subdirectory for platformer game executable
+add_subdirectory(src/platformer)
+
 # Add subdirectory for sound test executable
 add_subdirectory(src/test_sound)
