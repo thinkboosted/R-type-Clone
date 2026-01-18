@@ -46,7 +46,7 @@ local COLORS = {
     buttonSelected = { r = 0.1, g = 0.6, b = 0.3, a = 1.0 },
     textNormal = { r = 0.9, g = 0.9, b = 0.9 },
     textSelected = { r = 1.0, g = 1.0, b = 1.0 },
-    solo = { r = 0.1, g = 0.5, b = 0.2, a = 0.9 },
+    solo = { r = 0.5, g = 0.0, b = 0.5, a = 0.9 },
     multi = { r = 0.1, g = 0.3, b = 0.6, a = 0.9 },
     settings = { r = 0.5, g = 0.3, b = 0.1, a = 0.9 },
     quit = { r = 0.5, g = 0.1, b = 0.1, a = 0.9 },
@@ -58,7 +58,7 @@ local COLORS = {
 -- ============================================================================
 -- For Arial font, average character width is approximately 0.52 * fontSize
 -- This accounts for variable-width characters in the font
-local CHAR_WIDTH_RATIO = 0.52
+local CHAR_WIDTH_RATIO = 0.6
 
 local function estimateTextWidth(text, fontSize)
     return #text * fontSize * CHAR_WIDTH_RATIO
@@ -67,7 +67,7 @@ end
 -- Helper to create a centered label at a given Y position
 local function createCenteredLabel(text, y, size, color, zOrder)
     local textWidth = estimateTextWidth(text, size)
-    local x = (SCREEN_WIDTH - textWidth) / 2
+    local x = (SCREEN_WIDTH - textWidth) / 2 + 40
     return MenuSystem.createLabel(text, x, y, size, color, zOrder)
 end
 
@@ -127,6 +127,7 @@ function MenuSystem.init()
     ECS.subscribe("PAUSE_GAME", MenuSystem.showPauseMenu)
     ECS.subscribe("RESUME_GAME", MenuSystem.hidePauseMenu)
     ECS.subscribe("WindowResized", MenuSystem.onWindowResized)
+    ECS.subscribe("SET_GAME_MODE", MenuSystem.onSetGameMode)
     _G.SCREEN_WIDTH = SCREEN_WIDTH
     _G.SCREEN_HEIGHT = SCREEN_HEIGHT
 
@@ -193,23 +194,27 @@ function MenuSystem.renderMenu()
     table.insert(menuElements, line2)
 
     -- Title (centered)
-    createCenteredLabel("R-TYPE", SCREEN_HEIGHT - 120, 64, COLORS.title, 20)
-    createCenteredLabel("CLONE", SCREEN_HEIGHT - 180, 32, COLORS.title, 20)
-
+    local textWidthR = estimateTextWidth("R-TYPE", 64)
+    local xR = (SCREEN_WIDTH - textWidthR) / 2
+    MenuSystem.createLabel("R-TYPE", xR, SCREEN_HEIGHT - 135, 64, COLORS.title, 20)
+    local textWidthC = estimateTextWidth("CLONE", 32)
+    local xC = (SCREEN_WIDTH - textWidthC) / 2
+    MenuSystem.createLabel("CLONE", xC, SCREEN_HEIGHT - 185, 32, COLORS.title, 20)
+    
     -- Button dimensions
-    local btnWidth = 200
+    local btnWidth = 300
     local btnHeight = 50
-    local btnSpacing = 20
+    local btnSpacing = 30
     local startY = SCREEN_HEIGHT - 280
 
     -- SOLO Button (left)
-    MenuSystem.createButton("SOLO", "SOLO PLAY",
-        SCREEN_WIDTH/2 - btnWidth - 20, startY,
+    MenuSystem.createButton("SOLO", "SOLO PLAY", 
+        SCREEN_WIDTH/2 - btnWidth - 30, startY,
         btnWidth, btnHeight, COLORS.solo, 28, 10)
 
     -- MULTIPLAYER Button (right)
-    MenuSystem.createButton("MULTI", "MULTIPLAYER",
-        SCREEN_WIDTH/2 + 20, startY,
+    MenuSystem.createButton("MULTI", "MULTIPLAYER", 
+        SCREEN_WIDTH/2 + 30, startY,
         btnWidth, btnHeight, COLORS.multi, 28, 10)
 
     -- SETTINGS Button (center below)
@@ -223,9 +228,9 @@ function MenuSystem.renderMenu()
         btnWidth, btnHeight, COLORS.quit, 24, 10)
 
     -- Instructions (centered)
-    createCenteredLabel("Use Arrow Keys or Mouse to navigate", 40, 16, COLORS.textNormal, 15)
-    createCenteredLabel("Press ENTER or Click to select", 20, 16, COLORS.textNormal, 15)
-
+    createCenteredLabel("Use Arrow Keys or Mouse to navigate", 60, 16, COLORS.textNormal, 15)
+    createCenteredLabel("Press ENTER or Click to select", 40, 16, COLORS.textNormal, 15)
+    
     MenuSystem.updateSelection()
     print("[MenuSystem] Main menu rendered with " .. #menuButtons .. " buttons")
 end
@@ -265,10 +270,27 @@ end
 -- ============================================================================
 function MenuSystem.executeAction(action)
     print("[MenuSystem] Executing action: " .. action)
-
+    
+    -- Helper function for clean start
+    local function cleanStart()
+        ECS.isGameRunning = false
+        isPaused = false
+        ECS.isPaused = false
+        ECS.sendMessage("MusicStop", "bgm")
+        -- Destroy game entities
+        local allEntities = ECS.getEntitiesWith({"Transform"})
+        for _, id in ipairs(allEntities) do
+            if not ECS.hasComponent(id, "GameState") then
+                ECS.sendMessage("PhysicCommand", "DestroyBody:" .. id .. ";")
+                ECS.destroyEntity(id)
+            end
+        end
+    end
+    
     local gsEntities = ECS.getEntitiesWith({"GameState"})
 
     if action == "SOLO" then
+        cleanStart()
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
             gs.state = "PLAYING"
@@ -276,7 +298,8 @@ function MenuSystem.executeAction(action)
 
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO")
-
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
+        
         if #gsEntities > 0 then
             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
         end
@@ -294,9 +317,9 @@ function MenuSystem.executeAction(action)
         dofile("assets/scripts/space-shooter/levels/Level-" .. level .. ".lua")
 
         ScoreSystem.adjustToScreenSize(SCREEN_WIDTH, SCREEN_HEIGHT)
-        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
 
     elseif action == "MULTI" then
+        cleanStart()
         if #gsEntities > 0 then
             local gs = ECS.getComponent(gsEntities[1], "GameState")
             gs.state = "PLAYING"
@@ -490,18 +513,20 @@ function MenuSystem.showPauseMenu()
     table.insert(menuElements, panelBg)
 
     -- Title
-    MenuSystem.createLabel("PAUSED", SCREEN_WIDTH/2 - 60, panelY + panelH - 60, 40, COLORS.title, 55)
-
+    local textWidth = estimateTextWidth("PAUSED", 40)
+    local titleX = SCREEN_WIDTH/2 - textWidth/2
+    MenuSystem.createLabel("PAUSED", titleX, panelY + panelH - 60, 40, COLORS.title, 55)
+    
     -- Buttons
-    local btnWidth = 200
+    local btnWidth = 250
     local btnHeight = 45
     local btnX = SCREEN_WIDTH/2 - btnWidth/2
-    local startY = panelY + panelH - 120
-
+    local startY = panelY + panelH - 130
+    
     MenuSystem.createButton("RESUME", "RESUME", btnX, startY, btnWidth, btnHeight, COLORS.resume, 24, 52)
-    MenuSystem.createButton("PAUSE_SETTINGS", "SETTINGS", btnX, startY - 60, btnWidth, btnHeight, COLORS.settings, 24, 52)
-    MenuSystem.createButton("QUIT_TO_MENU", "MAIN MENU", btnX, startY - 120, btnWidth, btnHeight, COLORS.quit, 24, 52)
-
+    MenuSystem.createButton("PAUSE_SETTINGS", "SETTINGS", btnX, startY - 70, btnWidth, btnHeight, COLORS.settings, 24, 52)
+    MenuSystem.createButton("QUIT_TO_MENU", "MAIN MENU", btnX, startY - 140, btnWidth, btnHeight, COLORS.quit, 24, 52)
+    
     MenuSystem.updateSelection()
     ECS.sendMessage("GAME_PAUSED", "")
 end
@@ -656,6 +681,14 @@ function MenuSystem.onWindowResized(msg)
             end
         end
     end
+end
+
+-- ============================================================================
+-- SET GAME MODE (from client)
+-- ============================================================================
+function MenuSystem.onSetGameMode(mode)
+    print("[MenuSystem] Setting game mode to: " .. mode)
+    ECS.setGameMode(mode)
 end
 
 -- ============================================================================

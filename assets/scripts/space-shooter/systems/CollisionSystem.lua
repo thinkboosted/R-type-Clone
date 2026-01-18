@@ -150,8 +150,13 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
         life.amount = life.amount - damage
         life.invulnerableTime = invulnTime
         
-        -- Broadcast hit sound to all clients
-        ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100") -- change the sound
+        -- Play hit sound
+        if not ECS.capabilities.hasNetworkSync then
+            ECS.sendMessage("SoundPlay", "player_hit:effects/hit.wav:100")
+        else
+            -- Broadcast hit sound to all clients
+            ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100")
+        end
             if color then
                 color.r = 1.0
                 color.g = 0.0
@@ -170,15 +175,31 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
         -- DAMAGE APPLICATION: Kill enemy on bullet hit
         life.amount = 0
         
-        -- Broadcast explosion sound to all clients
-        ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
+        -- Play explosion sound
+        if not ECS.capabilities.hasNetworkSync then
+            ECS.sendMessage("SoundPlay", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
+        else
+            -- Broadcast explosion sound to all clients
+            ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
+        end
     end
 
-    -- Increase score (authority guaranteed)
+    -- Increase score for the player who shot the bullet
+    local ownerComp = ECS.getComponent(bulletId, "Owner")
+    if ownerComp and ownerComp.id then
+        local playerScore = ECS.getComponent(ownerComp.id, "Score")
+        if playerScore then
+            playerScore.value = playerScore.value + config.score.kill
+            print("[DEBUG] Player " .. ownerComp.id .. " score: " .. playerScore.value)
+        end
+    end
+
+    -- Increase global score
     local scoreEntities = ECS.getEntitiesWith({"Score"})
     if #scoreEntities > 0 then
         local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
         scoreComp.value = scoreComp.value + config.score.kill
+        print("[DEBUG] Global score: " .. scoreComp.value)
     end
 
     -- Destroy bullet after hit
@@ -194,8 +215,13 @@ function CollisionSystem.handlePlayerBonus(playerId, bonusId)
     if bonus then
         ECS.addComponent(playerId, "PowerUp", PowerUp(bonus.duration, 0.2))
         
-        -- Broadcast powerup sound to all clients
-        ECS.broadcastNetworkMessage("PLAY_SOUND", "powerup:effects/powerup.wav:100")
+        -- Play powerup sound
+        if not ECS.capabilities.hasNetworkSync then
+            ECS.sendMessage("SoundPlay", "powerup:effects/powerup.wav:100")
+        else
+            -- Broadcast powerup sound to all clients
+            ECS.broadcastNetworkMessage("PLAY_SOUND", "powerup:effects/powerup.wav:100")
+        end
 
         -- Destroy bonus after collection
         local bonusLife = ECS.getComponent(bonusId, "Life")

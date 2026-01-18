@@ -23,26 +23,40 @@ function ScoreSystem.update(dt)
     -- Only update text rendering on instances with rendering capability
     if not ECS.capabilities.hasRendering then return end
 
+    -- Don't display score in multiplayer mode
+    if ECS.capabilities.hasNetworkSync then return end
+
     local textEntities = ECS.getEntitiesWith({"Text"})
     if #textEntities == 0 then return end
     local textEntity = textEntities[1]
 
     local textComp = ECS.getComponent(textEntity, "Text")
 
-    -- Get player's score
-    local playerEntities = ECS.getEntitiesWith({"Player", "Score"})
-    if #playerEntities == 0 then return end
-    local playerScoreComp = ECS.getComponent(playerEntities[1], "Score")
-
-    if playerScoreComp.value ~= ScoreSystem.lastScore then
-        ScoreSystem.lastScore = playerScoreComp.value
-        textComp.text = "Score: " .. playerScoreComp.value
-        ECS.addComponent(textEntity, "Text", textComp)
-        CurrentScore = playerScoreComp.value
-        print("[SCORE] " .. CurrentScore)
-
+    -- Get score based on mode
+    local scoreValue = 0
+    if not ECS.capabilities.hasNetworkSync then
+        -- In solo, display player's individual score
+        local playerEntities = ECS.getEntitiesWith({"Player", "Score"})
+        if #playerEntities > 0 then
+            local playerScoreComp = ECS.getComponent(playerEntities[1], "Score")
+            scoreValue = playerScoreComp.value
+        end
+    else
+        -- In other modes, use global score
+        local scoreEntities = ECS.getEntitiesWith({"Score"})
+        if #scoreEntities > 0 then
+            local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
+            scoreValue = scoreComp.value
+        end
     end
 
+    if scoreValue ~= ScoreSystem.lastScore then
+        ScoreSystem.lastScore = scoreValue
+        textComp.text = "Score: " .. scoreValue
+        ECS.addComponent(textEntity, "Text", textComp)
+        CurrentScore = scoreValue
+        print("[SCORE] " .. CurrentScore)
+    end
 end
 
 

@@ -58,21 +58,32 @@ function LifeSystem.update(dt)
 
                     -- In multiplayer server mode, broadcast enemy death to clients
                     if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
-                        local phys = ECS.getComponent(id, "Physic")
-                        local vx, vy, vz = 0, 0, 0
-                        if phys then
-                            vx, vy, vz = phys.vx or 0, phys.vy or 0, phys.vz or 0
+                        -- Don't broadcast for boundary deaths
+                        if not (t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30) then
+                            local phys = ECS.getComponent(id, "Physic")
+                            local vx, vy, vz = 0, 0, 0
+                            if phys then
+                                vx, vy, vz = phys.vx or 0, phys.vy or 0, phys.vz or 0
+                            end
+                        if t then
+                            local msg = string.format("%s %f %f %f %f %f %f", id, t.x, t.y, t.z, vx, vy, vz)
+                            ECS.broadcastNetworkMessage("ENEMY_DEAD", msg)
+                            life.deathEventSent = true
                         end
-                    if t then
-                        local msg = string.format("%s %f %f %f %f %f %f", id, t.x, t.y, t.z, vx, vy, vz)
-                        ECS.broadcastNetworkMessage("ENEMY_DEAD", msg)
-                        life.deathEventSent = true
+                        end
                     end
-                end
 
                 -- In Solo Mode (Authority + Rendering), spawn explosion locally
                 if enemy and ECS.capabilities.hasRendering then
-                    Spawns.createExplosion(t.x, t.y, t.z)
+                    -- Don't spawn explosion for boundary deaths
+                    if not (t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30) then
+                        Spawns.createExplosion(t.x, t.y, t.z)
+                        
+                        -- Play enemy death sound
+                        if not ECS.capabilities.hasNetworkSync then
+                            ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/explosion.wav:90")
+                        end
+                    end
                 end
 
                 local finalScore = nil
@@ -87,9 +98,15 @@ function LifeSystem.update(dt)
                     end
                     print("GAME OVER: Player died! Final Score: " .. finalScore)
                     
-                    -- Broadcast stop music and gameover sound to clients
-                    ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
-                    ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
+                    -- Play stop music and gameover sound
+                    if not ECS.capabilities.hasNetworkSync then
+                        ECS.sendMessage("MusicStop", "bgm")
+                        ECS.sendMessage("SoundPlay", "gameover:effects/gameover.wav:100")
+                    else
+                        -- Broadcast stop music and gameover sound to clients
+                        ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
+                        ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
+                    end
 
                     local netId = ECS.getComponent(id, "NetworkId")
                     if netId then

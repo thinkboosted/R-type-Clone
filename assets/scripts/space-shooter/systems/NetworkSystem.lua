@@ -239,7 +239,10 @@ function NetworkSystem.init()
              if clientId then
                  clientId = tonumber(clientId)
                  if NetworkSystem.clientEntities[clientId] then
-                     ECS.destroyEntity(NetworkSystem.clientEntities[clientId])
+                     local playerId = NetworkSystem.clientEntities[clientId]
+                     ECS.broadcastNetworkMessage("ENTITY_DESTROY", playerId)
+                     ECS.sendMessage("PhysicCommand", "DestroyBody:" .. playerId .. ";")
+                     ECS.destroyEntity(playerId)
                      NetworkSystem.clientEntities[clientId] = nil
                      NetworkSystem.readyClients[clientId] = nil
                      print("Client Disconnected: " .. clientId)
@@ -326,6 +329,11 @@ function NetworkSystem.init()
 
         ECS.subscribe("LEVEL_CHANGE", function(level)
         local levelNum = tonumber(level) or 1
+            -- Destroy old background entities before loading new level
+            local backgroundEntities = ECS.getEntitiesWith({"Background"})
+            for _, id in ipairs(backgroundEntities) do
+                ECS.destroyEntity(id)
+            end
             dofile("assets/scripts/space-shooter/levels/Level-" .. levelNum .. ".lua")
             ScoreSystem.adjustToScreenSize(_G.SCREEN_WIDTH, _G.SCREEN_HEIGHT)
         end)
@@ -402,6 +410,8 @@ function NetworkSystem.init()
                 if id then
                     if x and y and z then
                         Spawns.createExplosion(tonumber(x), tonumber(y), tonumber(z))
+                        -- Play enemy death sound
+                        ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/explosion.wav:90")
                     end
 
                     local existing = NetworkSystem.serverEntities[id]

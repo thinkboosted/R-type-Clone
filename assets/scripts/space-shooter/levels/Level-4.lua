@@ -8,9 +8,15 @@ if file then
     file:close()
 end
 
+-- Conditional rendering: Check if solo or multiplayer
+local isSoloMode = not (ECS.capabilities and ECS.capabilities.hasNetworkSync)
+local backgroundTexture
 
-
-local backgroundTexture = "assets/textures/Background/SinglePlay4.png"
+if isSoloMode then
+    backgroundTexture = "assets/textures/Background/SinglePlay4.png"
+else
+    backgroundTexture = "assets/textures/Background/Multiplayer_4.png"
+end
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
 

@@ -1,6 +1,4 @@
 
-
-
 CurrentLevel = 3
 
 local file = io.open("current_level.txt", "w")
@@ -9,11 +7,16 @@ if file then
     file:close()
 end
 
+local isSoloMode = not (ECS.capabilities and ECS.capabilities.hasNetworkSync)
+local backgroundTexture
 
-local backgroundTexture = "assets/textures/Background/SinglePlay3.png"
+if isSoloMode then
+    backgroundTexture = "assets/textures/Background/SinglePlay3.png"
+else
+    backgroundTexture = "assets/textures/Background/Multiplayer_3.png"
+end
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
-
 
 Spawns.createCoreEntities(CurrentLevel, backgroundTexture, CurrentScore)
 
