@@ -159,8 +159,9 @@ void BulletPhysicEngine::sendUpdates() {
     bool hasUpdates = false;
 
     for (auto& pair : _bodies) {
-        btTransform trans;
-        if (pair.second && pair.second->getMotionState()) {
+        // Optimization: Only send updates for active (awake) bodies
+        if (pair.second && pair.second->getMotionState() && pair.second->isActive()) {
+            btTransform trans;
             pair.second->getMotionState()->getWorldTransform(trans);
             btVector3 pos = trans.getOrigin();
 
@@ -170,10 +171,8 @@ void BulletPhysicEngine::sendUpdates() {
             batchStream << "EntityUpdated:" << pair.first << ":"
                << pos.x() << "," << pos.y() << "," << pos.z() << ":"
                << pitch << "," << yaw << "," << roll << ";";
-            
+
             hasUpdates = true;
-        } else {
-            std::cout << "[Bullet] DEBUG: Missing MotionState for body " << pair.first << std::endl;
         }
     }
 

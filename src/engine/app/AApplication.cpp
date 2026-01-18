@@ -136,8 +136,32 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
 }
 
 void AApplication::cleanupMessageBroker() {
+  Logger::Debug("[App] Starting cleanupMessageBroker...");
   _isBrokerActive = false;
 
+  // 1. Shutdown context to interrupt blocking calls (like zmq::proxy)
+  try {
+      Logger::Debug("[App] Shutting down ZMQ context...");
+      _zmqContext.shutdown();
+      Logger::Debug("[App] ZMQ context shutdown complete.");
+  } catch (const std::exception& e) {
+      Logger::Error(std::string("[App] Error shutting down ZMQ context: ") + e.what());
+  }
+
+  // 2. Join the proxy thread BEFORE closing sockets it might be using
+  if (_proxyThread.joinable()) {
+    try {
+      Logger::Debug("[App] Joining proxy thread...");
+      _proxyThread.join();
+      Logger::Debug("[App] Proxy thread joined.");
+    } catch (const std::exception& e) {
+      Logger::Error(std::string("[App] Error joining proxy thread: ") + e.what());
+    }
+  }
+
+  Logger::Debug("[App] Closing sockets...");
+
+  // 3. Now it is safe to close sockets
   if (_publisher) {
     try { _publisher->set(zmq::sockopt::linger, 0); } catch (...) {}
     try { _publisher->close(); } catch (...) {}
@@ -160,15 +184,12 @@ void AApplication::cleanupMessageBroker() {
     _xsubSocket.reset();
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-  if (_proxyThread.joinable()) {
-    try {
-      _proxyThread.join();
-    } catch (const std::exception& e) {
-      Logger::Error(std::string("[App] Error joining proxy thread: ") + e.what());
-    }
-  }
+  // 4. Close context (optional, destructor will do it, but good for explicit cleanup)
+  try {
+      // _zmqContext.close(); // Let destructor handle this to avoid double-free issues if any
+  } catch (...) {}
+  
+  Logger::Debug("[App] cleanupMessageBroker complete.");
 }
 
 void AApplication::addModule(const std::string &modulePath, const std::string &pubEndpoint, const std::string &subEndpoint, void* sharedZmqContext) {

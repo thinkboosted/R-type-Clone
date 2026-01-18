@@ -54,7 +54,7 @@ GameEngine::~GameEngine() {
         _modulesManager.reset();
     }
 
-    cleanupMessageBroker();
+    // cleanupMessageBroker(); // Handled by AApplication destructor
 }
 void GameEngine::init() {
     Logger::Debug("[GameEngine] ======== INITIALIZATION START ========");
