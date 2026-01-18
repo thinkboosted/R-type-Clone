@@ -1,3 +1,13 @@
+/**
+ * @file I3DRenderer.hpp
+ * @brief Interface for 3D rendering modules
+ * 
+ * @details Defines the contract for 3D rendering implementations.
+ * 
+ * @see GLEWSFMLRenderer for OpenGL/GLEW implementation
+ * @see docs/CHANNELS.md for channel reference
+ */
+
 #pragma once
 
 #include <vector>

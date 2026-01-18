@@ -1,3 +1,13 @@
+/**
+ * @file IPhysicEngine.hpp
+ * @brief Interface for physics engine modules
+ * 
+ * @details Defines the contract for physics simulation implementations.
+ * 
+ * @see BulletPhysicEngine for Bullet3 implementation
+ * @see docs/CHANNELS.md for channel reference
+ */
+
 #pragma once
 
 #include "../AModule.hpp"

@@ -9,6 +9,11 @@ The **NetworkManager** module is the backbone of the R-Type project communicatio
 
 > **Important:** The NetworkManager is a **pure network abstraction** - it handles sockets only, with NO client/server game logic. Game logic (lobbies, player management, game state) must be implemented in a separate layer.
 
+**Related Documentation:**
+- [📡 Network Protocol](NETWORK_PROTOCOL.md) - Wire protocol specification
+- [📨 Message Channels](CHANNELS.md) - ECS pub/sub channel reference
+- [🏗️ Architecture](ARCHITECTURE.md) - Overall engine architecture
+
 ---
 
 ## 📑 Table of Contents

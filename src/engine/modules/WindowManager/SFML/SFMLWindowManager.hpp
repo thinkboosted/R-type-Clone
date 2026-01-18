@@ -1,3 +1,31 @@
+/**
+ * @file SFMLWindowManager.hpp
+ * @brief SFML-based window management module
+ * 
+ * @details Manages the application window and handles input events using SFML.
+ * Displays rendered frames and forwards input events to the ECS.
+ * 
+ * @section channels_sub Subscribed Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `ImageRendered` | Raw pixel data | Display rendered frame from Renderer |
+ * | `SetFullscreen` | "true"/"false" | Toggle fullscreen mode |
+ * | `SetWindowSize` | "width,height" | Resize window |
+ * | `GetWindowInfo` | - | Request window info |
+ * 
+ * @section channels_pub Published Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `KeyPressed` | Key name | Key press event (UP, DOWN, SPACE, etc.) |
+ * | `KeyReleased` | Key name | Key release event |
+ * | `MousePressed` | "x,y,button" | Mouse click event |
+ * | `MouseMoved` | "x,y" | Mouse movement event |
+ * | `WindowResized` | "width,height" | Window resize event |
+ * | `WindowInfo` | "width,height,fullscreen" | Response to GetWindowInfo |
+ * 
+ * @see docs/CHANNELS.md for complete channel reference
+ */
+
 #pragma once
 
 #include <SFML/Graphics.hpp>

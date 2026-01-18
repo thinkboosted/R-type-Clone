@@ -1,3 +1,47 @@
+/**
+ * @file LuaECSManager.hpp
+ * @brief Lua-based Entity Component System module
+ * 
+ * @details Hosts the game logic via Lua scripting using Sol2.
+ * Manages entities, components, and systems defined in Lua scripts.
+ * Acts as the central game logic hub, forwarding commands to other modules.
+ * 
+ * @section channels_sub Subscribed Channels (forwarded to Lua)
+ * | Channel | Source | Description |
+ * |---------|--------|-------------|
+ * | `KeyPressed` | WindowManager | Key press events |
+ * | `KeyReleased` | WindowManager | Key release events |
+ * | `MousePressed` | WindowManager | Mouse click events |
+ * | `MouseMoved` | WindowManager | Mouse movement |
+ * | `Collision` | PhysicEngine | Physics collision events |
+ * | `NetworkMessage` | NetworkManager | Network messages |
+ * | Custom topics | Various | Game-specific events |
+ * 
+ * @section channels_pub Published Channels (from Lua)
+ * | Channel | Target | Description |
+ * |---------|--------|-------------|
+ * | `RenderEntityCommand` | Renderer | Rendering instructions |
+ * | `PhysicCommand` | PhysicEngine | Physics commands |
+ * | `SoundPlay` | SoundManager | Play sound effects |
+ * | `MusicPlay` | SoundManager | Play music |
+ * | `RequestNetworkSend` | NetworkManager | Send network message |
+ * | `ExitApplication` | Application | Exit the application |
+ * 
+ * @section lua_api Lua API
+ * The ECS exposes these functions to Lua:
+ * - `ECS.createEntity()` - Create new entity
+ * - `ECS.destroyEntity(id)` - Remove entity
+ * - `ECS.addComponent(id, name, data)` - Add component
+ * - `ECS.getComponent(id, name)` - Get component
+ * - `ECS.getEntitiesWith({components})` - Query entities
+ * - `ECS.subscribe(topic, handler)` - Subscribe to channel
+ * - `ECS.sendMessage(topic, payload)` - Publish message
+ * - `ECS.registerSystem(system)` - Register system table
+ * 
+ * @see docs/CHANNELS.md for complete channel reference
+ * @see assets/scripts/ for Lua game scripts
+ */
+
 #pragma once
 
 #include "../../../types/ecs.hpp"

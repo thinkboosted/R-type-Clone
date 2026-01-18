@@ -1,3 +1,13 @@
+/**
+ * @file ISoundManager.hpp
+ * @brief Interface for audio management modules
+ * 
+ * @details Defines the contract for sound and music playback.
+ * 
+ * @see SFMLSoundManager for SFML Audio implementation
+ * @see docs/CHANNELS.md for channel reference
+ */
+
 #pragma once
 
 #include <string>

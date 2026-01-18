@@ -1,3 +1,17 @@
+/**
+ * @file IModule.hpp
+ * @brief Interface for all engine modules
+ * 
+ * @details This interface defines the contract for all dynamically loaded modules
+ * in the R-Type engine. Modules communicate via ZeroMQ pub/sub messaging.
+ * 
+ * @section channels Message Channels
+ * Base module interface - specific channels are defined by implementations.
+ * All modules use the pub/sub pattern via sendMessage() and subscribe().
+ * 
+ * @see AModule for the abstract base implementation
+ * @see docs/CHANNELS.md for complete channel reference
+ */
 
 #pragma once
 

@@ -1,3 +1,12 @@
+/**
+ * @file ModulesManager.hpp
+ * @brief Game-specific module manager
+ * 
+ * @details Extends AModulesManager for the R-Type game.
+ * Handles loading and lifecycle of game modules.
+ * 
+ * @see AModulesManager for base implementation
+ */
 
 #pragma once
 

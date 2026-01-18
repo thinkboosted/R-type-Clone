@@ -1,3 +1,13 @@
+/**
+ * @file IWindowManager.hpp
+ * @brief Interface for window management modules
+ * 
+ * @details Defines the contract for window creation and input handling.
+ * 
+ * @see SFMLWindowManager for SFML implementation
+ * @see docs/CHANNELS.md for channel reference
+ */
+
 #pragma once
 
 #include <string>
