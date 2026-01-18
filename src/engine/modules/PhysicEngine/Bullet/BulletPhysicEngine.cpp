@@ -76,9 +76,9 @@ void BulletPhysicEngine::stepSimulation() {
     const float fixedTimeStep = 1.0f / 60.0f;
 
     while (_timeAccumulator >= fixedTimeStep) {
-        // Calling step with timeStep=fixedTimeStep, maxSubSteps=0 (since we loop manually)
-        // Or just let bullet handle it?
-        // _dynamicsWorld->stepSimulation(fixedTimeStep, 10) takes timeStep.
+        // Calling step with timeStep=fixedTimeStep and maxSubSteps=10.
+        // We still consume the accumulator manually; Bullet may perform internal substeps.
+        // This mirrors _dynamicsWorld->stepSimulation(fixedTimeStep, 10).
         _bulletWorld->step(fixedTimeStep, 10);
         _timeAccumulator -= fixedTimeStep;
     }
