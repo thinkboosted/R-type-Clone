@@ -68,7 +68,6 @@ function WinSystem.update(dt)
     if #scoreEntities == 0 then return end
 
     local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
-    -- Use threshold-based advancement instead of hardcoded 100
     WinSystem.checkAndAdvanceLevel(scoreComp.value)
 end
 

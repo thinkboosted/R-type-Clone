@@ -10,14 +10,8 @@ end
 
 -- Conditional rendering: Check if solo or multiplayer
 local isSoloMode = not (ECS.capabilities and ECS.capabilities.hasNetworkSync)
-local backgroundTexture
+local backgroundTexture = "assets/textures/Background/StartSky.jpg"
 
-if isSoloMode then
-    backgroundTexture = "assets/textures/Background/StartSky.jpg"
-else
-    -- Level 5 doesn't have a specific multiplayer background, using the same
-    backgroundTexture = "assets/textures/Background/StartSky.jpg"
-end
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
 

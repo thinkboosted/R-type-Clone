@@ -7,7 +7,6 @@ EnemySystem.spawnTimer = 0
 EnemySystem.spawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.gameTime = 0
 EnemySystem.enemyShootTimers = {}
-EnemySystem.shootInterval = 5.0
 EnemySystem.baseSpawnInterval = config.enemy.spawnInterval or 2.0
 EnemySystem.baseSpeed = config.enemy.speed or 5.0
 
@@ -44,6 +43,10 @@ function EnemySystem.update(dt)
     if #players == 0 then
         return
     end
+
+    EnemySystem.gameTime = EnemySystem.gameTime + dt
+    local level = _G.CurrentLevel or 1
+    EnemySystem.shootInterval = math.max(0.3, 2.6 / (level ^ 0.5))
 
     EnemySystem.spawnTimer = EnemySystem.spawnTimer + dt
     if EnemySystem.spawnTimer >= EnemySystem.spawnInterval then
@@ -190,7 +193,7 @@ function EnemySystem.spawnEnemy()
     print("DEBUG: Spawning enemy at x=" .. x .. ", y=" .. y .. ", SCREEN_WIDTH=" .. _G.SCREEN_WIDTH)
 
     local level = _G.CurrentLevel or 1
-    local difficultyMultiplier = (1.0 + (EnemySystem.gameTime / 30.0)) * level
+    local difficultyMultiplier = (1.0 + (EnemySystem.gameTime / 30.0)) * (level ^ 0.3)
     local speed = EnemySystem.baseSpeed * difficultyMultiplier
     if config.enemy.maxSpeed and speed > config.enemy.maxSpeed then speed = config.enemy.maxSpeed end
     
@@ -210,7 +213,6 @@ function EnemySystem.resetDifficulty()
     local level = _G.CurrentLevel or 1
     -- Decrease spawn interval for higher levels (faster spawns), but cap at 0.5s minimum
     EnemySystem.spawnInterval = math.max(0.5, EnemySystem.baseSpawnInterval / (level ^ 0.5))
-    EnemySystem.shootInterval = math.max(1.0, 6.0 - level)
 end
 
 -- Subscribe to global event if possible, or poll?
