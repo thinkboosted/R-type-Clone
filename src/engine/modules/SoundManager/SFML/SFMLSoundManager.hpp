@@ -1,3 +1,34 @@
+/**
+ * @file SFMLSoundManager.hpp
+ * @brief SFML-based audio management module
+ * 
+ * @details Handles sound effects and music playback using SFML Audio.
+ * Supports multiple simultaneous sounds and background music.
+ * 
+ * @section channels_sub Subscribed Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `SoundPlay` | "id:path:volume" | Play sound effect |
+ * | `SoundStop` | "id" | Stop specific sound |
+ * | `SoundStopAll` | - | Stop all sound effects |
+ * | `SoundSetVolume` | "id:volume" | Set sound volume (0-100) |
+ * | `MusicPlay` | "id:path:volume" | Play background music |
+ * | `MusicStop` | "id" | Stop specific music |
+ * | `MusicStopAll` | - | Stop all music |
+ * | `MusicPause` | "id" | Pause music |
+ * | `MusicResume` | "id" | Resume paused music |
+ * | `MusicSetVolume` | "id:volume" | Set music volume (0-100) |
+ * 
+ * @section payload_format Payload Format
+ * Sound/Music ID format: `"identifier:path/to/file.wav:volume"`
+ * - identifier: Unique string ID for the sound/music
+ * - path: Relative path from assets/sounds/
+ * - volume: 0-100 (optional, defaults to 100)
+ * 
+ * @note No channels are published by this module
+ * @see docs/CHANNELS.md for complete channel reference
+ */
+
 #pragma once
 
 #include <SFML/Audio.hpp>

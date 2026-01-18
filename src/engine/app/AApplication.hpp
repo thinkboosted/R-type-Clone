@@ -1,3 +1,18 @@
+/**
+ * @file AApplication.hpp
+ * @brief Abstract base class for the application host
+ * 
+ * @details Manages the ZeroMQ message broker that connects all modules.
+ * The application loads modules and wires their messaging endpoints.
+ * 
+ * @section broker Message Broker
+ * Uses XPUB/XSUB proxy pattern for module communication:
+ * - Modules connect as publishers/subscribers
+ * - Proxy forwards messages between all modules
+ * 
+ * @see IApplication for the interface
+ * @see docs/ARCHITECTURE.md for architecture details
+ */
 
 #pragma once
 

@@ -1,3 +1,22 @@
+/**
+ * @file AModule.hpp
+ * @brief Abstract base class for engine modules
+ * 
+ * @details Provides ZeroMQ-based pub/sub messaging implementation for modules.
+ * Each module runs in its own thread and communicates asynchronously.
+ * 
+ * @section channels Message Channels
+ * This base class provides the messaging infrastructure.
+ * Derived classes define their specific subscriptions and publications.
+ * 
+ * @section threading Threading Model
+ * - Each module runs in _moduleThread
+ * - _running atomic controls the module loop
+ * - processMessages() handles incoming messages
+ * 
+ * @see IModule for the interface definition
+ * @see docs/ARCHITECTURE.md for module system details
+ */
 
 #pragma once
 

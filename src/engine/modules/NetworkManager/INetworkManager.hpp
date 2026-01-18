@@ -1,3 +1,15 @@
+/**
+ * @file INetworkManager.hpp
+ * @brief Interface for network communication modules
+ * 
+ * @details Defines the contract for network implementations.
+ * Supports both text and binary message protocols.
+ * 
+ * @see NetworkManager for UDP/Asio implementation
+ * @see docs/NETWORK_PROTOCOL.md for protocol details
+ * @see docs/CHANNELS.md for channel reference
+ */
+
 #pragma once
 
 #include <chrono>

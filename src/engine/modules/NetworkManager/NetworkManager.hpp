@@ -1,3 +1,40 @@
+/**
+ * @file NetworkManager.hpp
+ * @brief UDP-based network communication module
+ * 
+ * @details Handles client-server communication using UDP via Asio.
+ * Supports multi-client connections with binary MsgPack serialization.
+ * 
+ * @section channels_sub Subscribed Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `RequestNetworkBind` | "port" | Bind as server on port |
+ * | `RequestNetworkConnect` | "host:port" | Connect to server |
+ * | `RequestNetworkSend` | "topic:payload" | Send message to server |
+ * | `RequestNetworkSendTo` | "clientId:topic:payload" | Send to specific client |
+ * | `RequestNetworkBroadcast` | "topic:payload" | Broadcast to all clients |
+ * | `RequestNetworkSendBinary` | Binary data | Send binary message |
+ * | `RequestNetworkBroadcastBinary` | Binary data | Broadcast binary |
+ * 
+ * @section channels_pub Published Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `NetworkStatus` | Status string | Connection status updates |
+ * | `NetworkError` | Error string | Network error messages |
+ * | `ClientConnected` | "clientId" | New client connected (server) |
+ * | `ClientDisconnected` | "clientId" | Client disconnected (server) |
+ * | `{topic}` | Message payload | Forwarded network messages |
+ * 
+ * @section protocol Wire Protocol
+ * Uses MsgPack for binary serialization:
+ * - Messages: `[TopicLen(4)][Topic(N)][Payload(M)]`
+ * - Transport: UDP for low-latency game state
+ * - Heartbeat: 1 second interval for connection keep-alive
+ * 
+ * @see docs/NETWORK_PROTOCOL.md for protocol details
+ * @see docs/CHANNELS.md for complete channel reference
+ */
+
 #pragma once
 
 #include "../AModule.hpp"

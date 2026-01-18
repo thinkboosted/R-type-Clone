@@ -1,3 +1,36 @@
+/**
+ * @file BulletPhysicEngine.hpp
+ * @brief Bullet3-based physics simulation module
+ * 
+ * @details Provides physics simulation using Bullet Physics library.
+ * Handles rigid body dynamics, collision detection, and physics queries.
+ * 
+ * @section channels_sub Subscribed Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `PhysicCommand` | Command string | Physics commands (see formats below) |
+ * 
+ * @section physic_commands PhysicCommand Formats
+ * - `CreateBody:id,mass,friction,fixedRotation,useGravity;` - Create rigid body
+ * - `DestroyBody:id;` - Remove rigid body
+ * - `SetPosition:id:x,y,z;` - Set body position
+ * - `SetRotation:id:rx,ry,rz;` - Set body rotation
+ * - `SetVelocity:id:vx,vy,vz;` - Set linear velocity
+ * - `ApplyForce:id,fx,fy,fz;` - Apply force to body
+ * - `ApplyImpulse:id,ix,iy,iz;` - Apply impulse to body
+ * - `SetAngularFactor:id:x,y,z;` - Constrain rotation axes
+ * - `SetMass:id,mass;` - Update body mass
+ * - `SetFriction:id,friction;` - Update friction coefficient
+ * 
+ * @section channels_pub Published Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `Collision` | "id1:id2" | Collision between two bodies |
+ * | `PhysicUpdate` | Transform data | Body transform updates |
+ * 
+ * @see docs/CHANNELS.md for complete channel reference
+ */
+
 #pragma once
 
 #include "../IPhysicEngine.hpp"

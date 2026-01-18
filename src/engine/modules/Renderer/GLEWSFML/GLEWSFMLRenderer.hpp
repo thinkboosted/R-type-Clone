@@ -1,3 +1,35 @@
+/**
+ * @file GLEWSFMLRenderer.hpp
+ * @brief OpenGL/GLEW-based 3D renderer module
+ * 
+ * @details Renders 3D scenes using OpenGL with GLEW for extension loading.
+ * Manages render objects, cameras, lights, and particle systems.
+ * 
+ * @section channels_sub Subscribed Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `RenderEntityCommand` | Command string | Entity rendering commands |
+ * | `WindowResized` | "width,height" | Handle window resize |
+ * 
+ * @section render_commands RenderEntityCommand Formats
+ * - `CreateEntity:mesh:id` - Create entity with mesh
+ * - `CreateEntity:mesh:texture:id` - Create entity with mesh and texture
+ * - `SetPosition:id,x,y,z` - Set entity position
+ * - `SetRotation:id,rx,ry,rz` - Set entity rotation
+ * - `SetScale:id,sx,sy,sz` - Set entity scale
+ * - `SetColor:id,r,g,b` - Set entity color
+ * - `SetTexture:id:path` - Set entity texture
+ * - `SetActiveCamera:id` - Set active camera
+ * - `CreateParticleGenerator:params` - Create particle system
+ * 
+ * @section channels_pub Published Channels
+ * | Channel | Payload | Description |
+ * |---------|---------|-------------|
+ * | `ImageRendered` | Raw pixel data | Frame ready for display |
+ * 
+ * @see docs/CHANNELS.md for complete channel reference
+ */
+
 #pragma once
 
 #include <GL/glew.h>
