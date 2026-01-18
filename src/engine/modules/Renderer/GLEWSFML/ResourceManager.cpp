@@ -215,6 +215,9 @@ namespace rtypeEngine {
 #ifdef _WIN32
                     if (oldDC && oldContext)
                         wglMakeCurrent(oldDC, oldContext);
+#else
+                    if (display && oldContext)
+                        glXMakeCurrent(display, oldDrawable, oldContext);
 #endif
                     return 0;
                 }
