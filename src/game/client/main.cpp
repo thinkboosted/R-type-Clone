@@ -38,11 +38,10 @@ int main(int argc, char **argv) {
     app.run();
     std::cout << "Rtype Client closed." << std::endl;
   } catch (const std::exception &e) {
-    std::cout << "CRITICAL ERROR CAUGHT IN MAIN: " << e.what() << std::endl;
-    std::cerr << "Error: " << e.what() << std::endl;
+    std::cerr << "CRITICAL ERROR CAUGHT IN MAIN: " << e.what() << std::endl;
     return 1;
   } catch (...) {
-    std::cout << "UNKNOWN CRITICAL ERROR CAUGHT IN MAIN" << std::endl;
+    std::cerr << "UNKNOWN CRITICAL ERROR CAUGHT IN MAIN" << std::endl;
     return 1;
   }
   return 0;
