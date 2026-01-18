@@ -2,6 +2,10 @@
 add_library(BulletPhysicEngine SHARED
     BulletPhysicEngine.cpp
     BulletPhysicEngine.hpp
+    BulletWorld.cpp
+    BulletWorld.hpp
+    BulletBodyManager.cpp
+    BulletBodyManager.hpp
     ../IPhysicEngine.hpp
     ../../AModule.hpp
     ../../AModule.cpp
