@@ -188,11 +188,8 @@ void AApplication::run() {
   }
 
   while (_running) {
-    std::cout << "[D] Loop" << std::endl; 
     processMessages();
-    std::cout << "[D] PM Done" << std::endl;
     loop();
-    std::cout << "[D] Loop Done" << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
