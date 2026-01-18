@@ -26,22 +26,15 @@ namespace rtypeEngine {
 
 BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
     : IPhysicEngine(pubEndpoint, subEndpoint),
-      _collisionConfiguration(nullptr),
-      _dispatcher(nullptr),
-      _overlappingPairCache(nullptr),
-      _solver(nullptr),
-      _dynamicsWorld(nullptr) {}
+      _bulletWorld(nullptr),
+      _bodyManager(nullptr) {}
 
 void BulletPhysicEngine::init() {
-    _collisionConfiguration = new btDefaultCollisionConfiguration();
-    _dispatcher = new btCollisionDispatcher(_collisionConfiguration);
-    _overlappingPairCache = new btDbvtBroadphase();
-    _solver = new btSequentialImpulseConstraintSolver;
-    _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
+    _bulletWorld = new BulletWorld();
+    _bulletWorld->init();
+    _bodyManager = new BulletBodyManager(_bulletWorld->getWorld());
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
-    // Need to be changed in lua
-    _dynamicsWorld->setGravity(btVector3(0, 0, 0));
 
     subscribe("PhysicCommand", [this](const std::string& msg) {
         this->onPhysicCommand(msg);
@@ -51,26 +44,14 @@ void BulletPhysicEngine::init() {
 }
 
 void BulletPhysicEngine::cleanup() {
-    for (auto& pair : _bodies) {
-        _dynamicsWorld->removeRigidBody(pair.second);
-        delete pair.second->getMotionState();
-        delete pair.second->getCollisionShape();
-        delete pair.second;
-    }
-    _bodies.clear();
-    _bodyIds.clear();
-
-    if (_dynamicsWorld) { delete _dynamicsWorld; _dynamicsWorld = nullptr; }
-    if (_solver) { delete _solver; _solver = nullptr; }
-    if (_overlappingPairCache) { delete _overlappingPairCache; _overlappingPairCache = nullptr; }
-    if (_dispatcher) { delete _dispatcher; _dispatcher = nullptr; }
-    if (_collisionConfiguration) { delete _collisionConfiguration; _collisionConfiguration = nullptr; }
+    if (_bodyManager) { delete _bodyManager; _bodyManager = nullptr; }
+    if (_bulletWorld) { delete _bulletWorld; _bulletWorld = nullptr; }
 }
 
 void BulletPhysicEngine::loop() {
     static int heartbeat = 0;
-    if (++heartbeat % 60 == 0) {
-        std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodies.size() << std::endl;
+    if (++heartbeat % 60 == 0 && _bodyManager) {
+        std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodyManager->getBodies().size() << std::endl;
     }
 
     stepSimulation();
@@ -79,7 +60,7 @@ void BulletPhysicEngine::loop() {
 }
 
 void BulletPhysicEngine::stepSimulation() {
-    if (!_dynamicsWorld) return;
+    if (!_bulletWorld) return;
 
     auto currentTime = std::chrono::high_resolution_clock::now();
     std::chrono::duration<float> elapsedTime = currentTime - _lastFrameTime;
@@ -95,18 +76,23 @@ void BulletPhysicEngine::stepSimulation() {
     const float fixedTimeStep = 1.0f / 60.0f;
 
     while (_timeAccumulator >= fixedTimeStep) {
-        _dynamicsWorld->stepSimulation(fixedTimeStep, 10);
+        // Calling step with timeStep=fixedTimeStep, maxSubSteps=0 (since we loop manually)
+        // Or just let bullet handle it?
+        // _dynamicsWorld->stepSimulation(fixedTimeStep, 10) takes timeStep.
+        _bulletWorld->step(fixedTimeStep, 10);
         _timeAccumulator -= fixedTimeStep;
     }
 }
 
 void BulletPhysicEngine::checkCollisions() {
-    if (!_dispatcher) return;
+    if (!_bulletWorld || !_bodyManager) return;
+    btCollisionDispatcher* dispatcher = _bulletWorld->getDispatcher();
+    if (!dispatcher) return;
 
-    int numManifolds = _dispatcher->getNumManifolds();
+    int numManifolds = dispatcher->getNumManifolds();
     for (int i = 0; i < numManifolds; i++) {
-        if (i >= _dispatcher->getNumManifolds()) break;
-        btPersistentManifold* contactManifold = _dispatcher->getManifoldByIndexInternal(i);
+        if (i >= dispatcher->getNumManifolds()) break;
+        btPersistentManifold* contactManifold = dispatcher->getManifoldByIndexInternal(i);
         if (!contactManifold) continue;
 
         const btCollisionObject* obA = contactManifold->getBody0();
@@ -120,12 +106,12 @@ void BulletPhysicEngine::checkCollisions() {
                 const btRigidBody* bodyB = btRigidBody::upcast(obB);
 
                 if (bodyA && bodyB) {
-                    auto itA = _bodyIds.find(const_cast<btRigidBody*>(bodyA));
-                    auto itB = _bodyIds.find(const_cast<btRigidBody*>(bodyB));
+                    std::string idA = _bodyManager->getBodyId(const_cast<btRigidBody*>(bodyA));
+                    std::string idB = _bodyManager->getBodyId(const_cast<btRigidBody*>(bodyB));
 
-                    if (itA != _bodyIds.end() && itB != _bodyIds.end()) {
+                    if (!idA.empty() && !idB.empty()) {
                         std::stringstream ss;
-                        ss << "Collision:" << itA->second << ":" << itB->second << ";";
+                        ss << "Collision:" << idA << ":" << idB << ";";
                         sendMessage("PhysicEvent", ss.str());
                     }
                 }
@@ -140,7 +126,10 @@ void BulletPhysicEngine::sendUpdates() {
     std::stringstream batchStream;
     bool hasUpdates = false;
 
-    for (auto& pair : _bodies) {
+    if (!_bodyManager) return;
+    const auto& bodies = _bodyManager->getBodies();
+
+    for (auto& pair : bodies) {
         btTransform trans;
         if (pair.second && pair.second->getMotionState()) {
             pair.second->getMotionState()->getWorldTransform(trans);
@@ -381,112 +370,41 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
 }
 
 void BulletPhysicEngine::destroyBody(const std::string& id) {
-    auto it = _bodies.find(id);
-    if (it != _bodies.end()) {
-        btRigidBody* body = it->second;
-        _dynamicsWorld->removeRigidBody(body);
-        delete body->getMotionState();
-        delete body->getCollisionShape();
-        delete body;
-        _bodyIds.erase(body);
-        _bodies.erase(it);
-    }
+    if (_bodyManager) _bodyManager->destroyBody(id);
 }
 
 void BulletPhysicEngine::createBody(const std::string& id, const std::string& type, const std::vector<float>& params) {
-    btCollisionShape* shape = nullptr;
-    btScalar mass(1.f);
-    btScalar friction(0.5f);
-
-    std::string typeLower = type;
-    std::transform(typeLower.begin(), typeLower.end(), typeLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-    if (typeLower == "box" && params.size() >= 3) {
-        shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
-        if (params.size() >= 4) mass = params[3];
-        if (params.size() >= 5) friction = params[4];
-    } else if (typeLower == "sphere" && params.size() >= 1) {
-        shape = new btSphereShape(params[0]);
-        if (params.size() >= 2) mass = params[1];
-        if (params.size() >= 3) friction = params[2];
-    } else {
-        std::cerr << "[Bullet] ERROR: CreateBody unknown type or insufficient params for '" << id << "' (type='" << type << "', params=" << params.size() << ")" << std::endl;
-        return;
-    }
-
-    if (!shape) {
-        std::cerr << "[Bullet] ERROR: CreateBody failed to create shape for '" << id << "'" << std::endl;
-        return;
-    }
-
-    btTransform startTransform;
-    startTransform.setIdentity();
-    startTransform.setOrigin(btVector3(0, 0, 0));
-
-    bool isDynamic = (mass != 0.f);
-    btVector3 localInertia(0, 0, 0);
-    if (isDynamic) {
-        shape->calculateLocalInertia(mass, localInertia);
-    }
-
-    btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
-    btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, shape, localInertia);
-    rbInfo.m_friction = friction;
-    btRigidBody* body = new btRigidBody(rbInfo);
-
-    _dynamicsWorld->addRigidBody(body);
-    _bodies[id] = body;
-    _bodyIds[body] = id;
-    std::cout << "[Bullet] Created Body for ID: " << id << " (Mass: " << mass << ", Friction: " << friction << ")" << std::endl;
+    if (_bodyManager) _bodyManager->createBody(id, type, params);
 }
 
 void BulletPhysicEngine::applyForce(const std::string& id, const std::vector<float>& force) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->applyCentralForce(btVector3(force[0], force[1], force[2]));
-    }
+    if (_bodyManager) _bodyManager->applyForce(id, force);
 }
 
 void BulletPhysicEngine::setTransform(const std::string& id, const std::vector<float>& pos, const std::vector<float>& rot) {
-    if (_bodies.find(id) != _bodies.end()) {
-        btRigidBody* body = _bodies[id];
-        btTransform trans;
-        trans.setIdentity();
-        trans.setOrigin(btVector3(pos[0], pos[1], pos[2]));
-
-        float degToRad = static_cast<float>(M_PI) / 180.0f;
-        btQuaternion quat;
-        // setEulerZYX expects Yaw (Y), Pitch (X), Roll (Z) in radians
-        // rot is rx (X), ry (Y), rz (Z) in degrees
-        quat.setEulerZYX(rot[1] * degToRad, rot[0] * degToRad, rot[2] * degToRad);
-        trans.setRotation(quat);
-
-        body->setWorldTransform(trans);
-        if (body->getMotionState()) {
-            body->getMotionState()->setWorldTransform(trans);
-        }
-        body->activate(true);
-    }
+    if (_bodyManager) _bodyManager->setTransform(id, pos, rot);
 }
 
 void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::vector<float>& direction) {
-    if (!_dynamicsWorld) return;
+    if (!_bulletWorld || !_bodyManager) return;
+    btDiscreteDynamicsWorld* world = _bulletWorld->getWorld();
+    if (!world) return;
 
     btVector3 from(origin[0], origin[1], origin[2]);
     btVector3 to = from + btVector3(direction[0], direction[1], direction[2]) * 1000.0f; // Ray length 1000
 
     btCollisionWorld::ClosestRayResultCallback rayCallback(from, to);
-    _dynamicsWorld->rayTest(from, to, rayCallback);
+    world->rayTest(from, to, rayCallback);
 
     if (rayCallback.hasHit()) {
         const btRigidBody* body = btRigidBody::upcast(rayCallback.m_collisionObject);
         if (body) {
-            auto it = _bodyIds.find(const_cast<btRigidBody*>(body));
-            if (it != _bodyIds.end()) {
+            std::string id = _bodyManager->getBodyId(const_cast<btRigidBody*>(body));
+            if (!id.empty()) {
                 std::stringstream ss;
                 // RaycastHit:id:distance
                 float dist = (rayCallback.m_hitPointWorld - from).length();
-                ss << "RaycastHit:" << it->second << ":" << dist << ";";
+                ss << "RaycastHit:" << id << ":" << dist << ";";
                 sendMessage("PhysicEvent", ss.str());
             }
         }
@@ -494,72 +412,41 @@ void BulletPhysicEngine::raycast(const std::vector<float>& origin, const std::ve
 }
 
 void BulletPhysicEngine::setLinearVelocity(const std::string& id, const std::vector<float>& vel) {
-    auto it = _bodies.find(id);
-    if (it == _bodies.end()) {
-        std::cerr << "[Bullet] ERROR: SetLinearVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
-        return;
-    }
-    it->second->activate(true);
-    it->second->setLinearVelocity(btVector3(vel[0], vel[1], vel[2]));
+    if (_bodyManager) _bodyManager->setLinearVelocity(id, vel);
 }
 
 void BulletPhysicEngine::setAngularVelocity(const std::string& id, const std::vector<float>& vel) {
-    auto it = _bodies.find(id);
-    if (it == _bodies.end()) {
-        std::cerr << "[Bullet] ERROR: SetAngularVelocity failed. Entity ID '" << id << "' does not exist in Physics World." << std::endl;
-        return;
-    }
-    it->second->activate(true);
-    it->second->setAngularVelocity(btVector3(vel[0], vel[1], vel[2]));
+    if (_bodyManager) _bodyManager->setAngularVelocity(id, vel);
 }
 
 void BulletPhysicEngine::setMass(const std::string& id, float mass) {
-    if (_bodies.find(id) != _bodies.end()) {
-        btRigidBody* body = _bodies[id];
-        btVector3 localInertia(0, 0, 0);
-        if (mass != 0.f) {
-            body->getCollisionShape()->calculateLocalInertia(mass, localInertia);
-        }
-        body->setMassProps(mass, localInertia);
-        body->updateInertiaTensor();
-        body->activate(true);
-    }
+    if (_bodyManager) _bodyManager->setMass(id, mass);
 }
 
 void BulletPhysicEngine::setFriction(const std::string& id, float friction) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->setFriction(friction);
-        _bodies[id]->activate(true);
-    }
+    if (_bodyManager) _bodyManager->setFriction(id, friction);
 }
 
 void BulletPhysicEngine::setVelocityXZ(const std::string& id, float vx, float vz) {
-    if (_bodies.find(id) != _bodies.end()) {
-        btRigidBody* body = _bodies[id];
-        body->activate(true);
-        btVector3 vel = body->getLinearVelocity();
-        vel.setX(vx);
-        vel.setZ(vz);
-        body->setLinearVelocity(vel);
-    }
+    if (_bodyManager) _bodyManager->setVelocityXZ(id, vx, vz);
 }
 
 void BulletPhysicEngine::applyImpulse(const std::string& id, const std::vector<float>& impulse) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->applyCentralImpulse(btVector3(impulse[0], impulse[1], impulse[2]));
-    }
+    if (_bodyManager) _bodyManager->applyImpulse(id, impulse);
 }
 
 void BulletPhysicEngine::setAngularFactor(const std::string& id, const std::vector<float>& factor) {
-    if (_bodies.find(id) != _bodies.end()) {
-        _bodies[id]->activate(true);
-        _bodies[id]->setAngularFactor(btVector3(factor[0], factor[1], factor[2]));
-    }
+    if (_bodyManager) _bodyManager->setAngularFactor(id, factor);
 }
 
 } // namespace rtypeEngine
 
-extern "C" rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
+#ifdef _WIN32
+    #define BULLET_PHYSIC_ENGINE_EXPORT __declspec(dllexport)
+#else
+    #define BULLET_PHYSIC_ENGINE_EXPORT
+#endif
+
+extern "C" BULLET_PHYSIC_ENGINE_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::BulletPhysicEngine(pubEndpoint, subEndpoint);
 }

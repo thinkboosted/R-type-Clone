@@ -153,11 +153,13 @@ void SFMLWindowManager::drawPixels(const std::vector<uint32_t> &pixels, const Ve
         return;
     }
 
+    _window->setActive(true);
     _texture.update(reinterpret_cast<const std::uint8_t*>(pixels.data()));
 
     _window->clear();
     _window->draw(_sprite);
     _window->display();
+    _window->setActive(false);
 
 }
 

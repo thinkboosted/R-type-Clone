@@ -3,9 +3,9 @@
 #include <msgpack.hpp>
 
 #ifdef _WIN32
-#include <winsock2.h>
+  #include <winsock2.h>
 #else
-#include <arpa/inet.h>
+  #include <arpa/inet.h>
 #endif
 
 #include <algorithm>
@@ -899,9 +899,15 @@ std::vector<NetworkEnvelope> NetworkManager::getAllMessages() {
   return messages;
 }
 
-extern "C" rtypeEngine::IModule *createModule(const char *pubEndpoint,
-                                              const char *subEndpoint) {
-  return new NetworkManager(pubEndpoint, subEndpoint);
-}
-
 } // namespace rtypeEngine
+
+#ifdef _WIN32
+    #define NETWORK_MANAGER_EXPORT __declspec(dllexport)
+#else
+    #define NETWORK_MANAGER_EXPORT
+#endif
+
+extern "C" NETWORK_MANAGER_EXPORT rtypeEngine::IModule *createModule(const char *pubEndpoint,
+                                              const char *subEndpoint) {
+  return new rtypeEngine::NetworkManager(pubEndpoint, subEndpoint);
+}
