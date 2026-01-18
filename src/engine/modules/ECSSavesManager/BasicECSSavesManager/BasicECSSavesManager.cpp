@@ -1,10 +1,5 @@
 #include "BasicECSSavesManager.hpp"
 
-#ifdef _WIN32
-    #define BASIC_ECS_SAVES_EXPORT __declspec(dllexport)
-#else
-    #define BASIC_ECS_SAVES_EXPORT
-#endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -151,6 +146,13 @@ namespace rtypeEngine {
     }
 
 }
+
+
+#ifdef _WIN32
+    #define BASIC_ECS_SAVES_EXPORT __declspec(dllexport)
+#else
+    #define BASIC_ECS_SAVES_EXPORT
+#endif
 
 extern "C" BASIC_ECS_SAVES_EXPORT rtypeEngine::IModule* createModule(const char* pubEndpoint, const char* subEndpoint) {
     return new rtypeEngine::ECSSavesManager(pubEndpoint, subEndpoint);

@@ -2,6 +2,11 @@
 add_library(GLEWSFMLRenderer SHARED
     GLEWSFMLRenderer.cpp
     GLEWSFMLRenderer.hpp
+    RenderStructs.hpp
+    ResourceManager.cpp
+    ResourceManager.hpp
+    ParticleSystem.cpp
+    ParticleSystem.hpp
     ../I3DRenderer.hpp
     ../../IModule.hpp
     ../../AModule.hpp

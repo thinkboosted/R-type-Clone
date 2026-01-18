@@ -5,6 +5,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "BulletWorld.hpp"
+#include "BulletBodyManager.hpp"
 
 namespace rtypeEngine {
 
@@ -37,14 +39,8 @@ class BulletPhysicEngine : public IPhysicEngine {
     void sendUpdates();
     void checkCollisions();
 
-    btDefaultCollisionConfiguration* _collisionConfiguration;
-    btCollisionDispatcher* _dispatcher;
-    btBroadphaseInterface* _overlappingPairCache;
-    btSequentialImpulseConstraintSolver* _solver;
-    btDiscreteDynamicsWorld* _dynamicsWorld;
-
-    std::map<std::string, btRigidBody*> _bodies;
-    std::map<btRigidBody*, std::string> _bodyIds;
+    BulletWorld* _bulletWorld;
+    BulletBodyManager* _bodyManager;
 
     std::chrono::high_resolution_clock::time_point _lastFrameTime;
     float _timeAccumulator = 0.0f;

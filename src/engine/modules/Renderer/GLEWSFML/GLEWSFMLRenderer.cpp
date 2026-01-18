@@ -1,8 +1,3 @@
-#ifdef _WIN32
-#define GLEW_RENDERER_EXPORT __declspec(dllexport)
-#else
-#define GLEW_RENDERER_EXPORT
-#endif
 
 #include "GLEWSFMLRenderer.hpp"
 
@@ -64,7 +59,8 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
           _lightPos{0.0f, 5.0f, 0.0f},
           _lightColor{1.0f, 1.0f, 1.0f},
           _lightIntensity(1.0f),
-          _lastFrameTime(std::chrono::steady_clock::now())
+          _lastFrameTime(std::chrono::steady_clock::now()),
+          _resourceManager(_hdc, _hwnd, _hglrc)
     {
         _pixelBuffer.resize(_resolution.x * _resolution.y);
     }
@@ -236,10 +232,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.color = {1.0f, 0.5f, 0.2f};
                         _renderObjects[id] = obj;
 
-                        if (_meshCache.find(obj.meshPath) == _meshCache.end())
-                        {
-                            loadMesh(obj.meshPath);
-                        }
+                        _resourceManager.loadMesh(obj.meshPath);
                     }
                 }
             }
@@ -273,7 +266,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.scale = {1, 1, 1};
                         obj.color = {1.0f, 1.0f, 1.0f};
 
-                        obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
+                        obj.textureID = _resourceManager.createTextTexture(obj.text, obj.fontPath, obj.fontSize, obj.color);
                         _renderObjects[id] = obj;
                     }
                     catch (const std::exception &e)
@@ -290,22 +283,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posSize, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 4 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -330,12 +323,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string params = data.substr(split + 1);
-                    
+
                     std::stringstream pss(params);
                     std::string val;
                     std::vector<float> v;
                     while(std::getline(pss, val, ',')) v.push_back(safeParseFloat(val));
-                    
+
                     if (v.size() >= 4 && _renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
@@ -352,7 +345,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float alpha = safeParseFloat(data.substr(split + 1), 1.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         // Clamp alpha between 0.0 and 1.0
@@ -368,7 +361,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     int zorder = safeParseInt(data.substr(split + 1), 0);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         _renderObjects[id].zOrder = zorder;
@@ -383,23 +376,23 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posRadius, colorStr, isScreenSpaceStr, segmentsStr;
                     std::getline(ss2, posRadius, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr, ':');
                     std::getline(ss2, segmentsStr);
-                    
+
                     std::stringstream pss(posRadius);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 3 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -426,22 +419,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posSize, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 5 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -470,22 +463,22 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string posStr, colorStr, isScreenSpaceStr;
                     std::getline(ss2, posStr, ':');
                     std::getline(ss2, colorStr, ':');
                     std::getline(ss2, isScreenSpaceStr);
-                    
+
                     std::stringstream pss(posStr);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     std::stringstream css(colorStr);
                     std::vector<float> col;
                     while(std::getline(css, val, ',')) col.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 5 && col.size() >= 3)
                     {
                         RenderObject obj;
@@ -510,19 +503,19 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string texturePath, posSize, isScreenSpaceStr, zOrderStr;
                     std::getline(ss2, texturePath, ':');
                     std::getline(ss2, posSize, ':');
                     std::getline(ss2, isScreenSpaceStr, ':');
                     std::getline(ss2, zOrderStr);
-                    
+
                     std::stringstream pss(posSize);
                     std::string val;
                     std::vector<float> pos;
                     while(std::getline(pss, val, ',')) pos.push_back(safeParseFloat(val));
-                    
+
                     if (pos.size() >= 4)
                     {
                         RenderObject obj;
@@ -547,20 +540,20 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     std::string rest = data.substr(split + 1);
-                    
+
                     std::stringstream ss2(rest);
                     std::string enabledStr, widthStr, colorStr;
                     std::getline(ss2, enabledStr, ':');
                     std::getline(ss2, widthStr, ':');
                     std::getline(ss2, colorStr);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
                         obj.outlined = (enabledStr == "1" || enabledStr == "true");
                         float rawWidth = safeParseFloat(widthStr, 2.0f);
                         obj.outlineWidth = std::max(1.0f, std::min(rawWidth, 50.0f));
-                        
+
                         std::stringstream css(colorStr);
                         std::string val;
                         std::vector<float> col;
@@ -580,7 +573,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float radius = safeParseFloat(data.substr(split + 1), 10.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         _renderObjects[id].radius = radius;
@@ -595,7 +588,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     std::string id = data.substr(0, split);
                     float radius = safeParseFloat(data.substr(split + 1), 5.0f);
-                    
+
                     if (_renderObjects.find(id) != _renderObjects.end())
                     {
                         auto& obj = _renderObjects[id];
@@ -619,7 +612,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.text = newText;
                         if (obj.textureID) glDeleteTextures(1, &obj.textureID);
                         // Always create white texture so glColor3f in render() can tint it correctly
-                        obj.textureID = createTextTexture(obj.text, obj.fontPath, obj.fontSize, {1.0f, 1.0f, 1.0f});
+                        obj.textureID = _resourceManager.createTextTexture(obj.text, obj.fontPath, obj.fontSize, {1.0f, 1.0f, 1.0f});
                     }
                 }
             }
@@ -640,9 +633,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         _renderObjects[id].position = {v[0], v[1], v[2]};
                         handled = true;
                     }
-                    if (_particleGenerators.find(id) != _particleGenerators.end())
+                    if (_particleSystem.hasGenerator(id))
                     {
-                        _particleGenerators[id].position = {v[0], v[1], v[2]};
+                        _particleSystem.setGeneratorPosition(id, {v[0], v[1], v[2]});
                         handled = true;
                     }
 
@@ -669,9 +662,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         _renderObjects[id].rotation = {v[0], v[1], v[2]};
                         handled = true;
                     }
-                    if (_particleGenerators.find(id) != _particleGenerators.end())
+                    if (_particleSystem.hasGenerator(id))
                     {
-                        _particleGenerators[id].rotation = {v[0], v[1], v[2]};
+                        _particleSystem.setGeneratorRotation(id, {v[0], v[1], v[2]});
                         handled = true;
                     }
 
@@ -743,9 +736,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 {
                     _renderObjects.erase(data);
                 }
-                if (_particleGenerators.find(data) != _particleGenerators.end())
+                if (_particleSystem.hasGenerator(data))
                 {
-                    _particleGenerators.erase(data);
+                    _particleSystem.destroyGenerator(data);
                 }
             }
             else if (command == "CreateParticleGenerator")
@@ -789,7 +782,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                          // If we didn't get enough values, maybe it's the simpler format?
                          // Fallback defaults?
                     }
-                    _particleGenerators[id] = gen;
+                    _particleSystem.createGenerator(id, gen);
                 }
             }
             else if (command == "UpdateParticleGenerator")
@@ -801,9 +794,9 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     std::string id = data.substr(0, split);
                     std::string params = data.substr(split + 1);
 
-                    if (_particleGenerators.find(id) != _particleGenerators.end())
+                    if (_particleSystem.hasGenerator(id))
                     {
-                        auto& gen = _particleGenerators[id];
+                        auto& gen = _particleSystem.getGenerator(id);
                         std::stringstream pss(params);
                         std::string val;
                         std::vector<float> v;
@@ -829,273 +822,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 }
 }
 
-    void GLEWSFMLRenderer::loadMesh(const std::string &path)
-    {
-        if (path.empty())
-            return;
-        std::ifstream file(path);
-        if (!file.is_open())
-        {
-            std::cerr << "Failed to open mesh file: " << path << std::endl;
-            return;
-        }
 
-        MeshData meshData;
-        std::string line;
-        std::vector<Vector3f> tempVertices;
-        std::vector<Vector2f> tempTextures;
-
-        while (std::getline(file, line))
-        {
-            std::stringstream ss(line);
-            std::string prefix;
-            ss >> prefix;
-
-            if (prefix == "v")
-            {
-                Vector3f v;
-                ss >> v.x >> v.y >> v.z;
-                tempVertices.push_back(v);
-            }
-            else if (prefix == "f")
-            {
-                std::string vertexStr;
-                std::vector<unsigned int> faceIndices;
-                std::vector<unsigned int> faceUVIndices;
-                while (ss >> vertexStr)
-                {
-                    size_t slashPos = vertexStr.find('/');
-                    size_t secondSlashPos = vertexStr.find('/', slashPos + 1);
-
-                    std::string indexStr = (slashPos != std::string::npos) ? vertexStr.substr(0, slashPos) : vertexStr;
-                    std::string uvIndexStr;
-
-                    if (slashPos != std::string::npos)
-                    {
-                        if (secondSlashPos != std::string::npos)
-                        {
-                            uvIndexStr = vertexStr.substr(slashPos + 1, secondSlashPos - slashPos - 1);
-                        }
-                        else
-                        {
-                            uvIndexStr = vertexStr.substr(slashPos + 1);
-                        }
-                    }
-
-                    if (!indexStr.empty())
-                    {
-                        try
-                        {
-                            faceIndices.push_back(std::stoi(indexStr) - 1);
-                            if (!uvIndexStr.empty())
-                            {
-                                faceUVIndices.push_back(std::stoi(uvIndexStr) - 1);
-                            }
-                        }
-                        catch (...)
-                        {
-                            // Ignore invalid indices
-                        }
-                    }
-                }
-
-                if (faceIndices.size() >= 3)
-                {
-                    meshData.indices.push_back(faceIndices[0]);
-                    meshData.indices.push_back(faceIndices[1]);
-                    meshData.indices.push_back(faceIndices[2]);
-
-                    if (faceIndices.size() == 4)
-                    {
-                        meshData.indices.push_back(faceIndices[0]);
-                        meshData.indices.push_back(faceIndices[2]);
-                        meshData.indices.push_back(faceIndices[3]);
-                    }
-                }
-
-                if (faceUVIndices.size() >= 3)
-                {
-                    meshData._textureIndices.push_back(faceUVIndices[0]);
-                    meshData._textureIndices.push_back(faceUVIndices[1]);
-                    meshData._textureIndices.push_back(faceUVIndices[2]);
-
-                    if (faceUVIndices.size() == 4)
-                    {
-                        meshData._textureIndices.push_back(faceUVIndices[0]);
-                        meshData._textureIndices.push_back(faceUVIndices[2]);
-                        meshData._textureIndices.push_back(faceUVIndices[3]);
-                    }
-                }
-            }
-            else if (prefix == "vt")
-            {
-                Vector2f t;
-                ss >> t.x >> t.y;
-                tempTextures.push_back(t);
-            }
-        }
-
-        for (const auto &v : tempVertices)
-        {
-            meshData.vertices.push_back(v.x);
-            meshData.vertices.push_back(v.y);
-            meshData.vertices.push_back(v.z);
-        }
-
-        for (const auto &v : tempTextures)
-        {
-            meshData.uvs.push_back(v.x);
-            meshData.uvs.push_back(v.y);
-        }
-        std::cout << "[GLEWSFMLRenderer] Loaded mesh " << path << " with " << meshData.vertices.size() / 3 << " vertices, " << meshData.uvs.size() / 2 << " UVs, and " << meshData._textureIndices.size() << " UV indices." << std::endl; // debug
-        _meshCache[path] = meshData;
-    }
-
-    GLuint GLEWSFMLRenderer::loadTexture(const std::string &path)
-    {
-        if (_textureCache.find(path) != _textureCache.end())
-        {
-            return _textureCache[path];
-        }
-
-        sf::Image image;
-        if (!image.loadFromFile(path))
-        {
-            std::cerr << "Failed to load texture: " << path << std::endl;
-            return 0;
-        }
-
-        GLuint textureID;
-        glGenTextures(1, &textureID);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.getSize().x, image.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.getPixelsPtr());
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        _textureCache[path] = textureID;
-        return textureID;
-    }
-
-    GLuint GLEWSFMLRenderer::createTextTexture(const std::string &text, const std::string &fontPath, unsigned int fontSize, Vector3f color)
-    {
-// Save current OpenGL context
-#ifdef _WIN32
-        HDC oldDC = wglGetCurrentDC();
-        HGLRC oldContext = wglGetCurrentContext();
-#else
-        Display* display = (Display*)_hdc;
-        GLXContext oldContext = glXGetCurrentContext();
-        GLXDrawable oldDrawable = glXGetCurrentDrawable();
-#endif
-
-        sf::Image textImage;
-        bool success = false;
-
-        // Scope for SFML rendering to ensure resources are cleaned up before context restore
-        {
-            if (_fontCache.find(fontPath) == _fontCache.end())
-            {
-                sf::Font font;
-                if (!font.openFromFile(fontPath))
-                {
-                    std::cerr << "Failed to load font: " << fontPath << std::endl;
-// Restore context before returning
-#ifdef _WIN32
-                    if (oldDC && oldContext)
-                        wglMakeCurrent(oldDC, oldContext);
-#endif
-                    return 0;
-                }
-                _fontCache[fontPath] = font;
-            }
-
-            sf::Text sfText(_fontCache[fontPath]);
-            sfText.setString(text);
-            sfText.setCharacterSize(fontSize);
-            sfText.setFillColor(sf::Color(color.x * 255, color.y * 255, color.z * 255));
-
-            sf::FloatRect bounds = sfText.getLocalBounds();
-            unsigned int width = (unsigned int)std::ceil(bounds.size.x + bounds.position.x);
-            unsigned int height = (unsigned int)std::ceil(bounds.size.y + bounds.position.y);
-
-            if (width == 0)
-                width = 1;
-            if (height == 0)
-                height = 1;
-
-            sf::RenderTexture renderTexture;
-            if (renderTexture.resize({width, height}))
-            {
-                renderTexture.clear(sf::Color::Transparent);
-                renderTexture.draw(sfText);
-                renderTexture.display();
-                textImage = renderTexture.getTexture().copyToImage();
-                success = true;
-            }
-        }
-
-// Activate our renderer context to ensure the texture is created in the correct context
-#ifdef _WIN32
-        if (_hglrc && _hdc)
-        {
-            wglMakeCurrent((HDC)_hdc, (HGLRC)_hglrc);
-        }
-#else
-        // On Linux, make our GL context current for texture creation
-        if (_hdc && _hwnd && _hglrc)
-        {
-            glXMakeCurrent(display, (Window)_hwnd, (GLXContext)_hglrc);
-        }
-#endif
-
-        if (!success)
-        {
-// Restore original context if we failed
-#ifdef _WIN32
-            if (oldDC && oldContext)
-                wglMakeCurrent(oldDC, oldContext);
-            else
-                wglMakeCurrent(NULL, NULL);
-#else
-            if (oldContext)
-                glXMakeCurrent(display, oldDrawable, oldContext);
-            else
-                glXMakeCurrent(display, None, NULL);
-#endif
-            return 0;
-        }
-
-        // Create texture in the main context
-        GLuint textureID;
-        glGenTextures(1, &textureID);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, textImage.getSize().x, textImage.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, textImage.getPixelsPtr());
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-// Restore original context
-#ifdef _WIN32
-        if (oldDC && oldContext)
-        {
-            wglMakeCurrent(oldDC, oldContext);
-        }
-        else
-        {
-            wglMakeCurrent(NULL, NULL);
-        }
-#else
-        // Restore context on Linux - release it so loop() can acquire it
-        glXMakeCurrent(display, None, NULL);
-#endif
-
-        return textureID;
-    }
     void GLEWSFMLRenderer::cleanup()
     {
         destroyFramebuffer();
@@ -1213,7 +940,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         float dt = std::chrono::duration<float>(now - _lastFrameTime).count();
         _lastFrameTime = now;
 
-        updateParticles(dt);
+        _particleSystem.update(dt);
 
         glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
         glViewport(0, 0, _resolution.x, _resolution.y);
@@ -1294,7 +1021,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 }
                 else
                 {
-                    tex = loadTexture(obj.texturePath);
+                    tex = _resourceManager.loadTexture(obj.texturePath);
                 }
 
                 if (tex)
@@ -1335,14 +1062,14 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glEnable(GL_LIGHTING); // Re-enable lighting
                 }
             }
-            else if (_meshCache.find(obj.meshPath) != _meshCache.end())
+            else if (const MeshData* meshPtr = _resourceManager.getMesh(obj.meshPath))
             {
-                const auto &mesh = _meshCache[obj.meshPath];
+                const auto &mesh = *meshPtr;
                 GLuint texID;
 
                 if (!obj.texturePath.empty())
                 {
-                    texID = loadTexture(obj.texturePath);
+                    texID = _resourceManager.loadTexture(obj.texturePath);
                     glDisable(GL_LIGHTING);
                     glEnable(GL_TEXTURE_2D);
                     glBindTexture(GL_TEXTURE_2D, texID);
@@ -1440,7 +1167,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             glPopMatrix();
         }
 
-        renderParticles();
+        _particleSystem.render();
 
         // HUD Rendering
         glMatrixMode(GL_PROJECTION);
@@ -1464,31 +1191,31 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 sortedHUD.push_back({pair.second.zOrder, &pair.second});
             }
         }
-        std::sort(sortedHUD.begin(), sortedHUD.end(), 
+        std::sort(sortedHUD.begin(), sortedHUD.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
         for (const auto &sortedPair : sortedHUD)
         {
             const auto &obj = *sortedPair.second;
-            
+
             // Render rectangles (button backgrounds, panels, etc.)
             if (obj.isRect)
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float x = obj.position.x;
                 float y = obj.position.y;
                 float w = obj.scale.x;  // width
                 float h = obj.scale.y;  // height
-                
+
                 glBegin(GL_QUADS);
                 glVertex2f(x, y);
                 glVertex2f(x + w, y);
                 glVertex2f(x + w, y + h);
                 glVertex2f(x, y + h);
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1508,12 +1235,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float cx = obj.position.x;
                 float cy = obj.position.y;
                 float r = obj.radius;
                 int segments = obj.segments;
-                
+
                 glBegin(GL_TRIANGLE_FAN);
                 glVertex2f(cx, cy);  // Center
                 for (int i = 0; i <= segments; i++)
@@ -1522,7 +1249,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glVertex2f(cx + r * cos(angle), cy + r * sin(angle));
                 }
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1543,7 +1270,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
             {
                 glDisable(GL_TEXTURE_2D);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 float x = obj.position.x;
                 float y = obj.position.y;
                 float w = obj.scale.x;
@@ -1551,7 +1278,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 float r = obj.cornerRadius;  // Already clamped when set
                 // Use user-provided segments when available, fallback to 8 for compatibility
                 int cornerSegments = (obj.segments > 0) ? obj.segments : 8;  // segments per corner
-                
+
                 // Draw central body (3 distinct quads to avoid overdraw/artifacts)
                 glBegin(GL_QUADS);
                 // Center vertical strip (top to bottom)
@@ -1607,7 +1334,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     glVertex2f(x + r + r * cos(angle), y + h - r + r * sin(angle));
                 }
                 glEnd();
-                
+
                 // Draw outline if enabled
                 if (obj.outlined)
                 {
@@ -1645,12 +1372,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 glDisable(GL_TEXTURE_2D);
                 glLineWidth(obj.lineWidth);
                 glColor4f(obj.color.x, obj.color.y, obj.color.z, obj.alpha);
-                
+
                 glBegin(GL_LINES);
                 glVertex2f(obj.position.x, obj.position.y);
                 glVertex2f(obj.endPosition.x, obj.endPosition.y);
                 glEnd();
-                
+
                 glLineWidth(1.0f);
             }
             // Render sprites and text
@@ -1663,7 +1390,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                 }
                 else
                 {
-                    tex = loadTexture(obj.texturePath);
+                    tex = _resourceManager.loadTexture(obj.texturePath);
                 }
 
                 if (tex)
@@ -1680,7 +1407,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                     // Use explicit scale if provided, otherwise use texture size
                     float w = (obj.scale.x > 0) ? obj.scale.x : (float)texW;
                     float h = (obj.scale.y > 0) ? obj.scale.y : (float)texH;
-                    
+
                     // For text, scale is typically 1.0, so use texture size
                     if (obj.isText)
                     {
@@ -1753,170 +1480,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         return _resolution;
     }
 
-    void GLEWSFMLRenderer::updateParticles(float dt)
-    {
-        static std::mt19937 rng(std::random_device{}());
-        static std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
 
-        for (auto &pair : _particleGenerators)
-        {
-            auto &gen = pair.second;
-
-            gen.accumulator += dt * gen.rate;
-            while (gen.accumulator > 1.0f)
-            {
-                gen.accumulator -= 1.0f;
-
-                Particle p;
-
-                // Calculate world position and direction based on entity transform
-                // Rotation order: Z, Y, X (matching Lua implementation)
-
-                float radX = gen.rotation.x * 3.14159f / 180.0f;
-                float radY = gen.rotation.y * 3.14159f / 180.0f;
-                float radZ = gen.rotation.z * 3.14159f / 180.0f;
-
-                float cx = cos(radX), sx = sin(radX);
-                float cy = cos(radY), sy = sin(radY);
-                float cz = cos(radZ), sz = sin(radZ);
-
-                // Rotate offset
-                float x = gen.offset.x;
-                float y = gen.offset.y;
-                float z = gen.offset.z;
-
-                // Z rotation
-                float x1 = x * cz - y * sz;
-                float y1 = x * sz + y * cz;
-                float z1 = z;
-
-                // Y rotation
-                float x2 = x1 * cy + z1 * sy;
-                float y2 = y1;
-                float z2 = -x1 * sy + z1 * cy;
-
-                // X rotation
-                float x3 = x2;
-                float y3 = y2 * cx - z2 * sx;
-                float z3 = y2 * sx + z2 * cx;
-
-                p.position = {gen.position.x + x3, gen.position.y + y3, gen.position.z + z3};
-
-                // Rotate direction
-                Vector3f dir = gen.direction;
-
-                // Z rotation
-                float dx1 = dir.x * cz - dir.y * sz;
-                float dy1 = dir.x * sz + dir.y * cz;
-                float dz1 = dir.z;
-
-                // Y rotation
-                float dx2 = dx1 * cy + dz1 * sy;
-                float dy2 = dy1;
-                float dz2 = -dx1 * sy + dz1 * cy;
-
-                // X rotation
-                float dx3 = dx2;
-                float dy3 = dy2 * cx - dz2 * sx;
-                float dz3 = dy2 * sx + dz2 * cx;
-
-                // Apply spread
-                dx3 += dist(rng) * gen.spread;
-                dy3 += dist(rng) * gen.spread;
-                dz3 += dist(rng) * gen.spread;
-
-                float len = sqrt(dx3 * dx3 + dy3 * dy3 + dz3 * dz3);
-                if (len > 0)
-                {
-                    dx3 /= len;
-                    dy3 /= len;
-                    dz3 /= len;
-                }
-
-                p.velocity = {dx3 * gen.speed, dy3 * gen.speed, dz3 * gen.speed};
-                p.life = gen.lifeTime;
-                p.maxLife = gen.lifeTime;
-                p.size = gen.size;
-                p.color = gen.color;
-
-                gen.particles.push_back(p);
-            }
-
-            for (auto it = gen.particles.begin(); it != gen.particles.end();)
-            {
-                it->life -= dt;
-                if (it->life <= 0)
-                {
-                    it = gen.particles.erase(it);
-                }
-                else
-                {
-                    it->position.x += it->velocity.x * dt;
-                    it->position.y += it->velocity.y * dt;
-                    it->position.z += it->velocity.z * dt;
-                    ++it;
-                }
-            }
-        }
-    }
-
-    void GLEWSFMLRenderer::renderParticles()
-    {
-        glDisable(GL_LIGHTING);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        glDepthMask(GL_FALSE);
-
-        for (const auto &pair : _particleGenerators)
-        {
-            const auto &gen = pair.second;
-
-            for (const auto &p : gen.particles)
-            {
-                float lifeRatio = (p.maxLife > 0.0f) ? p.life / p.maxLife : 0.0f;
-                float alpha = lifeRatio;
-
-                glColor4f(p.color.x, p.color.y, p.color.z, alpha);
-
-                glPushMatrix();
-                glTranslatef(p.position.x, p.position.y, p.position.z);
-
-                float modelview[16];
-                glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
-
-                for (int i = 0; i < 3; i++)
-                {
-                    for (int j = 0; j < 3; j++)
-                    {
-                        if (i == j)
-                            modelview[i * 4 + j] = 1.0f;
-                        else
-                            modelview[i * 4 + j] = 0.0f;
-                    }
-                }
-
-                glLoadMatrixf(modelview);
-
-                float s = p.size;
-                glBegin(GL_QUADS);
-                glTexCoord2f(0, 0);
-                glVertex3f(-s, -s, 0);
-                glTexCoord2f(1, 0);
-                glVertex3f(s, -s, 0);
-                glTexCoord2f(1, 1);
-                glVertex3f(s, s, 0);
-                glTexCoord2f(0, 1);
-                glVertex3f(-s, s, 0);
-                glEnd();
-
-                glPopMatrix();
-            }
-        }
-
-        glDepthMask(GL_TRUE);
-        glDisable(GL_BLEND);
-        glEnable(GL_LIGHTING);
-    }
 
     void GLEWSFMLRenderer::initContext()
     {
@@ -2014,7 +1578,13 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
 } // namespace rtypeEngine
 
-// Factory function for dynamic loading
+
+#ifdef _WIN32
+    #define GLEW_RENDERER_EXPORT __declspec(dllexport)
+#else
+    #define GLEW_RENDERER_EXPORT
+#endif
+
 extern "C" GLEW_RENDERER_EXPORT rtypeEngine::IModule *createModule(const char *pubEndpoint, const char *subEndpoint)
 {
     return new rtypeEngine::GLEWSFMLRenderer(pubEndpoint, subEndpoint);
