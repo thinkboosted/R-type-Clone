@@ -42,7 +42,7 @@ if(MSGPACK_TARGET)
 endif()
 
 target_link_libraries(NetworkManager PRIVATE
-    cppzmq-static
+    cppzmq
 )
 
 if(WIN32)

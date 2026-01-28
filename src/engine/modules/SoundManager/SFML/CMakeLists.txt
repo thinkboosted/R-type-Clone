@@ -19,7 +19,7 @@ find_package(cppzmq CONFIG REQUIRED)
 target_link_libraries(SFMLSoundManager
     SFML::Audio
     SFML::System
-    cppzmq-static
+    cppzmq
 )
 
 # Set output name without lib prefix

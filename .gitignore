@@ -1,4 +1,6 @@
 .vscode/
+vcpkg/
+tarballs/
 vcpkg_installed/
 build/
 docs/*/*.txt

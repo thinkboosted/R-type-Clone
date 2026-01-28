@@ -22,7 +22,7 @@ target_include_directories(sound_test PRIVATE
 )
 
 target_link_libraries(sound_test PRIVATE
-    cppzmq-static
+    cppzmq
     ${CMAKE_DL_LIBS}
 )
 

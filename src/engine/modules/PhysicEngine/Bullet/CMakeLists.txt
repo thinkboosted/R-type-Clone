@@ -22,7 +22,7 @@ target_link_libraries(BulletPhysicEngine
     BulletDynamics
     BulletCollision
     LinearMath
-    cppzmq-static
+    cppzmq
 )
 
 # Set output name without lib prefix

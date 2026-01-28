@@ -1,5 +1,9 @@
 add_library(LuaECSManager SHARED
     LuaECSManager.cpp
+    LuaBindings.cpp
+    LuaSerialization.cpp
+    MsgPackUtils.cpp
+    MsgPackUtils.hpp
     LuaECSManager.hpp
     ../IECSManager.hpp
     ../../IModule.hpp
@@ -17,7 +21,7 @@ find_package(cppzmq CONFIG REQUIRED)
 find_package(msgpack-cxx CONFIG REQUIRED)
 
 target_link_libraries(LuaECSManager
-    cppzmq-static
+    cppzmq
     ${LUA_LIBRARIES}
     ${ZeroMQ_LINK_LIBS}
     msgpack-cxx

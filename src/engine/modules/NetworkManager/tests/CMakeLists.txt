@@ -16,7 +16,7 @@ target_link_libraries(NetworkManagerTests PRIVATE
     GTest::gmock_main
     asio
     msgpack-cxx
-    cppzmq-static
+    cppzmq
 )
 
 if(WIN32)
