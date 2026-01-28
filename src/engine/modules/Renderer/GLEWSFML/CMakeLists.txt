@@ -27,7 +27,7 @@ target_link_libraries(GLEWSFMLRenderer
     GLEW::GLEW
     OpenGL::GL
     SFML::Graphics
-    cppzmq-static
+    cppzmq
 )
 
 if(NOT WIN32)

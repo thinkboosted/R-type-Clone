@@ -73,10 +73,10 @@ if(NOT cppzmq_FOUND)
 endif()
 
 target_link_libraries(r-type_client PRIVATE
-    cppzmq-static
+    cppzmq
 )
 target_link_libraries(r-type_server PRIVATE
-    cppzmq-static
+    cppzmq
 )
 
 # Link with dynamic loading library

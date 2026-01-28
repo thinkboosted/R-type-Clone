@@ -44,7 +44,7 @@ if(NOT cppzmq_FOUND)
 endif()
 
 target_link_libraries(platformer PRIVATE
-    cppzmq-static
+    cppzmq
 )
 
 # Link with dynamic loading library

@@ -14,7 +14,7 @@ target_include_directories(ECSSavesManager PUBLIC
 find_package(cppzmq CONFIG REQUIRED)
 
 target_link_libraries(ECSSavesManager
-    cppzmq-static
+    cppzmq
 )
 
 set_target_properties(ECSSavesManager PROPERTIES PREFIX "")
