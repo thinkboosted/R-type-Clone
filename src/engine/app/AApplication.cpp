@@ -136,6 +136,9 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
 }
 
 void AApplication::cleanupMessageBroker() {
+  if (_isCleanedUp) return; // Prevent double cleanup
+  _isCleanedUp = true;
+  
   Logger::Debug("[App] Starting cleanupMessageBroker...");
   _isBrokerActive = false;
 
@@ -241,7 +244,7 @@ void AApplication::sendMessage(const std::string& topic, const std::string& mess
   memcpy(zmqMessage.data(), fullMessage.c_str(), fullMessage.size());
   _publisher->send(zmqMessage, zmq::send_flags::none);
 
-  Logger::LogTraffic("->", "App", topic, message);
+  // Logger::LogTraffic("->", "App", topic, message);
 }
 
 std::string AApplication::getMessage(const std::string& topic) {
@@ -323,7 +326,7 @@ void AApplication::processMessages() {
     std::string payload = (spacePos != std::string::npos && spacePos + 1 < fullMessage.size())
                                 ? fullMessage.substr(spacePos + 1)
                                 : "";
-    Logger::LogTraffic("<-", "App", messageTopic, payload);
+    // Logger::LogTraffic("<-", "App", messageTopic, payload);
 
     for (const auto& subscription : _subscriptions) {
       const std::string& topic = subscription.first;

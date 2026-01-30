@@ -46,6 +46,7 @@ protected:                        // Changed from private to protected
 
   // New method to configure and initialize the ZMQ broker/connections
   void setupBroker(const std::string &baseEndpoint, bool isServer);
+  bool _isCleanedUp = false;
 
   /**
    * @brief Factory method to generate ZMQ endpoint based on mode
