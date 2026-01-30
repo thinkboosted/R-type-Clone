@@ -3,10 +3,13 @@
 #include "../IPhysicEngine.hpp"
 #include <btBulletDynamicsCommon.h>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace rtypeEngine {
+
+class BulletDebugDrawer;
 
 class BulletPhysicEngine : public IPhysicEngine {
   public:
@@ -47,9 +50,11 @@ class BulletPhysicEngine : public IPhysicEngine {
     btBroadphaseInterface* _overlappingPairCache;
     btSequentialImpulseConstraintSolver* _solver;
     btDiscreteDynamicsWorld* _dynamicsWorld;
+    BulletDebugDrawer* _debugDrawer;
 
     std::map<std::string, btRigidBody*> _bodies;
     std::map<btRigidBody*, std::string> _bodyIds;
+    std::set<std::pair<std::string, std::string>> _activeCollisions; // Cache for collision deduplication
 
     std::chrono::high_resolution_clock::time_point _lastFrameTime;
     float _timeAccumulator = 0.0f;

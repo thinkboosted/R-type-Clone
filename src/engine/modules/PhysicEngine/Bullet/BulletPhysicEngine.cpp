@@ -2,6 +2,8 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <set>
+#include <utility>
 
 static void split(const std::string &s, char delim, std::vector<std::string> &elems) {
     std::stringstream ss(s);
@@ -24,13 +26,61 @@ static float safeStof(const std::string &str, float fallback = 0.0f) {
 
 namespace rtypeEngine {
 
+// ═══════════════════════════════════════════════════════════════
+// INTERNAL DEBUG DRAWER CLASS
+// ═══════════════════════════════════════════════════════════════
+class BulletDebugDrawer : public btIDebugDraw {
+public:
+    explicit BulletDebugDrawer(BulletPhysicEngine* engine) 
+        : _engine(engine), _debugMode(btIDebugDraw::DBG_NoDebug) {}
+
+    void drawLine(const btVector3& from, const btVector3& to, const btVector3& color) override {
+        if (!_engine) return;
+
+        // Optimization: Batch lines into a single large message instead of 2000+ individual ones
+        // Format: x1,y1,z1,x2,y2,z2,r,g,b;...
+        _lineBatch << from.x() << "," << from.y() << "," << from.z() << ","
+                   << to.x()   << "," << to.y()   << "," << to.z()   << ","
+                   << color.x() << "," << color.y() << "," << color.z() << ";";
+
+        // Flush if too large (avoid massive strings)
+        if (_lineBatch.tellp() > 4000) {
+            flushLines();
+        }
+    }
+
+    void flushLines() {
+        if (_lineBatch.tellp() > 0) {
+            // New command: BatchDrawDebugLines:data
+            _engine->sendMessage("BatchDrawDebugLines", _lineBatch.str());
+            _lineBatch.str("");
+            _lineBatch.clear();
+        }
+    }
+
+    void drawContactPoint(const btVector3&, const btVector3&, btScalar, int, const btVector3&) override {}
+    void reportErrorWarning(const char* warningString) override {
+        std::cerr << "[Bullet Warning] " << warningString << std::endl;
+    }
+    void draw3dText(const btVector3&, const char*) override {}
+    
+    void setDebugMode(int debugMode) override { _debugMode = debugMode; }
+    int getDebugMode() const override { return _debugMode; }
+
+private:
+    BulletPhysicEngine* _engine;
+    int _debugMode;
+    std::stringstream _lineBatch;
+};
+
 BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
     : IPhysicEngine(pubEndpoint, subEndpoint),
       _collisionConfiguration(nullptr),
       _dispatcher(nullptr),
       _overlappingPairCache(nullptr),
       _solver(nullptr),
-      _dynamicsWorld(nullptr) {}
+      _dynamicsWorld(nullptr),
+      _debugDrawer(nullptr) {}
 
 void BulletPhysicEngine::init() {
     _collisionConfiguration = new btDefaultCollisionConfiguration();
@@ -38,6 +88,9 @@ void BulletPhysicEngine::init() {
     _overlappingPairCache = new btDbvtBroadphase();
     _solver = new btSequentialImpulseConstraintSolver;
     _dynamicsWorld = new btDiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
+
+    _debugDrawer = new BulletDebugDrawer(this);
+    _dynamicsWorld->setDebugDrawer(_debugDrawer);
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
     // Need to be changed in lua
@@ -75,6 +128,23 @@ void BulletPhysicEngine::fixedUpdate(double dt) {
 
     // Use GameEngine's fixed timestep directly (deterministic)
     _dynamicsWorld->stepSimulation(static_cast<float>(dt), 0);
+    _dynamicsWorld->debugDrawWorld();
+
+    // Debug Labels: Draw Entity Names (IDs)
+    // DISABLED: Too much visual clutter (140+ texts) causing freeze/lag/weirdness
+    /*
+    if (_debugDrawer && _debugDrawer->getDebugMode() != btIDebugDraw::DBG_NoDebug) {
+        for (auto const& [id, body] : _bodies) {
+            btTransform trans = body->getWorldTransform();
+            btVector3 pos = trans.getOrigin();
+            std::stringstream ss;
+            ss << "DrawDebugText:" << pos.x() << "," << (pos.y() + 1.5f) << "," << pos.z() 
+               << ":" << id << ":1,1,0";
+            sendMessage("RenderEntityCommand", ss.str());
+        }
+    }
+    */
+    if (_debugDrawer) _debugDrawer->flushLines();
 
     // Post-simulation logic
     checkCollisions();
@@ -86,14 +156,13 @@ void BulletPhysicEngine::fixedUpdate(double dt) {
 // ═══════════════════════════════════════════════════════════════
 // Will be removed once all code paths use hard-wired calls
 void BulletPhysicEngine::loop() {
-    static int heartbeat = 0;
-    if (++heartbeat % 60 == 0) {
-        std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodies.size() << std::endl;
-    }
-
-    stepSimulation();
-    checkCollisions();
-    sendUpdates();
+    // CRITICAL FIX: Do NOT step simulation here!
+    // The simulation is now driven by GameEngine::fixedUpdate() in the main thread.
+    // This loop runs in a background thread provided by AModule.
+    // If we step here AND in fixedUpdate, we get a Race Condition -> Segfault (removeleaf).
+    
+    // We just yield to keep the thread alive for message processing (handled by AModule wrapper)
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void BulletPhysicEngine::stepSimulation() {
@@ -121,9 +190,11 @@ void BulletPhysicEngine::stepSimulation() {
 void BulletPhysicEngine::checkCollisions() {
     if (!_dispatcher) return;
 
+    // Track current frame collisions to detech Enter/Exit
+    std::set<std::pair<std::string, std::string>> currentCollisions;
+
     int numManifolds = _dispatcher->getNumManifolds();
     for (int i = 0; i < numManifolds; i++) {
-        if (i >= _dispatcher->getNumManifolds()) break;
         btPersistentManifold* contactManifold = _dispatcher->getManifoldByIndexInternal(i);
         if (!contactManifold) continue;
 
@@ -131,27 +202,48 @@ void BulletPhysicEngine::checkCollisions() {
         const btCollisionObject* obB = contactManifold->getBody1();
 
         int numContacts = contactManifold->getNumContacts();
+        bool isColliding = false;
+        
+        // Check if there is at least one actual contact point
         for (int j = 0; j < numContacts; j++) {
             btManifoldPoint& pt = contactManifold->getContactPoint(j);
             if (pt.getDistance() < 0.f) {
-                const btRigidBody* bodyA = btRigidBody::upcast(obA);
-                const btRigidBody* bodyB = btRigidBody::upcast(obB);
+                isColliding = true;
+                break; 
+            }
+        }
 
-                if (bodyA && bodyB) {
-                    auto itA = _bodyIds.find(const_cast<btRigidBody*>(bodyA));
-                    auto itB = _bodyIds.find(const_cast<btRigidBody*>(bodyB));
+        if (isColliding) {
+            const btRigidBody* bodyA = btRigidBody::upcast(obA);
+            const btRigidBody* bodyB = btRigidBody::upcast(obB);
 
-                    if (itA != _bodyIds.end() && itB != _bodyIds.end()) {
+            if (bodyA && bodyB) {
+                auto itA = _bodyIds.find(const_cast<btRigidBody*>(bodyA));
+                auto itB = _bodyIds.find(const_cast<btRigidBody*>(bodyB));
+
+                if (itA != _bodyIds.end() && itB != _bodyIds.end()) {
+                    std::string idA = itA->second;
+                    std::string idB = itB->second;
+                    
+                    // Ensure consistent ordering for the pair key
+                    if (idA > idB) std::swap(idA, idB);
+                    std::pair<std::string, std::string> pairKey = {idA, idB};
+                    
+                    currentCollisions.insert(pairKey);
+
+                    // Only send event if this is a NEW collision (Enter)
+                    if (_activeCollisions.find(pairKey) == _activeCollisions.end()) {
                         std::stringstream ss;
                         ss << "Collision:" << itA->second << ":" << itB->second << ";";
                         sendMessage("PhysicEvent", ss.str());
                     }
                 }
-                // Only report one contact point per manifold to avoid spamming
-                break;
             }
         }
     }
+    
+    // Update active collisions state
+    _activeCollisions = currentCollisions;
 }
 
 void BulletPhysicEngine::sendUpdates() {
@@ -390,6 +482,13 @@ void BulletPhysicEngine::onPhysicCommand(const std::string& message) {
                 }
             } else if (command == "DestroyBody") {
                 destroyBody(data);
+            } else if (command == "SetDebugMode") {
+                 // SetDebugMode:1 (Wireframe) or 0 (Off)
+                 int mode = static_cast<int>(safeStof(data)); 
+                 if (_debugDrawer) {
+                     _debugDrawer->setDebugMode(mode);
+                     std::cout << "[Bullet] Debug Mode set to: " << mode << std::endl;
+                 }
             }
         }
     } catch (const std::exception& e) {
@@ -419,7 +518,8 @@ void BulletPhysicEngine::createBody(const std::string& id, const std::string& ty
     std::transform(typeLower.begin(), typeLower.end(), typeLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     if (typeLower == "box" && params.size() >= 3) {
-        shape = new btBoxShape(btVector3(params[0], params[1], params[2]));
+        // Fix: Bullet uses half-extents, but API expects full size (width, height, depth)
+        shape = new btBoxShape(btVector3(params[0] * 0.5f, params[1] * 0.5f, params[2] * 0.5f));
         if (params.size() >= 4) mass = params[3];
         if (params.size() >= 5) friction = params[4];
     } else if (typeLower == "sphere" && params.size() >= 1) {
