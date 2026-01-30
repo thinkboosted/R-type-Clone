@@ -345,6 +345,26 @@ void LuaECSManager::init() {
           std::stringstream rss(rotStr);
           rss >> rx >> comma >> ry >> comma >> rz;
 
+          // 1. Update Internal Transform Component (if exists)
+          if (_pools.count("Transform")) {
+            ComponentPool &pool = _pools["Transform"];
+            if (pool.sparse.count(id)) {
+                sol::table t = pool.dense[pool.sparse[id]];
+                t["x"] = x; t["y"] = y; t["z"] = z;
+                t["rx"] = rx; t["ry"] = ry; t["rz"] = rz;
+            }
+          }
+
+          // 2. Direct Sync to Renderer (Bypass Lua)
+          std::stringstream posSs;
+          posSs << "SetPosition:" << id << "," << x << "," << y << "," << z;
+          sendMessage("RenderEntityCommand", posSs.str());
+
+          std::stringstream rotSs;
+          rotSs << "SetRotation:" << id << "," << rx << "," << ry << "," << rz;
+          sendMessage("RenderEntityCommand", rotSs.str());
+
+          // 3. Optional: Still notify Lua if needed (kept for custom logic like logging or triggers)
           for (auto &system : _systems) {
             if (system["onEntityUpdated"].valid()) {
               try {
@@ -934,6 +954,18 @@ void LuaECSManager::setupLuaBindings() {
              std::stringstream ss;
              ss << "CreateBody:" << entityId << ":" << type << ":" << sx << "," << sy << "," << sz << "," << m << "," << f << ";";
              sendMessage("PhysicCommand", ss.str());
+
+             // Automatic Physics Sync: Set Initial Position
+             if (_pools.count("Transform") && _pools["Transform"].sparse.count(entityId)) {
+                 sol::table t = _pools["Transform"].dense[_pools["Transform"].sparse[entityId]];
+                 float x = t.get_or("x", 0.0f);
+                 float y = t.get_or("y", 0.0f);
+                 float z = t.get_or("z", 0.0f);
+                 
+                 std::stringstream pss;
+                 pss << "SetPosition:" << entityId << ":" << x << "," << y << "," << z << ";";
+                 sendMessage("PhysicCommand", pss.str());
+             }
         }
         // Automatic Renderer Sync: Camera
         else if (componentName == "Camera") {
@@ -979,6 +1011,21 @@ void LuaECSManager::setupLuaBindings() {
           std::stringstream scaleSs;
           scaleSs << "SetScale:" << id << "," << sx << "," << sy << "," << sz;
           sendMessage("RenderEntityCommand", scaleSs.str());
+
+          // Sync to Physics (Blindly send, harmless if no body exists, or check for Collider first)
+          // To be safe and efficient, we could check for Collider, but blindly sending SetPosition to Physics is usually fine if ID doesn't exist (ignored)
+          // But let's check for Collider to be clean if possible.
+          if (_pools.count("Collider") && _pools["Collider"].sparse.count(id)) {
+               std::stringstream physPosSs;
+               physPosSs << "SetPosition:" << id << ":" << x << "," << y << "," << z << ";";
+               sendMessage("PhysicCommand", physPosSs.str());
+               
+               // Physics engine usually doesn't take explicit rotation in expected format easily or we didn't check binding. 
+               // Based on logs, it supports SetPosition. Let's trust that.
+               std::stringstream physRotSs;
+               physRotSs << "SetRotation:" << id << ":" << rx << "," << ry << "," << rz << ";";
+               sendMessage("PhysicCommand", physRotSs.str());
+          }
       }
   });
 
