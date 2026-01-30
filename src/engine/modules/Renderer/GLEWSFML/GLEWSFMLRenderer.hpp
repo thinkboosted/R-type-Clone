@@ -104,6 +104,18 @@ class GLEWSFMLRenderer : public I3DRenderer {
         std::vector<unsigned int> _textureIndices;
     };
 
+    struct DebugLine {
+        Vector3f start;
+        Vector3f end;
+        Vector3f color;
+    };
+
+    struct DebugText {
+        Vector3f position;
+        std::string text;
+        Vector3f color;
+    };
+
     Vector2u _resolution;
     Vector2u _hudResolution;
     bool _pendingResize = false;
@@ -115,6 +127,8 @@ class GLEWSFMLRenderer : public I3DRenderer {
 
     std::map<std::string, RenderObject> _renderObjects;
     std::map<std::string, ParticleGenerator> _particleGenerators;
+    std::vector<DebugLine> _debugLines;
+    std::vector<DebugText> _debugTexts;
     std::chrono::steady_clock::time_point _lastFrameTime;
 
     std::map<std::string, MeshData> _meshCache;

@@ -683,6 +683,95 @@ template<typename T>
                         obj.cornerRadius = std::min(radius, maxRadius);
                     }
                 }
+            } else if (command == "BatchDrawDebugLines") {
+                 // Format: x1,y1,z1,x2,y2,z2,r,g,b;...
+                 std::stringstream ss(data);
+                 std::string lineSegment;
+                 
+                 while(std::getline(ss, lineSegment, ';')) {
+                     if (lineSegment.empty()) continue;
+                     
+                     // Optimization: Fast parse without creating many vector/string objects
+                     float v[9];
+                     int idx = 0;
+                     size_t start = 0;
+                     size_t end = lineSegment.find(',');
+                     
+                     while (end != std::string::npos && idx < 9) {
+                         // Use safeParseFloat to avoid exceptions and segfaults
+                         v[idx++] = safeParseFloat(lineSegment.substr(start, end - start));
+                         start = end + 1;
+                         end = lineSegment.find(',', start);
+                     }
+                     // Last element
+                     if (idx < 9) {
+                         v[idx++] = safeParseFloat(lineSegment.substr(start));
+                     }
+
+                     if (idx == 9) {
+                        DebugLine line;
+                        line.start = {v[0], v[1], v[2]};
+                        line.end = {v[3], v[4], v[5]};
+                        line.color = {v[6], v[7], v[8]};
+                        _debugLines.push_back(line);
+                     }
+                 }
+            } else if (command == "DrawDebugLine")
+            {
+                // Format: DrawDebugLine:x1,y1,z1:x2,y2,z2:r,g,b
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string p1Str = data.substr(0, split1);
+                    std::string rest = data.substr(split1 + 1);
+                    size_t split2 = rest.find(':');
+                    if (split2 != std::string::npos) {
+                        std::string p2Str = rest.substr(0, split2);
+                        std::string colorStr = rest.substr(split2 + 1);
+
+                        std::vector<float> p1, p2, col;
+                        std::stringstream ss1(p1Str); std::string v;
+                        while(std::getline(ss1, v, ',')) p1.push_back(safeParseFloat(v));
+                        std::stringstream ss2(p2Str);
+                        while(std::getline(ss2, v, ',')) p2.push_back(safeParseFloat(v));
+                        std::stringstream ssc(colorStr);
+                        while(std::getline(ssc, v, ',')) col.push_back(safeParseFloat(v));
+
+                        if (p1.size() == 3 && p2.size() == 3 && col.size() == 3) {
+                            DebugLine line;
+                            line.start = {p1[0], p1[1], p1[2]};
+                            line.end = {p2[0], p2[1], p2[2]};
+                            line.color = {col[0], col[1], col[2]};
+                            _debugLines.push_back(line);
+                        }
+                    }
+                }
+                
+            } else if (command == "DrawDebugText") {
+                // Format: DrawDebugText:x,y,z:text:r,g,b
+                size_t split1 = data.find(':');
+                if (split1 != std::string::npos) {
+                    std::string posStr = data.substr(0, split1);
+                    std::string rest = data.substr(split1 + 1);
+                    size_t split2 = rest.find(':');
+                    if (split2 != std::string::npos) {
+                        std::string text = rest.substr(0, split2);
+                        std::string colorStr = rest.substr(split2 + 1);
+
+                        std::vector<float> pos, col;
+                        std::stringstream ss1(posStr); std::string v;
+                        while(std::getline(ss1, v, ',')) pos.push_back(safeParseFloat(v));
+                        std::stringstream ssc(colorStr);
+                        while(std::getline(ssc, v, ',')) col.push_back(safeParseFloat(v));
+
+                        if (pos.size() == 3 && col.size() == 3) {
+                            DebugText dt;
+                            dt.position = {pos[0], pos[1], pos[2]};
+                            dt.text = text;
+                            dt.color = {col[0], col[1], col[2]};
+                            _debugTexts.push_back(dt);
+                        }
+                    }
+                }
             }
             else if (command == "SetText")
             {
@@ -1302,11 +1391,13 @@ template<typename T>
 
         float dt = std::chrono::duration<float>(now - _lastFrameTime).count();
         _lastFrameTime = now;
+        
+        // Clamp dt to avoid physics explosion (max 100ms)
+        if (dt > 0.1f) dt = 0.1f;
 
         updateParticles(dt);
 
         glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
-        glViewport(0, 0, _resolution.x, _resolution.y);
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1531,6 +1622,131 @@ template<typename T>
         }
 
         renderParticles();
+
+        // Render Debug Lines
+        if (!_debugLines.empty()) {
+            static int lineFrameCount = 0;
+            lineFrameCount++;
+            if (lineFrameCount % 60 == 0) {
+                 std::cout << "[GLEWSFMLRenderer] Rendering " << _debugLines.size() << " debug lines" << std::endl;
+            }
+            glDisable(GL_LIGHTING);
+            glDisable(GL_TEXTURE_2D);
+            glDisable(GL_DEPTH_TEST);
+            glLineWidth(1.0f);
+            glBegin(GL_LINES);
+            for (const auto& line : _debugLines) {
+                glColor3f(line.color.x, line.color.y, line.color.z);
+                glVertex3f(line.start.x, line.start.y, line.start.z);
+                glVertex3f(line.end.x, line.end.y, line.end.z);
+            }
+            glEnd();
+            _debugLines.clear(); // Transient: clear after persistent render
+        }
+
+        // Render Debug Texts
+        if (!_debugTexts.empty()) {
+            static int textFrameCount = 0;
+            textFrameCount++;
+            if (textFrameCount % 60 == 0) {
+                 std::cout << "[GLEWSFMLRenderer] Rendering " << _debugTexts.size() << " debug texts" << std::endl;
+            }
+            glDisable(GL_LIGHTING);
+            glEnable(GL_TEXTURE_2D);
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            std::string fontPath = "assets/fonts/arial.ttf";
+            // Ensure font loaded
+            if (_fontCache.find(fontPath) == _fontCache.end())
+            {
+                sf::Font font;
+                if (!font.openFromFile(fontPath))
+                {
+                    std::cerr << "Failed to load font " << fontPath << std::endl;
+                }
+                else
+                {
+                    _fontCache[fontPath] = font;
+                }
+            }
+
+            if (_fontCache.find(fontPath) != _fontCache.end())
+            {
+                sf::Font &font = _fontCache[fontPath];
+                unsigned int fontSize = 24; // Use larger font for better quality
+                
+                // Iterate texts
+                for (const auto &dt : _debugTexts)
+                {
+                    // Warm up glyphs to ensure texture is up to date before binding
+                    for (char c : dt.text) (void)font.getGlyph(c, fontSize, false);
+
+                    const sf::Texture &texture = font.getTexture(fontSize);
+                    glBindTexture(GL_TEXTURE_2D, texture.getNativeHandle());
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+                    glPushMatrix();
+                    glTranslatef(dt.position.x, dt.position.y, dt.position.z);
+
+                    // Billboarding: Align with camera view plane
+                    float modelview[16];
+                    glGetFloatv(GL_MODELVIEW_MATRIX, modelview);
+                    // Reset rotation part to identity to face camera
+                    modelview[0] = 1; modelview[4] = 0; modelview[8] = 0;
+                    modelview[1] = 0; modelview[5] = 1; modelview[9] = 0;
+                    modelview[2] = 0; modelview[6] = 0; modelview[10] = 1;
+                    glLoadMatrixf(modelview);
+
+                    // Scale down (font coords are pixels)
+                    float scale = 0.02f;
+                    glScalef(scale, -scale, scale); // Flip Y
+
+                    // Center text horizontally
+                    float textWidth = 0;
+                    for (char c : dt.text) {
+                        textWidth += font.getGlyph(c, fontSize, false).advance;
+                    }
+                    glTranslatef(-textWidth / 2.0f, 0, 0);
+
+                    glColor3f(1.0f, 1.0f, 1.0f); // Default white, blended with texture
+
+                    glBegin(GL_QUADS);
+                    float xPos = 0;
+                    float yPos = 0; // Baseline
+
+                    for (char c : dt.text)
+                    {
+                        const sf::Glyph &glyph = font.getGlyph(c, fontSize, false);
+
+                        float x0 = xPos + glyph.bounds.position.x;
+                        float y0 = yPos + glyph.bounds.position.y;
+                        float x1 = x0 + glyph.bounds.size.x;
+                        float y1 = y0 + glyph.bounds.size.y;
+
+                        float u0 = (float)glyph.textureRect.position.x / (float)texture.getSize().x;
+                        float v0 = (float)glyph.textureRect.position.y / (float)texture.getSize().y;
+                        float u1 = (float)(glyph.textureRect.position.x + glyph.textureRect.size.x) / (float)texture.getSize().x;
+                        float v1 = (float)(glyph.textureRect.position.y + glyph.textureRect.size.y) / (float)texture.getSize().y;
+
+                        glTexCoord2f(u0, v0); glVertex2f(x0, y0);
+                        glTexCoord2f(u1, v0); glVertex2f(x1, y0);
+                        glTexCoord2f(u1, v1); glVertex2f(x1, y1);
+                        glTexCoord2f(u0, v1); glVertex2f(x0, y1);
+
+                        xPos += glyph.advance;
+                    }
+                    glEnd();
+
+                    glPopMatrix();
+                }
+            }
+            _debugTexts.clear();
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_TEXTURE_2D);
+        }
 
         // HUD Rendering
         glMatrixMode(GL_PROJECTION);
@@ -1795,6 +2011,190 @@ template<typename T>
                     glDisable(GL_TEXTURE_2D);
                 }
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // DEBUG OVERLAY (Persistent Info)
+        // ═══════════════════════════════════════════════════════════════
+        {
+            float padding = 10.0f;
+            float lineOffset = 20.0f;
+            unsigned int fontSize = 24;
+
+            glEnable(GL_TEXTURE_2D);
+            glDisable(GL_LIGHTING);
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            std::string fontPath = "assets/fonts/arial.ttf";
+            if (_fontCache.find(fontPath) == _fontCache.end()) {
+                sf::Font font;
+                if (font.openFromFile(fontPath)) _fontCache[fontPath] = font;
+            }
+
+            if (_fontCache.find(fontPath) != _fontCache.end()) {
+                sf::Font &font = _fontCache[fontPath];
+                // Calculate DT for FPS since we don't have it as arg
+                static auto lastFrameTime = std::chrono::high_resolution_clock::now();
+                auto currentFrameTime = std::chrono::high_resolution_clock::now();
+                float localDt = std::chrono::duration<float>(currentFrameTime - lastFrameTime).count();
+                lastFrameTime = currentFrameTime;
+                if (localDt <= 0.0f) localDt = 0.016f; // Prevent div by zero
+
+                // Prepare Strings
+                std::vector<std::string> lines;
+                lines.push_back("FPS: " + std::to_string((int)(1.0f / localDt)));
+                lines.push_back("Entities: " + std::to_string(_renderObjects.size()));
+                lines.push_back("Cam Pos: " + std::to_string((int)_cameraPos.x) + ", " + std::to_string((int)_cameraPos.y) + ", " + std::to_string((int)_cameraPos.z));
+                // lines.push_back("Cam Rot: " + std::to_string((int)_cameraRot.x) + ", " + std::to_string((int)_cameraRot.y) + ", " + std::to_string((int)_cameraRot.z));
+
+                // Logging to console every ~1 second
+                static float logTimer = 0.0f;
+                logTimer += localDt;
+                if (logTimer >= 1.0f) {
+                    std::cout << "[DebugOverlay] FPS: " << (int)(1.0f / localDt) 
+                              << " | Entities: " << _renderObjects.size() 
+                              << " | Cam: " << (int)_cameraPos.x << "," << (int)_cameraPos.y << "," << (int)_cameraPos.z 
+                              << std::endl;
+                    logTimer = 0.0f;
+                }
+
+                // 1. Warm up glyphs so texture atlas is complete BEFORE binding
+                float maxWidth = 0.0f;
+                for (const auto& txt : lines) {
+                    float w = 0.0f;
+                    for (char c : txt) {
+                         const sf::Glyph &g = font.getGlyph(c, fontSize, false);
+                         w += g.advance;
+                    }
+                    if (w > maxWidth) maxWidth = w;
+                }
+
+                // 2. Draw Background Box
+                // Top-Left coords: (padding, _hudResolution.y - padding)
+                // Width: maxWidth + padding*2
+                // Height: lines.size() * lineOffset + padding*2
+                {
+                    glDisable(GL_TEXTURE_2D);
+                    glColor4f(0.0f, 0.0f, 0.0f, 0.7f); // Semi-transparent black
+                    
+                    float x = 0.0f;
+                    float y = _hudResolution.y; 
+                    float w = maxWidth + padding * 3.0f;
+                    float h = (lines.size() * (float)fontSize) + padding * 2.0f + 20.0f; // Bit of extra height
+
+                    // Draw Quad (Bottom-Up Ortho: y is top)
+                    glBegin(GL_QUADS);
+                    glVertex2f(x, y);          // Top-Left
+                    glVertex2f(x + w, y);      // Top-Right
+                    glVertex2f(x + w, y - h);  // Bottom-Right
+                    glVertex2f(x, y - h);      // Bottom-Left
+                    glEnd();
+                    glEnable(GL_TEXTURE_2D);
+                }
+
+                // 3. Bind Texture
+                const sf::Texture &texture = font.getTexture(fontSize);
+                glBindTexture(GL_TEXTURE_2D, texture.getNativeHandle());
+
+                auto drawText2D = [&](const std::string& str, float x, float topY, const Vector3f& color) {
+                    glColor4f(color.x, color.y, color.z, 1.0f);
+                    glBegin(GL_QUADS);
+                    float xPos = x;
+                    // topY is the visual top line.
+                    
+                    for (char c : str) {
+                        const sf::Glyph &glyph = font.getGlyph(c, fontSize, false);
+                        
+                        // GL coords (Ortho 0..H). 
+                        // We want to draw 'downwards' from topY.
+                        // glyph.bounds.position.y is usually negative (distance from baseline up).
+                        
+                        // Let's use simple logic: 
+                        // Start Y = topY - ascent.
+                        // Actually, let's just use the screenY logic that seemed mostly correct but maybe lacked flip.
+                        
+                        float screenY = topY; 
+
+                        // Standard SFML math adapted for Bottom-Up GL
+                        // screenY is the "Baseline" position? No, let's treat it as the top of the line?
+                        // Let's rely on bounds.
+                        
+                        float y0 = screenY - (glyph.bounds.position.y); // Flipped Y
+                        float y1 = screenY - (glyph.bounds.position.y + glyph.bounds.size.y);
+
+                        // But wait, glyph.bounds.position.y is roughly -Size.
+                        // So screenY - (-Size) = screenY + Size (Higher up).
+                        // If screenY is the BASELINE.
+                        // If we want to draw BELOW the top of screen...
+                        
+                        // Let's try: screenY is the top of the character.
+                        // y0 = screenY + ... ? 
+                        
+                        // Let's stick to the previous verified logic but adjust Y to be definitely visible.
+                        // We are drawing at y (passed in).
+                        
+                        // Pos in Quad:
+                        // x same.
+                        // y calculated:
+                        
+                        // Let's use the Background box as reference. It goes from Y to Y-H.
+                        // So text should be inside that.
+                        
+                        // Simplest: 
+                        // u,v standard.
+                        // x,y:
+                        // x0 = xPos + glyph.bounds.left
+                        // y0 = y - glyph.bounds.top  (Invert Y axis logic)
+                        
+                        float x0 = xPos + glyph.bounds.position.x;
+                        float x1 = x0 + glyph.bounds.size.x;
+                        
+                        // Normal Rendering (Top-Down): y0 = y + bounds.top
+                        // Bottom-Up Rendering: y0 = ViewHeight - (y + bounds.top) (?)
+                        // No, our 'y' is already View coordinates (e.g. 590).
+                        
+                        float y_gl = topY - glyph.bounds.position.y; // If y is baseline.
+                        // If y is 590. Bounds.top is -15. y_gl = 605. That's off top of screen (600).
+                        
+                        // We want to go DOWN.
+                        // So y_gl should be LESS than 590.
+                        // So y_gl = y - (-bounds.top)? No.
+                        
+                        // Correct for Bottom-Up with Top-Down font metrics:
+                        // VertexY = CursorY - (MetricsY)
+                        // But MetricsY (bounds.top) is negative for 'up'.
+                        // So VertexY = CursorY + MetricsY (which is negative).
+                        // e.g. 590 + (-15) = 575. Correct.
+                        
+                        float y0_v = topY - (glyph.bounds.position.y + glyph.bounds.size.y); // Bottom of glyph
+                        float y1_v = topY - glyph.bounds.position.y; // Top of glyph check?
+                        
+                        // Font Texture Coords
+                        float u0 = (float)glyph.textureRect.position.x / (float)texture.getSize().x;
+                        float v0 = (float)glyph.textureRect.position.y / (float)texture.getSize().y;
+                        float u1 = (float)(glyph.textureRect.position.x + glyph.textureRect.size.x) / (float)texture.getSize().x;
+                        float v1 = (float)(glyph.textureRect.position.y + glyph.textureRect.size.y) / (float)texture.getSize().y;
+
+                        glTexCoord2f(u0, v0); glVertex2f(x0, y1_v); // Top-Left UV -> Top-Left Vertex
+                        glTexCoord2f(u1, v0); glVertex2f(x1, y1_v); // Top-Right UV -> Top-Right Vertex
+                        glTexCoord2f(u1, v1); glVertex2f(x1, y0_v); // Bottom-Right UV -> Bottom-Right Vertex
+                        glTexCoord2f(u0, v1); glVertex2f(x0, y0_v); // Bottom-Left UV -> Bottom-Left Vertex
+
+                        xPos += glyph.advance;
+                    }
+                    glEnd();
+                };
+
+                float currentY = _hudResolution.y - padding - 20.0f; // Start slightly below top edge
+                
+                for (const auto& line : lines) {
+                    drawText2D(line, padding + 10.0f, currentY, {1, 1, 0}); // Yellow text
+                    currentY -= (float)fontSize + 5.0f;
+                }
+            }
+             glDisable(GL_TEXTURE_2D);
         }
 
         glEnable(GL_DEPTH_TEST);
