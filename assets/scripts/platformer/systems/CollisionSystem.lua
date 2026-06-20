@@ -10,6 +10,10 @@ function CollisionSystem.init()
 end
 
 function CollisionSystem.update(dt)
+    if not ECS.capabilities.hasAuthority then
+        return
+    end
+
     local entities = ECS.getEntitiesWith({"Transform", "Collider"})
 
     for _, id in ipairs(entities) do

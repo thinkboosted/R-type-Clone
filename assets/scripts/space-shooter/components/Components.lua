@@ -75,6 +75,15 @@ function Weapon(cooldown)
     }
 end
 
+function WeaponProfile(weaponType, baseCooldown)
+    return {
+        weaponType = weaponType or "STANDARD",
+        baseCooldown = baseCooldown or 0.2,
+        bonusDamage = 0,
+        bonusUntil = 0
+    }
+end
+
 
 function Enemy(speed)
     return {
@@ -140,7 +149,19 @@ end
 function PowerUp(duration, originalCooldown)
     return {
         timeRemaining = duration or 5.0,
-        originalCooldown = originalCooldown or 0.2
+        originalCooldown = originalCooldown or 0.2,
+        powerType = "RAPID"
+    }
+end
+
+function Boss(maxHp)
+    return {
+        maxHp = maxHp or 300,
+        phase = 1,
+        attackTimer = 0,
+        moveTimer = 0,
+        spawnedAt = os.time(),
+        defeated = false
     }
 end
 

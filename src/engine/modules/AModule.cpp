@@ -19,6 +19,11 @@ bool sniperDebugEnabled() {
     return enabled;
 }
 
+bool profileEnabled() {
+    static bool enabled = (std::getenv("RTYPE_PROFILE") != nullptr);
+    return enabled;
+}
+
 std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
     if (msg.size() <= limit) {
         return msg;
@@ -43,6 +48,10 @@ void AModule::start() {
         const std::string name = moduleName(this);
         bool isBullet = (name.find("Bullet") != std::string::npos);
         bool sniper = sniperDebugEnabled() && isBullet;
+        auto lastProfileLog = std::chrono::steady_clock::now();
+        double processMsTotal = 0.0;
+        double loopMsTotal = 0.0;
+        int profileSamples = 0;
 
         if (debugEnabled()) {
             std::cout << "[Module] Start " << name << std::endl;
@@ -51,25 +60,72 @@ void AModule::start() {
             if (debugEnabled()) {
                 std::cout << "[Module] Init " << name << std::endl;
             }
-            init();
-            _initialized = true;
+            try {
+                init();
+                _initialized = true;
+            } catch (const std::exception& e) {
+                std::cerr << "[Module] Init failed for " << name << ": " << e.what() << std::endl;
+                _running = false;
+            } catch (...) {
+                std::cerr << "[Module] Init failed for " << name << ": unknown error" << std::endl;
+                _running = false;
+            }
         }
         while (_running) {
             if (sniper) std::cout << "[Sniper] " << name << " Step 1: Entering processMessages" << std::endl;
-            processMessages();
+            const auto processStart = std::chrono::steady_clock::now();
+            try {
+                processMessages();
+            } catch (const std::exception& e) {
+                std::cerr << "[Module] Message processing error in " << name << ": " << e.what() << std::endl;
+            } catch (...) {
+                std::cerr << "[Module] Message processing error in " << name << ": unknown error" << std::endl;
+            }
+            const auto processEnd = std::chrono::steady_clock::now();
             if (sniper) std::cout << "[Sniper] " << name << " Step 2: Exited processMessages" << std::endl;
 
             if (sniper) std::cout << "[Sniper] " << name << " Step 3: Entering loop" << std::endl;
-            loop();
+            const auto loopStart = std::chrono::steady_clock::now();
+            try {
+                loop();
+            } catch (const std::exception& e) {
+                std::cerr << "[Module] Loop error in " << name << ": " << e.what() << std::endl;
+            } catch (...) {
+                std::cerr << "[Module] Loop error in " << name << ": unknown error" << std::endl;
+            }
+            const auto loopEnd = std::chrono::steady_clock::now();
             if (sniper) std::cout << "[Sniper] " << name << " Step 4: Exited loop" << std::endl;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (profileEnabled()) {
+                processMsTotal += std::chrono::duration<double, std::milli>(processEnd - processStart).count();
+                loopMsTotal += std::chrono::duration<double, std::milli>(loopEnd - loopStart).count();
+                ++profileSamples;
+                if (loopEnd - lastProfileLog >= std::chrono::seconds(1)) {
+                    const double sampleCount = profileSamples > 0 ? static_cast<double>(profileSamples) : 1.0;
+                    std::cout << "[PROFILE][Module] " << name
+                              << " process_avg_ms=" << (processMsTotal / sampleCount)
+                              << " loop_avg_ms=" << (loopMsTotal / sampleCount)
+                              << " samples=" << profileSamples << std::endl;
+                    processMsTotal = 0.0;
+                    loopMsTotal = 0.0;
+                    profileSamples = 0;
+                    lastProfileLog = loopEnd;
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         if (_initialized) {
             if (debugEnabled()) {
                 std::cout << "[Module] Cleanup " << name << std::endl;
             }
-            cleanup();
+            try {
+                cleanup();
+            } catch (const std::exception& e) {
+                std::cerr << "[Module] Cleanup error in " << name << ": " << e.what() << std::endl;
+            } catch (...) {
+                std::cerr << "[Module] Cleanup error in " << name << ": unknown error" << std::endl;
+            }
             _initialized = false;
         }
         if (debugEnabled()) {
@@ -114,7 +170,6 @@ AModule::AModule(const char* pubEndpoint, const char* subEndpoint)
         _subscriber->connect(zmqPubEndpoint);  // Subscriber connects to PUB endpoint (XPUB socket)
     } catch (const zmq::error_t& e) {
         std::cerr << "ZeroMQ connection error: " << e.what() << std::endl;
-        throw;
     }
 }
 
@@ -177,13 +232,16 @@ void AModule::unsubscribe(const std::string& topic) {
 }
 
 void AModule::processMessages() {
-    while (true) {
+    int messagesProcessed = 0;
+    constexpr int maxMessagesPerLoop = 256;
+    while (messagesProcessed < maxMessagesPerLoop) {
         zmq::message_t zmqMessage;
         auto result = _subscriber->recv(zmqMessage, zmq::recv_flags::dontwait);
 
         if (!result) {
             break;
         }
+        ++messagesProcessed;
 
         std::string fullMessage(static_cast<char*>(zmqMessage.data()), zmqMessage.size());
 
@@ -200,7 +258,13 @@ void AModule::processMessages() {
                     if (debugEnabled()) {
                         std::cout << "[Module<-] " << moduleName(this) << " " << topic << " | " << truncatePayload(payload) << std::endl;
                     }
-                    handler(payload);
+                    try {
+                        handler(payload);
+                    } catch (const std::exception& e) {
+                        std::cerr << "[Module] Handler error for topic '" << topic << "': " << e.what() << std::endl;
+                    } catch (...) {
+                        std::cerr << "[Module] Handler error for topic '" << topic << "': unknown error" << std::endl;
+                    }
                 }
             }
         }

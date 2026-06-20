@@ -77,6 +77,9 @@ dofile("assets/scripts/space-shooter/systems/LifeSystem.lua")
 dofile("assets/scripts/space-shooter/systems/WinSystem.lua")
 dofile("assets/scripts/space-shooter/systems/EnemySystem.lua")
 dofile("assets/scripts/space-shooter/systems/PlayerSystem.lua")
+dofile("assets/scripts/space-shooter/systems/WeaponSystem.lua")
+dofile("assets/scripts/space-shooter/systems/PowerUpSystem.lua")
+dofile("assets/scripts/space-shooter/systems/BossSystem.lua")
 dofile("assets/scripts/space-shooter/systems/GameStateManager.lua")
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -108,6 +111,7 @@ if ECS.capabilities.hasRendering then
     dofile("assets/scripts/space-shooter/systems/AnimationSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ParticleSystem.lua")
     dofile("assets/scripts/space-shooter/systems/ScoreSystem.lua")
+    dofile("assets/scripts/space-shooter/systems/HPBarSystem.lua")
     dofile("assets/scripts/space-shooter/systems/BackgroundSystem.lua")
     dofile("assets/scripts/space-shooter/systems/HitFlashSystem.lua")
 

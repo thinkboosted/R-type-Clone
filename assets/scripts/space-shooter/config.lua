@@ -16,6 +16,7 @@ local config = {
     bullet = {
         damage = 10,
         speed = 20.0,
+        enemySpeed = 8.0,
         collider = { type = "Sphere", size = {0.2} },
         life = 1,
     },
@@ -23,15 +24,15 @@ local config = {
         baseSpawnInterval = 2.0,
         baseSpeed = 5.0,
         minSpawnInterval = 0.8,
-        maxSpeed = 15.0,
+        maxSpeed = 12.0,
         life = 1,
-        scale = 1.9,
-        collider = { type = "Box", size = {1, 1, 1} },
+        scale = 2.35,
+        collider = { type = "Box", size = {1.25, 1.25, 1.25} },
     },
     score = {
         kill = 10,
         escapePenalty = 20,
-        levelThresholds = {700, 1900, 3350, 4500, 6000},
+        levelThresholds = {700},
     }
 }
 

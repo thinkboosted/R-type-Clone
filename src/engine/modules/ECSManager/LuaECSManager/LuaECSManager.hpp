@@ -75,6 +75,8 @@ private:
   std::vector<sol::table> _systems;
   std::vector<std::string> _entities;
   std::unordered_map<std::string, ComponentPool> _pools;
+  std::unordered_map<std::string, std::vector<std::string>> _queryCache;
+  bool _queryCacheDirty = true;
   std::map<std::string, std::vector<sol::function>> _luaListeners;
   bool _isServer = false;
   sol::table _capabilities;

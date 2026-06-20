@@ -29,6 +29,8 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <array>
+#include <cstdint>
 #include <memory>
 #include "../IWindowManager.hpp"
 
@@ -41,6 +43,7 @@ class SFMLWindowManager : public IWindowManager {
     void init() override;
     void loop() override;
     void cleanup() override;
+    void processMessages() override;
 
     void createWindow(const std::string &title, const Vector2u &size) override;
     bool isOpen() const override;
@@ -53,6 +56,7 @@ class SFMLWindowManager : public IWindowManager {
     void handleSetWindowSize(const std::string& message);
     void handleGetWindowInfo(const std::string& message);
     void recreateWindow(bool fullscreen);
+    void drawPixelBytes(const std::uint8_t* pixels, const Vector2u &size);
     
     std::unique_ptr<sf::RenderWindow> _window;
     sf::Texture _texture;
@@ -61,5 +65,7 @@ class SFMLWindowManager : public IWindowManager {
     std::string _windowTitle = "R-Type Clone";
     Vector2u _windowedSize = {800, 600};
     bool _isFullscreen = false;
+    bool _isFocused = true;
+    std::array<bool, sf::Keyboard::KeyCount> _pressedKeys{};
 };
 }  // namespace rtypeEngine

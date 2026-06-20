@@ -5,6 +5,9 @@
 
 namespace rtypeEngine {
 
+    static constexpr int MAX_SPAWN_PER_GENERATOR_PER_UPDATE = 24;
+    static constexpr std::size_t MAX_PARTICLES_PER_GENERATOR = 400;
+
     ParticleSystem::ParticleSystem() {}
 
     void ParticleSystem::update(float dt)
@@ -17,9 +20,13 @@ namespace rtypeEngine {
             auto &gen = pair.second;
 
             gen.accumulator += dt * gen.rate;
-            while (gen.accumulator > 1.0f)
+            int spawnedThisUpdate = 0;
+            while (gen.accumulator > 1.0f &&
+                   spawnedThisUpdate < MAX_SPAWN_PER_GENERATOR_PER_UPDATE &&
+                   gen.particles.size() < MAX_PARTICLES_PER_GENERATOR)
             {
                 gen.accumulator -= 1.0f;
+                ++spawnedThisUpdate;
 
                 Particle p;
 
@@ -96,20 +103,24 @@ namespace rtypeEngine {
                 gen.particles.push_back(p);
             }
 
-            for (auto it = gen.particles.begin(); it != gen.particles.end();)
-            {
-                it->life -= dt;
-                if (it->life <= 0)
-                {
-                    it = gen.particles.erase(it);
+            if (spawnedThisUpdate == MAX_SPAWN_PER_GENERATOR_PER_UPDATE) {
+                // Drop excess budget to avoid spiral stutter after a frame hitch.
+                gen.accumulator = 0.0f;
+            }
+
+            for (std::size_t i = 0; i < gen.particles.size();) {
+                auto &p = gen.particles[i];
+                p.life -= dt;
+                if (p.life <= 0.0f) {
+                    gen.particles[i] = gen.particles.back();
+                    gen.particles.pop_back();
+                    continue;
                 }
-                else
-                {
-                    it->position.x += it->velocity.x * dt;
-                    it->position.y += it->velocity.y * dt;
-                    it->position.z += it->velocity.z * dt;
-                    ++it;
-                }
+
+                p.position.x += p.velocity.x * dt;
+                p.position.y += p.velocity.y * dt;
+                p.position.z += p.velocity.z * dt;
+                ++i;
             }
         }
     }
@@ -174,6 +185,9 @@ namespace rtypeEngine {
 
     void ParticleSystem::createGenerator(const std::string& id, const ParticleGenerator& gen) {
         _particleGenerators[id] = gen;
+        auto &created = _particleGenerators[id];
+        const float target = std::max(8.0f, std::min(220.0f, created.rate * std::max(0.1f, created.lifeTime) * 1.5f));
+        created.particles.reserve(static_cast<std::size_t>(target));
     }
 
     void ParticleSystem::updateGenerator(const std::string& id, const ParticleGenerator& gen) {

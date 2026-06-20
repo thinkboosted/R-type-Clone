@@ -3,12 +3,35 @@
 #include <thread>
 #include <chrono>
 
+#ifdef _WIN32
+    #include <process.h>
+#else
+    #include <unistd.h>
+#endif
+
 namespace rtypeGame {
 
-RTypeClient::RTypeClient(bool isLocal, const std::string& serverIp, int serverPort)
-    : RTypeGame(), _isLocal(isLocal), _serverIp(serverIp), _serverPort(serverPort) {
+namespace {
+int processId() {
+#ifdef _WIN32
+    return _getpid();
+#else
+    return static_cast<int>(getpid());
+#endif
+}
+} // namespace
 
+RTypeClient::RTypeClient(bool isLocal, const std::string& serverIp, int serverPort,
+                                                 int simulateLagMs, bool printBandwidth)
+        : RTypeGame(), _isLocal(isLocal), _serverIp(serverIp), _serverPort(serverPort),
+            _simulateLagMs(simulateLagMs), _printBandwidth(printBandwidth) {
+#ifdef _WIN32
     setupBroker("127.0.0.1:*", true);
+#else
+    // Use an IPC namespace bound to PID so each local client process has an isolated bus.
+    const std::string busNamespace = "ipc:///tmp/rtype-client-bus-" + std::to_string(processId());
+    setupBroker(busNamespace, true);
+#endif
 }
 
 void RTypeClient::onInit() {
@@ -18,6 +41,16 @@ void RTypeClient::onInit() {
 void RTypeClient::onLoop() {
     if (!_networkInitDone) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+        if (_printBandwidth) {
+            std::cout << "[Client] Bandwidth logging enabled" << std::endl;
+            sendMessage("RequestNetworkSetBandwidthLogging", "true");
+        }
+
+        if (_simulateLagMs > 0) {
+            std::cout << "[Client] Enabling simulated lag: " << _simulateLagMs << "ms" << std::endl;
+            sendMessage("RequestNetworkSetLag", std::to_string(_simulateLagMs));
+        }
 
         if (_isLocal) {
             std::cout << "[Client] Local solo mode: skipping network connection" << std::endl;

@@ -41,6 +41,7 @@ std::string endpointToString(const asio::ip::udp::endpoint &ep) {
 struct SerializableEnvelope {
   std::string topic;
   std::string payload;
+  uint64_t messageId = 0;
 
   SerializableEnvelope() = default;
   explicit SerializableEnvelope(const rtypeEngine::NetworkEnvelope &envelope)
@@ -50,7 +51,7 @@ struct SerializableEnvelope {
     return {topic, payload, clientId};
   }
 
-  MSGPACK_DEFINE(topic, payload);
+  MSGPACK_DEFINE(topic, payload, messageId);
 };
 
 } // namespace
@@ -59,11 +60,17 @@ namespace rtypeEngine {
 
 NetworkManager::NetworkManager(const char *pubEndpoint, const char *subEndpoint)
     : AModule(pubEndpoint, subEndpoint), _workGuard(nullptr), _socket(nullptr),
-      _ioThreadRunning(false), _isServer(false) {
+      _ioThreadRunning(false), _isServer(false), _lobbyManager(2) {
   auto now = std::chrono::steady_clock::now();
+  _startTime = now;
+  _lastBandwidthReportTime = now;
   _lastHeartbeatTime = now;
   _lastTimeoutCheckTime = now;
   _lastOverflowLog = now;
+  _lastReliableCheckTime = now;
+  _lastGameStateUpdateTime = now;
+
+  setupGameStateMachineCallbacks();
 }
 
 NetworkManager::~NetworkManager() { cleanup(); }
@@ -75,6 +82,8 @@ void NetworkManager::init() {
 }
 
 void NetworkManager::loop() {
+  reportBandwidthUsage();
+
   std::deque<std::pair<std::string, std::string>> toPublish;
   {
     std::lock_guard<std::mutex> lock(_busMutex);
@@ -99,6 +108,17 @@ void NetworkManager::loop() {
     if (now - _lastTimeoutCheckTime >= std::chrono::seconds(1)) {
       checkClientTimeouts();
       _lastTimeoutCheckTime = now;
+    }
+
+    if (now - _lastReliableCheckTime >= RELIABLE_RESEND_INTERVAL) {
+      processReliableResends();
+      _lastReliableCheckTime = now;
+    }
+
+    // Update game state machine (server only)
+    if (now - _lastGameStateUpdateTime >= std::chrono::milliseconds(100)) {
+      _gameStateMachine.update();
+      _lastGameStateUpdateTime = now;
     }
   }
 
@@ -198,6 +218,42 @@ void NetworkManager::registerSubscriptions() {
   subscribe("RequestNetworkSendToBinary", [this](const std::string &payload) {
     handleSendToBinaryRequest(payload);
   });
+
+  subscribe("RequestNetworkSetLag", [this](const std::string &payload) {
+    handleSetLagRequest(payload);
+  });
+
+  subscribe("RequestNetworkSetBandwidthLogging",
+            [this](const std::string &payload) {
+              handleSetBandwidthLoggingRequest(payload);
+            });
+
+  // Game state management subscriptions (server-side)
+  subscribe("RequestPlayerDied", [this](const std::string &payload) {
+    handlePlayerDiedRequest(payload);
+  });
+
+  subscribe("RequestPlayerLeave", [this](const std::string &payload) {
+    handlePlayerLeaveRequest(payload);
+  });
+
+  subscribe("RequestForceEndGame", [this](const std::string &) {
+    if (_isServer) {
+      _gameStateMachine.forceEndGame();
+    }
+  });
+
+  subscribe("RequestResetToLobby", [this](const std::string &) {
+    if (_isServer) {
+      _gameStateMachine.resetToLobby();
+    }
+  });
+
+  subscribe("RequestRevivePlayers", [this](const std::string &) {
+    if (_isServer) {
+      _gameStateMachine.reviveAllPlayers();
+    }
+  });
 }
 
 void NetworkManager::handleCommandString(const std::string &commandLine) {
@@ -225,7 +281,46 @@ void NetworkManager::handleCommandString(const std::string &commandLine) {
     handleSendToRequest(remainder);
   } else if (lowered == "broadcast") {
     handleBroadcastRequest(remainder);
+  } else if (lowered == "setlag") {
+    handleSetLagRequest(remainder);
+  } else if (lowered == "setbandwidthlog") {
+    handleSetBandwidthLoggingRequest(remainder);
   }
+}
+
+void NetworkManager::handleSetLagRequest(const std::string &payload) {
+  const std::string trimmed = trimString(payload);
+  if (trimmed.empty()) {
+    publishError("SetLagMissingValue");
+    return;
+  }
+
+  try {
+    int lagMs = std::stoi(trimmed);
+    if (lagMs < 0) {
+      publishError("SetLagInvalidValue");
+      return;
+    }
+
+    _simulatedLagMs.store(lagMs, std::memory_order_relaxed);
+    std::cout << "[NET][LAG][" << nowSinceStartMs() << "ms] "
+              << "simulate-lag=" << lagMs << "ms" << std::endl;
+    publishStatus("SimulatedLagMs:" + std::to_string(lagMs));
+  } catch (const std::exception &) {
+    publishError("SetLagInvalidValue");
+  }
+}
+
+void NetworkManager::handleSetBandwidthLoggingRequest(
+    const std::string &payload) {
+  const std::string lowered = toLower(trimString(payload));
+  const bool enabled = (lowered == "1" || lowered == "true" ||
+                        lowered == "on" || lowered == "yes");
+
+  _bandwidthLoggingEnabled.store(enabled, std::memory_order_relaxed);
+  std::cout << "[NET][BANDWIDTH][" << nowSinceStartMs() << "ms] "
+            << "logging=" << (enabled ? "enabled" : "disabled")
+            << std::endl;
 }
 
 void NetworkManager::handleBindRequest(const std::string &payload) {
@@ -463,16 +558,38 @@ void NetworkManager::disconnect() {
 }
 
 void NetworkManager::disconnectInternal() {
+  if (!_isServer && _socket && _socket->is_open()) {
+    // Try to notify the server before closing so it can reset state immediately.
+    try {
+      NetworkEnvelope envelope{"_disconnect", "bye", 0};
+      msgpack::sbuffer buffer;
+      SerializableEnvelope wireEnvelope(envelope);
+      msgpack::pack(buffer, wireEnvelope);
+
+      std::error_code sendEc;
+      _socket->send(asio::buffer(buffer.data(), buffer.size()), 0, sendEc);
+      if (!sendEc) {
+        logPacket("SEND", "_disconnect", buffer.size());
+      }
+    } catch (const std::exception &) {
+      // Best effort only; timeout heartbeat remains the fallback.
+    }
+  }
+
   if (_socket && _socket->is_open()) {
     std::error_code ec;
     _socket->close(ec);
   }
   _socket.reset();
   _isServer = false;
+  _lobbyManager.setGameStarted(false);
 
   std::lock_guard<std::mutex> lock(_clientsMutex);
   _clients.clear();
   _endpointToClientId.clear();
+
+  std::lock_guard<std::mutex> reliableLock(_reliableMutex);
+  _pendingReliablePackets.clear();
 }
 
 void NetworkManager::startReceive() {
@@ -514,6 +631,7 @@ void NetworkManager::processIncomingBuffer(
     const msgpack::object &obj = handle.get();
     SerializableEnvelope wireEnvelope;
     obj.convert(wireEnvelope);
+    logPacket("RECEIVE", wireEnvelope.topic, buffer.size());
 
     // Track client if we're server
     uint32_t clientId = 0;
@@ -533,7 +651,66 @@ void NetworkManager::processIncomingBuffer(
       return;
     }
 
+    if (_isServer && envelope.topic == "ACK") {
+      handleAckMessage(clientId, envelope.payload);
+      return;
+    }
+
+    if (!_isServer && wireEnvelope.messageId > 0 &&
+        isReliableTopic(envelope.topic)) {
+      sendNetworkMessage("ACK", std::to_string(wireEnvelope.messageId));
+    }
+
+    if (_isServer && envelope.topic == "_disconnect") {
+      if (clientId > 0) {
+        markClientDisconnected(clientId, "graceful");
+      }
+      return;
+    }
+
+    bool suppressDefaultBusForward = false;
+    if (_isServer) {
+      if (envelope.topic == "PLAYER_JOIN") {
+        _lobbyManager.onPlayerJoin(clientId);
+        _gameStateMachine.onPlayerJoin(clientId);
+        queueBusMessage("PLAYER_JOIN", std::to_string(clientId));
+        suppressDefaultBusForward = true;
+      } else if (envelope.topic == "PLAYER_READY") {
+        _lobbyManager.onPlayerReady(clientId);
+        _gameStateMachine.onPlayerReady(clientId);
+        queueBusMessage("PLAYER_READY", std::to_string(clientId));
+        suppressDefaultBusForward = true;
+
+        // Check if game should start (using new GameStateMachine)
+        if (_gameStateMachine.shouldTransitionToStarting()) {
+          // GameStateMachine will handle the transition in update()
+          // The callback will broadcast GAME_START
+        } else if (_lobbyManager.shouldStartGame()) {
+          // Fallback to legacy LobbyManager behavior
+          _lobbyManager.setGameStarted(true);
+          broadcast("GAME_START", "all_ready");
+          queueBusMessage("GAME_START", "all_ready");
+        }
+      } else if (envelope.topic == "PLAYER_LEAVE") {
+        _gameStateMachine.onPlayerLeave(clientId);
+        queueBusMessage("PLAYER_LEAVE", std::to_string(clientId));
+        suppressDefaultBusForward = true;
+      } else if (envelope.topic == "PLAYER_DIED") {
+        _gameStateMachine.onPlayerDied(clientId);
+        queueBusMessage("PLAYER_DIED", std::to_string(clientId));
+        suppressDefaultBusForward = true;
+      } else if (envelope.topic == "HEARTBEAT") {
+        _gameStateMachine.onPlayerHeartbeat(clientId);
+        // Don't forward heartbeats to Lua
+        suppressDefaultBusForward = true;
+      }
+    }
+
     enqueueMessage(envelope);
+
+    if (suppressDefaultBusForward) {
+      return;
+    }
 
     if (_isServer && clientId > 0) {
       queueBusMessage(envelope.topic,
@@ -573,7 +750,9 @@ uint32_t NetworkManager::getOrCreateClientId(const udp::endpoint &endpoint) {
 
   // Notify about new client
   if (isNewClient) {
+    _lobbyManager.onClientConnected(clientId);
     queueBusMessage("ClientConnected", std::to_string(clientId) + " " + key);
+    sendToClient(clientId, "NET_PROBE", "connected");
   }
 
   return clientId;
@@ -599,14 +778,56 @@ void NetworkManager::updateClientActivity(uint32_t clientId) {
 }
 
 void NetworkManager::checkClientTimeouts() {
-  std::lock_guard<std::mutex> lock(_clientsMutex);
-  auto now = std::chrono::steady_clock::now();
+  std::vector<uint32_t> timedOutClients;
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto now = std::chrono::steady_clock::now();
 
-  for (auto &[clientId, session] : _clients) {
-    if (session.connected && (now - session.lastActivity) >= CLIENT_TIMEOUT) {
-      session.connected = false;
-      queueBusMessage("ClientDisconnected",
-                      std::to_string(clientId) + " timeout");
+    for (auto &[clientId, session] : _clients) {
+      if (session.connected && (now - session.lastActivity) >= CLIENT_TIMEOUT) {
+        timedOutClients.push_back(clientId);
+      }
+    }
+  }
+
+  for (uint32_t clientId : timedOutClients) {
+    markClientDisconnected(clientId, "timeout");
+  }
+}
+
+void NetworkManager::markClientDisconnected(uint32_t clientId,
+                                            const std::string &reason) {
+  bool wasConnected = false;
+
+  {
+    std::lock_guard<std::mutex> lock(_clientsMutex);
+    auto it = _clients.find(clientId);
+    if (it == _clients.end()) {
+      return;
+    }
+    if (!it->second.connected) {
+      return;
+    }
+    it->second.connected = false;
+    wasConnected = true;
+  }
+
+  if (!wasConnected) {
+    return;
+  }
+
+  _lobbyManager.onClientDisconnected(clientId);
+  queueBusMessage("ClientDisconnected",
+                  std::to_string(clientId) + " " + reason);
+
+  std::lock_guard<std::mutex> reliableLock(_reliableMutex);
+  const std::string prefix = std::to_string(clientId) + ":";
+  for (auto it = _pendingReliablePackets.begin();
+       it != _pendingReliablePackets.end();) {
+    if (it->first.rfind(prefix, 0) == 0) {
+      it = _pendingReliablePackets.erase(it);
+    } else {
+      ++it;
     }
   }
 }
@@ -629,33 +850,55 @@ void NetworkManager::sendHeartbeats() {
 
 void NetworkManager::sendToEndpoint(const udp::endpoint &endpoint,
                                     const std::string &topic,
-                                    const std::string &payload) {
+                                    const std::string &payload,
+                                    uint64_t messageId) {
   NetworkEnvelope envelope{topic, payload, 0};
   msgpack::sbuffer buffer;
   SerializableEnvelope wireEnvelope(envelope);
+  wireEnvelope.messageId = messageId;
   msgpack::pack(buffer, wireEnvelope);
 
   auto packet = std::make_shared<std::vector<char>>(buffer.size());
   std::memcpy(packet->data(), buffer.data(), buffer.size());
 
-  asio::post(_ioContext, [this, packet, endpoint]() {
+  asio::post(_ioContext, [this, packet, endpoint, topic]() {
     if (!_socket || !_socket->is_open()) {
       return;
     }
 
-    _socket->async_send_to(
-        asio::buffer(*packet), endpoint,
-        [this, packet](const std::error_code &ec, std::size_t) {
-          if (ec && ec != asio::error::operation_aborted) {
-            publishError(std::string("SendFailed:") + ec.message());
-          }
-        });
+    auto sendOnce = [this, packet, endpoint, topic]() {
+      _socket->async_send_to(
+          asio::buffer(*packet), endpoint,
+          [this, packet, topic](const std::error_code &ec,
+                                std::size_t bytesTransferred) {
+            if (ec && ec != asio::error::operation_aborted) {
+              publishError(std::string("SendFailed:") + ec.message());
+              return;
+            }
+            logPacket("SEND", topic, bytesTransferred);
+          });
+    };
+
+    const int lagMs = _simulatedLagMs.load(std::memory_order_relaxed);
+    if (lagMs > 0) {
+      auto timer = std::make_shared<asio::steady_timer>(
+          _ioContext, std::chrono::milliseconds(lagMs));
+      timer->async_wait([sendOnce, timer](const std::error_code &timerEc) {
+        if (!timerEc) {
+          sendOnce();
+        }
+      });
+      return;
+    }
+
+    sendOnce();
   });
 }
 
 void NetworkManager::sendToEndpointBinary(const udp::endpoint &endpoint,
                                           const std::string &topic,
-                                          const std::vector<char> &payload) {
+                                          const std::vector<char> &payload,
+                                          uint64_t messageId) {
   // Convert vector<char> to string for the envelope (which uses string storage)
   // This is safe for binary data.
   std::string payloadStr(payload.begin(), payload.end());
@@ -663,23 +906,43 @@ void NetworkManager::sendToEndpointBinary(const udp::endpoint &endpoint,
   
   msgpack::sbuffer buffer;
   SerializableEnvelope wireEnvelope(envelope);
+  wireEnvelope.messageId = messageId;
   msgpack::pack(buffer, wireEnvelope);
 
   auto packet = std::make_shared<std::vector<char>>(buffer.size());
   std::memcpy(packet->data(), buffer.data(), buffer.size());
 
-  asio::post(_ioContext, [this, packet, endpoint]() {
+  asio::post(_ioContext, [this, packet, endpoint, topic]() {
     if (!_socket || !_socket->is_open()) {
       return;
     }
 
-    _socket->async_send_to(
-        asio::buffer(*packet), endpoint,
-        [this, packet](const std::error_code &ec, std::size_t) {
-          if (ec && ec != asio::error::operation_aborted) {
-            publishError(std::string("SendFailed:") + ec.message());
-          }
-        });
+    auto sendOnce = [this, packet, endpoint, topic]() {
+      _socket->async_send_to(
+          asio::buffer(*packet), endpoint,
+          [this, packet, topic](const std::error_code &ec,
+                                std::size_t bytesTransferred) {
+            if (ec && ec != asio::error::operation_aborted) {
+              publishError(std::string("SendFailed:") + ec.message());
+              return;
+            }
+            logPacket("SEND", topic, bytesTransferred);
+          });
+    };
+
+    const int lagMs = _simulatedLagMs.load(std::memory_order_relaxed);
+    if (lagMs > 0) {
+      auto timer = std::make_shared<asio::steady_timer>(
+          _ioContext, std::chrono::milliseconds(lagMs));
+      timer->async_wait([sendOnce, timer](const std::error_code &timerEc) {
+        if (!timerEc) {
+          sendOnce();
+        }
+      });
+      return;
+    }
+
+    sendOnce();
   });
 }
 
@@ -780,7 +1043,12 @@ void NetworkManager::sendToClient(uint32_t clientId, const std::string &topic,
   }
 
   if (endpointOpt.has_value()) {
-    sendToEndpoint(endpointOpt.value(), topic, payload);
+    uint64_t messageId = 0;
+    if (_isServer && isReliableTopic(topic)) {
+      messageId = nextReliableMessageId();
+      trackReliableMessage(clientId, topic, payload, messageId);
+    }
+    sendToEndpoint(endpointOpt.value(), topic, payload, messageId);
   }
 }
 
@@ -814,6 +1082,7 @@ void NetworkManager::sendToClientBinary(uint32_t clientId,
 
 void NetworkManager::broadcast(const std::string &topic,
                                const std::string &payload) {
+  std::vector<uint32_t> reliableClients;
   std::vector<udp::endpoint> endpoints;
   {
     std::lock_guard<std::mutex> lock(_clientsMutex);
@@ -823,8 +1092,20 @@ void NetworkManager::broadcast(const std::string &topic,
     for (const auto &[clientId, session] : _clients) {
       if (session.connected) {
         endpoints.push_back(session.endpoint);
+        reliableClients.push_back(clientId);
       }
     }
+  }
+
+  if (_isServer && isReliableTopic(topic)) {
+    const uint64_t messageId = nextReliableMessageId();
+    for (uint32_t clientId : reliableClients) {
+      trackReliableMessage(clientId, topic, payload, messageId);
+    }
+    for (const auto &endpoint : endpoints) {
+      sendToEndpoint(endpoint, topic, payload, messageId);
+    }
+    return;
   }
 
   for (const auto &endpoint : endpoints) {
@@ -897,6 +1178,225 @@ std::vector<NetworkEnvelope> NetworkManager::getAllMessages() {
     _messageQueue.pop_front();
   }
   return messages;
+}
+
+bool NetworkManager::isReliableTopic(const std::string &topic) const {
+  return topic == "PLAYER_ASSIGN" || topic == "GAME_START" ||
+         topic == "GAME_END" || topic == "NET_PROBE";
+}
+
+void NetworkManager::trackReliableMessage(uint32_t clientId,
+                                          const std::string &topic,
+                                          const std::string &payload,
+                                          uint64_t messageId) {
+  std::lock_guard<std::mutex> lock(_reliableMutex);
+  const auto key = std::to_string(clientId) + ":" + std::to_string(messageId);
+  auto &packet = _pendingReliablePackets[key];
+  packet.clientId = clientId;
+  packet.messageId = messageId;
+  packet.topic = topic;
+  packet.payload = payload;
+  packet.lastSent = std::chrono::steady_clock::now();
+  packet.attempts = 1;
+}
+
+void NetworkManager::handleAckMessage(uint32_t clientId,
+                                      const std::string &payload) {
+  const std::string ackPayload = trimString(payload);
+  if (ackPayload.empty()) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(_reliableMutex);
+  try {
+    const uint64_t messageId = std::stoull(ackPayload);
+    const auto key = std::to_string(clientId) + ":" + std::to_string(messageId);
+    if (_pendingReliablePackets.erase(key) > 0) {
+      std::cout << "[NET][ACK][" << nowSinceStartMs() << "ms] "
+                << "CLIENT=" << clientId << " MID=" << messageId
+                << std::endl;
+    }
+    return;
+  } catch (const std::exception &) {
+    // Backward compatibility with legacy ACK payload containing topic.
+  }
+
+  const auto legacyKey = std::to_string(clientId) + ":" + ackPayload;
+  _pendingReliablePackets.erase(legacyKey);
+}
+
+void NetworkManager::processReliableResends() {
+  std::vector<ReliablePacket> toResend;
+  std::vector<std::string> toErase;
+  const auto now = std::chrono::steady_clock::now();
+
+  {
+    std::lock_guard<std::mutex> lock(_reliableMutex);
+    for (auto &[key, packet] : _pendingReliablePackets) {
+      if (now - packet.lastSent < RELIABLE_RESEND_INTERVAL) {
+        continue;
+      }
+      if (packet.attempts >= RELIABLE_MAX_ATTEMPTS) {
+        toErase.push_back(key);
+        publishError("ReliableMessageTimeout:" + key);
+        continue;
+      }
+      packet.lastSent = now;
+      packet.attempts += 1;
+      toResend.push_back(packet);
+    }
+
+    for (const auto &key : toErase) {
+      _pendingReliablePackets.erase(key);
+    }
+  }
+
+  for (const auto &packet : toResend) {
+    std::optional<udp::endpoint> endpointOpt;
+    {
+      std::lock_guard<std::mutex> clientsLock(_clientsMutex);
+      auto it = _clients.find(packet.clientId);
+      if (it != _clients.end() && it->second.connected) {
+        endpointOpt = it->second.endpoint;
+      }
+    }
+    if (endpointOpt.has_value()) {
+      std::cout << "[NET][RESEND][" << nowSinceStartMs() << "ms] "
+                << "CLIENT=" << packet.clientId
+                << " TOPIC=" << packet.topic
+                << " MID=" << packet.messageId
+                << " ATTEMPT=" << packet.attempts << std::endl;
+      sendToEndpoint(endpointOpt.value(), packet.topic, packet.payload,
+                     packet.messageId);
+    }
+  }
+}
+
+uint64_t NetworkManager::nextReliableMessageId() {
+  return _nextReliableMessageId.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t NetworkManager::nowSinceStartMs() const {
+  const auto now = std::chrono::steady_clock::now();
+  return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - _startTime)
+          .count());
+}
+
+void NetworkManager::logPacket(const char *direction, const std::string &topic,
+                               std::size_t sizeBytes) {
+  if (std::strcmp(direction, "SEND") == 0) {
+    _sentBytesThisSecond.fetch_add(sizeBytes, std::memory_order_relaxed);
+  } else {
+    _receivedBytesThisSecond.fetch_add(sizeBytes, std::memory_order_relaxed);
+  }
+
+  std::cout << "[NET][" << direction << "][" << nowSinceStartMs() << "ms] "
+            << "TOPIC=" << topic << " SIZE=" << sizeBytes << " bytes"
+            << std::endl;
+}
+
+void NetworkManager::reportBandwidthUsage() {
+  if (!_bandwidthLoggingEnabled.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  if (now - _lastBandwidthReportTime < std::chrono::seconds(1)) {
+    return;
+  }
+
+  _lastBandwidthReportTime = now;
+  const uint64_t sendBytes =
+      _sentBytesThisSecond.exchange(0, std::memory_order_relaxed);
+  const uint64_t recvBytes =
+      _receivedBytesThisSecond.exchange(0, std::memory_order_relaxed);
+
+  std::cout << "[NET][BANDWIDTH][" << nowSinceStartMs() << "ms] "
+            << "SEND=" << sendBytes << " B/s "
+            << "RECEIVE=" << recvBytes << " B/s "
+            << "TOTAL=" << (sendBytes + recvBytes) << " B/s"
+            << std::endl;
+}
+
+void NetworkManager::setupGameStateMachineCallbacks() {
+  _gameStateMachine.setStateChangeCallback(
+      [this](GameState oldState, GameState newState) {
+        onGameStateChanged(oldState, newState);
+      });
+
+  _gameStateMachine.setPlayerStateChangeCallback(
+      [this](uint32_t playerId, PlayerState oldState, PlayerState newState) {
+        onPlayerStateChanged(playerId, oldState, newState);
+      });
+}
+
+void NetworkManager::onGameStateChanged(GameState oldState, GameState newState) {
+  std::cout << "[NetworkManager] Game state changed: "
+            << GameStateMachine::stateToString(oldState) << " -> "
+            << GameStateMachine::stateToString(newState) << std::endl;
+
+  if (newState == GameState::STARTING) {
+    // Notify clients that game is starting
+    broadcast("GAME_STARTING", "get_ready");
+    queueBusMessage("GAME_STARTING", "get_ready");
+  } else if (newState == GameState::IN_GAME) {
+    // Game is now in progress - broadcast GAME_START
+    _lobbyManager.setGameStarted(true);
+    broadcast("GAME_START", "all_ready");
+    queueBusMessage("GAME_START", "all_ready");
+  } else if (newState == GameState::ENDING) {
+    // Game ended - broadcast GAME_END and notify Lua
+    broadcast("GAME_END", "game_over");
+    queueBusMessage("GAME_END", "game_over");
+  } else if (newState == GameState::LOBBY) {
+    // Back to lobby - notify clients
+    _lobbyManager.setGameStarted(false);
+    broadcast("GAME_WAITING_ROOM", "reset");
+    queueBusMessage("GAME_WAITING_ROOM", "reset");
+  }
+}
+
+void NetworkManager::onPlayerStateChanged(uint32_t playerId, PlayerState oldState,
+                                          PlayerState newState) {
+  std::cout << "[NetworkManager] Player " << playerId << " state changed: "
+            << GameStateMachine::playerStateToString(oldState) << " -> "
+            << GameStateMachine::playerStateToString(newState) << std::endl;
+
+  // Notify Lua about player state changes
+  std::string stateStr = GameStateMachine::playerStateToString(newState);
+  queueBusMessage("PLAYER_STATE_CHANGED",
+                  std::to_string(playerId) + " " + stateStr);
+
+  if (newState == PlayerState::DEAD) {
+    // Notify all clients about player death
+    broadcast("PLAYER_DIED", std::to_string(playerId));
+  } else if (newState == PlayerState::DISCONNECTED) {
+    // Mark client disconnected in the network layer
+    markClientDisconnected(playerId, "state_change");
+  }
+}
+
+void NetworkManager::handlePlayerDiedRequest(const std::string &payload) {
+  try {
+    uint32_t clientId = static_cast<uint32_t>(std::stoul(trimString(payload)));
+    _gameStateMachine.onPlayerDied(clientId);
+  } catch (const std::exception &) {
+    publishError("PlayerDiedInvalidClientId");
+  }
+}
+
+void NetworkManager::handlePlayerLeaveRequest(const std::string &payload) {
+  try {
+    uint32_t clientId = static_cast<uint32_t>(std::stoul(trimString(payload)));
+    _gameStateMachine.onPlayerLeave(clientId);
+  } catch (const std::exception &) {
+    publishError("PlayerLeaveInvalidClientId");
+  }
+}
+
+void NetworkManager::handleHeartbeat(uint32_t clientId) {
+  _gameStateMachine.onPlayerHeartbeat(clientId);
 }
 
 } // namespace rtypeEngine

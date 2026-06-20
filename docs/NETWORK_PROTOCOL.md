@@ -63,15 +63,72 @@ Assigns a unique ID and entity to a newly connected client.
 
 ---
 
+### 4. `PLAYER_JOIN` (Client ➔ Server)
+Signals that a connected client entered the multiplayer lobby.
+
+**Topic:** `PLAYER_JOIN`  
+**Payload:** String (free text, usually `join`)
+
+---
+
+### 5. `PLAYER_READY` (Client ➔ Server)
+Marks a lobby player as ready.
+
+**Topic:** `PLAYER_READY`  
+**Payload:** String (free text, usually `ready`)
+
+---
+
+### 6. `GAME_START` (Server ➔ Clients)
+Broadcast when all connected lobby players are ready.
+
+**Topic:** `GAME_START`  
+**Payload:** String (`all_ready`)
+
+---
+
+### 7. `ACK` (Client ➔ Server)
+Acknowledges reliable control messages.
+
+**Topic:** `ACK`  
+**Payload:** String (acked topic, e.g. `PLAYER_ASSIGN` or `GAME_START`)
+
+---
+
+## ✅ Reliable Control Messages
+
+The server tracks a small set of critical messages and resends them until ACK:
+
+- `PLAYER_ASSIGN`
+- `GAME_START`
+
+Resend policy:
+
+- Interval: 500ms
+- Max attempts: 6
+- Timeout report: `NetworkError` publishes `ReliableMessageTimeout:<clientId>:<topic>`
+
+Error handling behavior:
+
+- Missing ACK triggers retransmission.
+- Reaching max retries emits timeout telemetry (`NetworkError`) and drops the pending reliable packet.
+- Client disconnect removes all pending reliable packets for that client.
+
+---
+
 ## 🔄 Sequence Diagram
 
 ```mermaid
 sequence_diagram
   Client ->> Server: RequestNetworkConnect
   Server -->> Client: NetworkStatus ("Connected")
+  Client ->> Server: PLAYER_JOIN
+  Client ->> Server: PLAYER_READY
+  Server -->> Client: GAME_START
+  Client ->> Server: ACK("GAME_START")
   Server ->> Server: Create Player Entity
   Server -->> Client: PLAYER_ASSIGN (UUID)
-  Client ->> Server: CLIENT_READY
+  Client ->> Server: ACK("PLAYER_ASSIGN")
   loop Gameplay
     Client ->> Server: INPUT (Binary MsgPack)
     Server ->> Server: Simulate Physics

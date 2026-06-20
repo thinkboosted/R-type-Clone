@@ -7,7 +7,8 @@ namespace rtypeGame {
 
 class RTypeClient : public RTypeGame {
 public:
-    RTypeClient(bool isLocal, const std::string& serverIp = "", int serverPort = 0);
+    RTypeClient(bool isLocal, const std::string& serverIp = "", int serverPort = 0,
+                int simulateLagMs = 0, bool printBandwidth = false);
     ~RTypeClient() override = default;
 
 protected:
@@ -18,6 +19,8 @@ private:
     bool _isLocal;
     std::string _serverIp;
     int _serverPort;
+    int _simulateLagMs;
+    bool _printBandwidth;
 };
 
 } // namespace rtypeGame

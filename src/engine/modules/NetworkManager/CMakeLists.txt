@@ -1,6 +1,10 @@
 add_library(NetworkManager SHARED
     NetworkManager.cpp
     NetworkManager.hpp
+    LobbyManager.cpp
+    LobbyManager.hpp
+    GameStateMachine.cpp
+    GameStateMachine.hpp
     INetworkManager.hpp
     ../IModule.hpp
     ../AModule.hpp
@@ -41,9 +45,15 @@ if(MSGPACK_TARGET)
     target_link_libraries(NetworkManager PRIVATE ${MSGPACK_TARGET})
 endif()
 
-target_link_libraries(NetworkManager PRIVATE
-    cppzmq
-)
+# cppzmq is header-only; link the actual zmq library target explicitly.
+if (TARGET libzmq)
+    target_link_libraries(NetworkManager PRIVATE libzmq)
+elseif(TARGET libzmq-static)
+    target_link_libraries(NetworkManager PRIVATE libzmq-static)
+elseif(TARGET cppzmq)
+    # Fallback if only cppzmq target exists in this environment.
+    target_link_libraries(NetworkManager PRIVATE cppzmq)
+endif()
 
 if(WIN32)
     target_link_libraries(NetworkManager PRIVATE ws2_32 mswsock)

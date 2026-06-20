@@ -14,15 +14,12 @@ end
 local isSoloMode = not (ECS.capabilities and ECS.capabilities.hasNetworkSync)
 local backgroundTexture
 
-if isSoloMode then
-    backgroundTexture = "assets/textures/Background/SinglePlay1.png"
-else
-    backgroundTexture = "assets/textures/Background/Multiplayer_1.png"
-end
+backgroundTexture = "assets/textures/Background/Starfield.png"
 
 local Spawns = require("assets/scripts/space-shooter/spawns")
 
 
 Spawns.createCoreEntities(CurrentLevel, backgroundTexture, CurrentScore)
+ECS.sendMessage("ShowLevelIntro", "1")
 
 print("[Level-1] Level 1 entities loaded!")

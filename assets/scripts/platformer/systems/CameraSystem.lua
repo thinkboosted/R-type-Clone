@@ -13,6 +13,15 @@ function CameraSystem.update(dt)
 
     if #players > 0 and #cameras > 0 then
         local playerID = players[1]
+        if ECS.capabilities.hasAuthority and _G.PlatformerNetwork and _G.PlatformerNetwork.hostPlayerId then
+            playerID = _G.PlatformerNetwork.hostPlayerId
+        elseif not ECS.capabilities.hasAuthority and _G.PlatformerNetwork and _G.PlatformerNetwork.assignedServerPlayerId then
+            local mapped = _G.PlatformerNetwork.serverToLocal[_G.PlatformerNetwork.assignedServerPlayerId]
+            if mapped then
+                playerID = mapped
+            end
+        end
+
         local cameraID = cameras[1]
 
         local pTrans = ECS.getComponent(playerID, "Transform")

@@ -1,7 +1,30 @@
 #include "RTypeClient.hpp"
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
+
+namespace {
+int parseLagFlag(int argc, char **argv) {
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    const std::string prefix = "--simulate-lag=";
+    if (arg.rfind(prefix, 0) == 0) {
+      return std::max(0, std::stoi(arg.substr(prefix.size())));
+    }
+  }
+  return 0;
+}
+
+bool parsePrintBandwidthFlag(int argc, char **argv) {
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--print-bandwidth") {
+      return true;
+    }
+  }
+  return false;
+}
+}
 
 int main(int argc, char **argv) {
   try {
@@ -20,11 +43,22 @@ int main(int argc, char **argv) {
             return 1;
         }
     } else {
-        std::cerr << "Usage: ./r-type_client local  OR  ./r-type_client <server_ip> <server_port>" << std::endl;
+      std::cerr << "Usage: ./r-type_client local [--simulate-lag=100] [--print-bandwidth]  OR  ./r-type_client <server_ip> <server_port> [--simulate-lag=100] [--print-bandwidth]" << std::endl;
         return 1;
     }
 
-    rtypeGame::RTypeClient app(isLocal, serverIp, serverPort);
+    int simulateLagMs = 0;
+    bool printBandwidth = false;
+    try {
+      simulateLagMs = parseLagFlag(argc, argv);
+      printBandwidth = parsePrintBandwidthFlag(argc, argv);
+    } catch (...) {
+      std::cerr << "Error: Invalid simulate-lag value." << std::endl;
+      return 1;
+    }
+
+    rtypeGame::RTypeClient app(isLocal, serverIp, serverPort, simulateLagMs,
+                               printBandwidth);
 
     app.loadModule("LuaECSManager");
     app.loadModule("GLEWSFMLRenderer");

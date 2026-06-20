@@ -97,6 +97,11 @@ function CollisionSystem.hasTag(id, tag)
 end
 
 function CollisionSystem.onCollision(id1, id2)
+    if (CollisionSystem.hasTag(id1, "Bullet") and (CollisionSystem.hasTag(id2, "Bonus") or CollisionSystem.hasTag(id2, "PowerUp"))) or
+       (CollisionSystem.hasTag(id2, "Bullet") and (CollisionSystem.hasTag(id1, "Bonus") or CollisionSystem.hasTag(id1, "PowerUp"))) then
+        return
+    end
+
     -- Check Player vs Enemy
     if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "Enemy") then
         CollisionSystem.handlePlayerEnemy(id1, id2)
@@ -124,11 +129,16 @@ function CollisionSystem.onCollision(id1, id2)
 elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "Bonus") then
         CollisionSystem.handlePlayerBonus(id2, id1)
     end
+
+    -- Check Player vs PowerUp (new explicit tag)
+    if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "PowerUp") then
+        CollisionSystem.handlePlayerBonus(id1, id2)
+    elseif CollisionSystem.hasTag(id2, "Player") and CollisionSystem.hasTag(id1, "PowerUp") then
+        CollisionSystem.handlePlayerBonus(id2, id1)
+    end
 end
 
 function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
-    print("DEBUG: Collision Player " .. playerId .. " vs Enemy " .. enemyId)
-
     -- ⚠️ AUTHORITY: Only server/solo modifies life (guaranteed by update() check)
     local life = ECS.getComponent(playerId, "Life")
     local color = ECS.getComponent(playerId, "Color")
@@ -152,7 +162,7 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
         
         -- Play hit sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "player_hit:effects/hit.wav:100")
+            ECS.sendMessage("SoundPlay", "player_hit:effects/hit.wav:" .. ECS.getSfxVolume(100))
         else
             -- Broadcast hit sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100")
@@ -172,12 +182,18 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
     -- ⚠️ AUTHORITY: Only server/solo modifies life and score
     local life = ECS.getComponent(enemyId, "Life")
     if life then
-        -- DAMAGE APPLICATION: Kill enemy on bullet hit
-        life.amount = 0
+        local bulletComp = ECS.getComponent(bulletId, "Bullet")
+        local damage = (bulletComp and bulletComp.damage) or 1
+        if CollisionSystem.hasTag(enemyId, "Boss") then
+            life.amount = life.amount - damage
+        else
+            -- Keep fast clear for normal enemies.
+            life.amount = 0
+        end
         
         -- Play explosion sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
+            ECS.sendMessage("SoundPlay", "explosion_" .. enemyId .. ":effects/explosion.wav:" .. ECS.getSfxVolume(90))
         else
             -- Broadcast explosion sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
@@ -190,7 +206,6 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
         local playerScore = ECS.getComponent(ownerComp.id, "Score")
         if playerScore then
             playerScore.value = playerScore.value + config.score.kill
-            print("[DEBUG] Player " .. ownerComp.id .. " score: " .. playerScore.value)
         end
     end
 
@@ -199,7 +214,6 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
     if #scoreEntities > 0 then
         local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
         scoreComp.value = scoreComp.value + config.score.kill
-        print("[DEBUG] Global score: " .. scoreComp.value)
     end
 
     -- Destroy bullet after hit
@@ -213,11 +227,40 @@ function CollisionSystem.handlePlayerBonus(playerId, bonusId)
     -- ⚠️ AUTHORITY: Only server/solo can grant powerups and destroy bonus
     local bonus = ECS.getComponent(bonusId, "Bonus")
     if bonus then
-        ECS.addComponent(playerId, "PowerUp", PowerUp(bonus.duration, 0.2))
+        local duration = bonus.duration or 8.0
+        local pType = bonus.type or "RAPID"
+
+        if PowerUpSystem and PowerUpSystem.applyPowerUp then
+            PowerUpSystem.applyPowerUp(playerId, pType, duration)
+        else
+            -- Safety path: still apply a real weapon buff if PowerUpSystem isn't in scope.
+            local weapon = ECS.getComponent(playerId, "Weapon")
+            local profile = ECS.getComponent(playerId, "WeaponProfile")
+            if weapon then
+                if not profile then
+                    profile = WeaponProfile("STANDARD", weapon.cooldown or 0.2)
+                end
+
+                if pType == "RAPID" then
+                    weapon.cooldown = 0.1
+                    profile.weaponType = "STANDARD"
+                elseif pType == "SPREAD" then
+                    weapon.cooldown = 0.22
+                    profile.weaponType = "SPREAD"
+                elseif pType == "BURST" then
+                    weapon.cooldown = 0.28
+                    profile.weaponType = "BURST"
+                end
+
+                ECS.addComponent(playerId, "Weapon", weapon)
+                ECS.addComponent(playerId, "WeaponProfile", profile)
+            end
+            ECS.addComponent(playerId, "PowerUp", { timeRemaining = duration, originalCooldown = (profile and profile.baseCooldown) or 0.2, powerType = pType })
+        end
         
         -- Play powerup sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "powerup:effects/powerup.wav:100")
+            ECS.sendMessage("SoundPlay", "powerup:effects/powerup.wav:" .. ECS.getSfxVolume(100))
         else
             -- Broadcast powerup sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "powerup:effects/powerup.wav:100")

@@ -143,7 +143,6 @@ void SFMLSoundManager::handleSoundSetVolume(const std::string& message) {
 
 void SFMLSoundManager::playSound(const std::string& soundId, const std::string& filePath, float volume) {
     std::string fullPath = std::string(ASSETS_PATH) + filePath;
-    std::cout << "[SFMLSoundManager] playSound called: id=" << soundId << " path=" << fullPath << " volume=" << volume << std::endl;
 
     if (_soundBuffers.find(filePath) == _soundBuffers.end()) {
         auto buffer = std::make_unique<sf::SoundBuffer>();
@@ -151,7 +150,6 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
             std::cerr << "[SFMLSoundManager] Failed to load sound: " << fullPath << std::endl;
             return;
         }
-        std::cout << "[SFMLSoundManager] Sound buffer loaded successfully: " << fullPath << std::endl;
         _soundBuffers[filePath] = BufferInfo{std::move(buffer), 0.0f};
     }
 
@@ -160,7 +158,6 @@ void SFMLSoundManager::playSound(const std::string& soundId, const std::string& 
     auto sound = std::make_unique<sf::Sound>(*_soundBuffers[filePath].buffer);
     sound->setVolume(volume);
     sound->play();
-    std::cout << "[SFMLSoundManager] Sound playing: " << soundId << " (status=" << static_cast<int>(sound->getStatus()) << ")" << std::endl;
 
     static unsigned long long counter = 0;
     std::string uniqueKey = soundId + ":" + std::to_string(counter++);

@@ -13,6 +13,47 @@ PlayerSystem.keys = {
 
 PlayerSystem.jumpRequested = false
 
+local function getHostControlledPlayer()
+    local players = ECS.getEntitiesWith({"Player", "Physic", "Transform"})
+    if #players == 0 then return nil end
+
+    if _G.PlatformerNetwork and _G.PlatformerNetwork.hostPlayerId then
+        return _G.PlatformerNetwork.hostPlayerId
+    end
+
+    for _, id in ipairs(players) do
+        local remote = ECS.getComponent(id, "RemoteControl")
+        if not remote then
+            return id
+        end
+    end
+
+    return players[1]
+end
+
+local function getClientControlledPlayer()
+    local net = _G.PlatformerNetwork
+    if net and net.assignedServerPlayerId then
+        local mapped = net.serverToLocal[net.assignedServerPlayerId]
+        if mapped then
+            return mapped
+        end
+    end
+
+    local players = ECS.getEntitiesWith({"Player", "Physic", "Transform"})
+    if #players > 0 then
+        return players[1]
+    end
+    return nil
+end
+
+local function sendClientInput(key, pressed)
+    if not ECS.capabilities.hasNetworkSync or ECS.capabilities.hasAuthority then
+        return
+    end
+    ECS.sendNetworkMessage("PINPUT", key .. " " .. (pressed and "1" or "0"))
+end
+
 function PlayerSystem.init()
     print("[PlayerSystem] Initialized")
     -- Subscribe to keyboard events
@@ -21,13 +62,18 @@ function PlayerSystem.init()
 end
 
 function PlayerSystem.update(dt)
-    local players = ECS.getEntitiesWith({"Player", "Physic", "Transform"})
-    if #players == 0 then return end
+    local id = nil
+    if ECS.capabilities.hasAuthority then
+        id = getHostControlledPlayer()
+    else
+        id = getClientControlledPlayer()
+    end
+    if not id then return end
 
-    local id = players[1]
     local physic = ECS.getComponent(id, "Physic")
     local transform = ECS.getComponent(id, "Transform")
     local playerComp = ECS.getComponent(id, "Player")
+    if not physic or not transform or not playerComp then return end
 
     -- Handle rotation with left/right arrows
     local rotationSpeed = 3.0
@@ -38,7 +84,9 @@ function PlayerSystem.update(dt)
     if PlayerSystem.keys.rotateRight then
         vaz = vaz - rotationSpeed
     end
-    physic.vaz = vaz
+    if ECS.capabilities.hasAuthority then
+        physic.vaz = vaz
+    end
 
     -- Calculate movement direction based on player's rotation
     local speed = playerComp.speed
@@ -76,16 +124,18 @@ function PlayerSystem.update(dt)
         vz = (vz / length) * speed
     end
 
-    physic.vx = vx
-    physic.vz = vz
+    if ECS.capabilities.hasAuthority then
+        physic.vx = vx
+        physic.vz = vz
+    end
 
     -- Update jump cooldown
-    if playerComp.jumpCooldown > 0 then
+    if ECS.capabilities.hasAuthority and playerComp.jumpCooldown > 0 then
         playerComp.jumpCooldown = playerComp.jumpCooldown - dt
     end
 
     -- Handle jump (only if grounded, cooldown expired, and jump requested)
-    if PlayerSystem.jumpRequested and playerComp.isGrounded and playerComp.jumpCooldown <= 0 then
+    if ECS.capabilities.hasAuthority and PlayerSystem.jumpRequested and playerComp.isGrounded and playerComp.jumpCooldown <= 0 then
         ECS.sendMessage("PhysicCommand", "ApplyImpulse:" .. id .. ":0," .. playerComp.jumpForce .. ",0;")
         playerComp.isGrounded = false
         playerComp.jumpCooldown = playerComp.jumpCooldownTime
@@ -112,6 +162,8 @@ function PlayerSystem.onKeyPressed(key)
     elseif key == "SPACE" then
         PlayerSystem.jumpRequested = true
     end
+
+    sendClientInput(key, true)
 end
 
 function PlayerSystem.onKeyReleased(key)
@@ -130,6 +182,8 @@ function PlayerSystem.onKeyReleased(key)
     elseif key == "SPACE" then
         PlayerSystem.jumpRequested = false
     end
+
+    sendClientInput(key, false)
 end
 
 ECS.registerSystem(PlayerSystem)

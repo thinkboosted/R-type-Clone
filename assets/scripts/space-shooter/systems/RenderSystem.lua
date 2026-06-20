@@ -8,6 +8,21 @@ local RenderSystem = {}
 local activeCameraId = nil  -- Track the currently active camera
 RenderSystem.initializedEntities = {}
 
+local function nearlyEqual(a, b, eps)
+    eps = eps or 0.0001
+    return math.abs((a or 0) - (b or 0)) <= eps
+end
+
+local function transformChanged(cache, t)
+    return not (nearlyEqual(cache.x, t.x) and nearlyEqual(cache.y, t.y) and nearlyEqual(cache.z, t.z)
+    and nearlyEqual(cache.rx, t.rx) and nearlyEqual(cache.ry, t.ry) and nearlyEqual(cache.rz, t.rz)
+    and nearlyEqual(cache.sx, t.sx) and nearlyEqual(cache.sy, t.sy) and nearlyEqual(cache.sz, t.sz))
+end
+
+local function colorChanged(cache, c)
+    return not (nearlyEqual(cache.cr, c.r) and nearlyEqual(cache.cg, c.g) and nearlyEqual(cache.cb, c.b))
+end
+
 function RenderSystem.init()
     print("[RenderSystem] Initialized (hasRendering: " .. tostring(ECS.capabilities.hasRendering) .. ")")
 end
@@ -54,7 +69,14 @@ function RenderSystem.update(dt)
 
         -- Initialize state tracking if needed
         if not RenderSystem.initializedEntities[id] then
-            RenderSystem.initializedEntities[id] = { model = nil, texture = nil }
+            RenderSystem.initializedEntities[id] = {
+                model = nil,
+                texture = nil,
+                x = nil, y = nil, z = nil,
+                rx = nil, ry = nil, rz = nil,
+                sx = nil, sy = nil, sz = nil,
+                cr = nil, cg = nil, cb = nil,
+            }
         end
         local cached = RenderSystem.initializedEntities[id]
 
@@ -64,6 +86,7 @@ function RenderSystem.update(dt)
              ECS.sendMessage("RenderEntityCommand", "CreateEntity:" .. type .. ":" .. id)
              ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
              cached.model = mesh.modelPath
+               cached.sx, cached.sy, cached.sz = transform.sx, transform.sy, transform.sz
              
              -- Force texture update after model change
              cached.texture = nil 
@@ -77,12 +100,21 @@ function RenderSystem.update(dt)
             cached.texture = mesh.texturePath
         end
 
-        if color then
+        if color and colorChanged(cached, color) then
             ECS.sendMessage("RenderEntityCommand", "SetColor:" .. id .. "," .. color.r .. "," .. color.g .. "," .. color.b)
+            cached.cr, cached.cg, cached.cb = color.r, color.g, color.b
         end
 
-        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
-        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+        if transformChanged(cached, transform) then
+            if not (nearlyEqual(cached.sx, transform.sx) and nearlyEqual(cached.sy, transform.sy) and nearlyEqual(cached.sz, transform.sz)) then
+                ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+            end
+            ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+            ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+            cached.x, cached.y, cached.z = transform.x, transform.y, transform.z
+            cached.rx, cached.ry, cached.rz = transform.rx, transform.ry, transform.rz
+            cached.sx, cached.sy, cached.sz = transform.sx, transform.sy, transform.sz
+        end
     end
 
     -- Handle Text Entities
@@ -95,15 +127,30 @@ function RenderSystem.update(dt)
         if not RenderSystem.initializedEntities[id] then
             ECS.createText(id, text.text, text.fontPath, text.fontSize, text.isScreenSpace)
             ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
-            RenderSystem.initializedEntities[id] = true
+            RenderSystem.initializedEntities[id] = {
+                x = nil, y = nil, z = nil,
+                rx = nil, ry = nil, rz = nil,
+                sx = nil, sy = nil, sz = nil,
+                cr = nil, cg = nil, cb = nil,
+            }
         end
+        local cached = RenderSystem.initializedEntities[id]
 
-        if color then
+        if color and colorChanged(cached, color) then
             ECS.sendMessage("RenderEntityCommand", "SetColor:" .. id .. "," .. color.r .. "," .. color.g .. "," .. color.b)
+            cached.cr, cached.cg, cached.cb = color.r, color.g, color.b
         end
 
-        ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
-        ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+        if transformChanged(cached, transform) then
+            if not (nearlyEqual(cached.sx, transform.sx) and nearlyEqual(cached.sy, transform.sy) and nearlyEqual(cached.sz, transform.sz)) then
+                ECS.sendMessage("RenderEntityCommand", "SetScale:" .. id .. "," .. transform.sx .. "," .. transform.sy .. "," .. transform.sz)
+            end
+            ECS.sendMessage("RenderEntityCommand", "SetPosition:" .. id .. "," .. transform.x .. "," .. transform.y .. "," .. transform.z)
+            ECS.sendMessage("RenderEntityCommand", "SetRotation:" .. id .. "," .. transform.rx .. "," .. transform.ry .. "," .. transform.rz)
+            cached.x, cached.y, cached.z = transform.x, transform.y, transform.z
+            cached.rx, cached.ry, cached.rz = transform.rx, transform.ry, transform.rz
+            cached.sx, cached.sy, cached.sz = transform.sx, transform.sy, transform.sz
+        end
 
         if not RenderSystem.lastText then RenderSystem.lastText = {} end
         if RenderSystem.lastText[id] ~= text.text then

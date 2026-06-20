@@ -11,6 +11,10 @@ function PhysicSystem.init()
 end
 
 function PhysicSystem.update(dt)
+    if not ECS.capabilities.hasAuthority then
+        return
+    end
+
     local entities = ECS.getEntitiesWith({"Transform", "Physic"})
 
     for _, id in ipairs(entities) do

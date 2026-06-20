@@ -1,12 +1,35 @@
 #include "RTypeServer.hpp"
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
 
+namespace {
+int parseLagFlag(int argc, char **argv) {
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    const std::string prefix = "--simulate-lag=";
+    if (arg.rfind(prefix, 0) == 0) {
+      return std::max(0, std::stoi(arg.substr(prefix.size())));
+    }
+  }
+  return 0;
+}
+
+bool parsePrintBandwidthFlag(int argc, char **argv) {
+  for (int i = 2; i < argc; ++i) {
+    if (std::string(argv[i]) == "--print-bandwidth") {
+      return true;
+    }
+  }
+  return false;
+}
+}
+
 int main(int argc, char **argv) {
   try {
     if (argc < 2) {
-      std::cerr << "Usage: ./r-type_server <port>" << std::endl;
+      std::cerr << "Usage: ./r-type_server <port> [--simulate-lag=100] [--print-bandwidth]" << std::endl;
       return 1;
     }
 
@@ -18,7 +41,17 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    rtypeGame::RTypeServer app(port);
+    int simulateLagMs = 0;
+    bool printBandwidth = false;
+    try {
+      simulateLagMs = parseLagFlag(argc, argv);
+      printBandwidth = parsePrintBandwidthFlag(argc, argv);
+    } catch (...) {
+      std::cerr << "Error: Invalid simulate-lag value." << std::endl;
+      return 1;
+    }
+
+    rtypeGame::RTypeServer app(port, simulateLagMs, printBandwidth);
 
     app.loadModule("LuaECSManager");
     app.loadModule("BulletPhysicEngine");

@@ -48,6 +48,11 @@ function EnemySystem.update(dt)
     local level = _G.CurrentLevel or 1
     EnemySystem.shootInterval = math.max(0.3, 2.6 / (level ^ 0.5))
 
+    -- During boss fights, stop spawning regular enemies to keep the phase readable.
+    if _G.LevelBossActive then
+        return
+    end
+
     EnemySystem.spawnTimer = EnemySystem.spawnTimer + dt
     if EnemySystem.spawnTimer >= EnemySystem.spawnInterval then
         EnemySystem.spawnTimer = 0

@@ -6,6 +6,15 @@ print("    3D PLATFORMER - Starting Game")
 print("===========================================")
 print("")
 
+-- Ensure solo capability defaults when no network handshake happened.
+if not ECS.capabilities.hasNetworkSync and not ECS.capabilities.hasAuthority then
+	ECS.setGameMode("SOLO")
+end
+
+print("[Main] Capabilities: authority=" .. tostring(ECS.capabilities.hasAuthority)
+	.. " network=" .. tostring(ECS.capabilities.hasNetworkSync)
+	.. " render=" .. tostring(ECS.capabilities.hasRendering))
+
 -- Load component definitions
 dofile("assets/scripts/platformer/Components.lua")
 print("[Main] Components loaded")
@@ -28,6 +37,11 @@ print("[Main] RenderSystem loaded")
 
 dofile("assets/scripts/platformer/systems/GameLogicSystem.lua")
 print("[Main] GameLogicSystem loaded")
+
+if ECS.capabilities.hasNetworkSync then
+	dofile("assets/scripts/platformer/systems/NetworkSystem.lua")
+	print("[Main] NetworkSystem loaded")
+end
 
 print("")
 print("[Main] All systems loaded successfully!")

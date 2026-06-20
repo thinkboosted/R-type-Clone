@@ -14,6 +14,10 @@ function GameLogicSystem.init()
 end
 
 function GameLogicSystem.update(dt)
+    if not ECS.capabilities.hasAuthority then
+        return
+    end
+
     -- Update win message timer
     if GameLogicSystem.gameWon then
         GameLogicSystem.winMessageTimer = GameLogicSystem.winMessageTimer + dt
@@ -59,6 +63,10 @@ function GameLogicSystem.respawnPlayer(playerId)
 end
 
 function GameLogicSystem.onCollision(id1, id2)
+    if not ECS.capabilities.hasAuthority then
+        return
+    end
+
     local player1 = ECS.getComponent(id1, "Player")
     local player2 = ECS.getComponent(id2, "Player")
     

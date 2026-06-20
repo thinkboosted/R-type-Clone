@@ -12,6 +12,7 @@
 #include <utility>
 #include <map>
 #include <sstream>
+#include <zmq.hpp>
 
 namespace rtypeEngine {
 
@@ -48,6 +49,31 @@ void SFMLWindowManager::loop() {
                 _window->close();
                 sendMessage("ExitApplication", "");
             }
+
+            if (event->is<sf::Event::FocusLost>()) {
+                _isFocused = false;
+                // Prevent sticky movement when window loses focus while key is held.
+                for (int k = 0; k < sf::Keyboard::KeyCount; ++k) {
+                    if (_pressedKeys[k]) {
+                        auto it = keyMappings.find(static_cast<sf::Keyboard::Key>(k));
+                        if (it != keyMappings.end()) {
+                            sendMessage("KeyReleased", it->second);
+                        }
+                        _pressedKeys[k] = false;
+                    }
+                }
+                continue;
+            }
+
+            if (event->is<sf::Event::FocusGained>()) {
+                _isFocused = true;
+                continue;
+            }
+
+            if (!_isFocused) {
+                continue;
+            }
+
             if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>()) {
                 std::stringstream ss;
                 ss << static_cast<int>(mousePressed->button) << ":" << mousePressed->position.x << "," << mousePressed->position.y;
@@ -67,6 +93,17 @@ void SFMLWindowManager::loop() {
                 auto it = keyMappings.find(keyReleased->code);
                 if (it != keyMappings.end()) {
                     sendMessage("KeyReleased", it->second);
+                }
+                _pressedKeys[static_cast<int>(keyReleased->code)] = false;
+            }
+            if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+                auto it = keyMappings.find(keyPressed->code);
+                if (it != keyMappings.end()) {
+                    const int keyIndex = static_cast<int>(keyPressed->code);
+                    if (!_pressedKeys[keyIndex]) {
+                        sendMessage("KeyPressed", it->second);
+                        _pressedKeys[keyIndex] = true;
+                    }
                 }
             }
             if (const auto* resized = event->getIf<sf::Event::Resized>()) {
@@ -116,13 +153,6 @@ void SFMLWindowManager::loop() {
             }
         }
     }
-
-    for (int k = 0; k < sf::Keyboard::KeyCount; ++k) {
-        auto key = static_cast<sf::Keyboard::Key>(k);
-        if (sf::Keyboard::isKeyPressed(key)) {
-            sendMessage("KeyPressed", keyMappings.at(key));
-        }
-    }
 }
 
 void SFMLWindowManager::cleanup() {
@@ -131,9 +161,60 @@ void SFMLWindowManager::cleanup() {
     }
 }
 
+void SFMLWindowManager::processMessages() {
+    std::string latestFrame;
+    bool hasLatestFrame = false;
+    int messagesProcessed = 0;
+    constexpr int maxMessagesPerLoop = 64;
+
+    while (messagesProcessed < maxMessagesPerLoop) {
+        zmq::message_t zmqMessage;
+        auto result = _subscriber->recv(zmqMessage, zmq::recv_flags::dontwait);
+        if (!result) {
+            break;
+        }
+        ++messagesProcessed;
+
+        std::string fullMessage(static_cast<char*>(zmqMessage.data()), zmqMessage.size());
+        constexpr const char* imageTopic = "ImageRendered";
+        constexpr std::size_t imageTopicLen = 13;
+        if (fullMessage.rfind(imageTopic, 0) == 0 &&
+            (fullMessage.size() == imageTopicLen || fullMessage[imageTopicLen] == ' ')) {
+            latestFrame = fullMessage.size() > imageTopicLen + 1 ? fullMessage.substr(imageTopicLen + 1) : "";
+            hasLatestFrame = true;
+            continue;
+        }
+
+        for (const auto& subscription : _subscriptions) {
+            const std::string& topic = subscription.first;
+            const MessageHandler& handler = subscription.second;
+
+            if (fullMessage.find(topic) == 0 &&
+                (fullMessage.length() == topic.length() || fullMessage[topic.length()] == ' ')) {
+                std::string payload;
+                if (fullMessage.length() > topic.length() + 1) {
+                    payload = fullMessage.substr(topic.length() + 1);
+                }
+                try {
+                    handler(payload);
+                } catch (const std::exception& e) {
+                    std::cerr << "[SFMLWindowManager] Handler error for topic '" << topic << "': " << e.what() << std::endl;
+                } catch (...) {
+                    std::cerr << "[SFMLWindowManager] Handler error for topic '" << topic << "': unknown error" << std::endl;
+                }
+            }
+        }
+    }
+
+    if (hasLatestFrame) {
+        handleImageRendered(latestFrame);
+    }
+}
+
 void SFMLWindowManager::createWindow(const std::string &title, const Vector2u &size) {
     _window = std::make_unique<sf::RenderWindow>(
         sf::VideoMode(sf::Vector2u(size.x, size.y)), title);
+    _window->setKeyRepeatEnabled(false);
     _texture = sf::Texture(sf::Vector2u(size.x, size.y));
     _sprite = sf::Sprite(_texture);
 }
@@ -149,12 +230,16 @@ void SFMLWindowManager::close() {
 }
 
 void SFMLWindowManager::drawPixels(const std::vector<uint32_t> &pixels, const Vector2u &size) {
+    drawPixelBytes(reinterpret_cast<const std::uint8_t*>(pixels.data()), size);
+}
+
+void SFMLWindowManager::drawPixelBytes(const std::uint8_t* pixels, const Vector2u &size) {
     if (!_window || !_window->isOpen()) {
         return;
     }
 
     _window->setActive(true);
-    _texture.update(reinterpret_cast<const std::uint8_t*>(pixels.data()));
+    _texture.update(pixels);
 
     _window->clear();
     _window->draw(_sprite);
@@ -172,7 +257,8 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
     }
 
     std::string header = pixelData.substr(0, sep);
-    std::string body = pixelData.substr(sep + 1);
+    const std::size_t bodySize = pixelData.size() - sep - 1;
+    const char* bodyData = pixelData.data() + sep + 1;
 
     unsigned int width = 0, height = 0;
     {
@@ -191,7 +277,7 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
         }
     }
 
-    size_t pixelCount = body.size() / sizeof(uint32_t);
+    size_t pixelCount = bodySize / sizeof(uint32_t);
     if (pixelCount != static_cast<size_t>(width) * static_cast<size_t>(height)) {
         std::cerr << "[SFMLWindowManager] handleImageRendered: pixel size mismatch (got " << pixelCount << ", expected " << width * height << ")" << std::endl;
         return;
@@ -207,10 +293,7 @@ void SFMLWindowManager::handleImageRendered(const std::string& pixelData) {
         _sprite.setScale(sf::Vector2f(1.0f,1.0f));
     }
 
-    const uint32_t* pixelPtr = reinterpret_cast<const uint32_t*>(body.data());
-    std::vector<uint32_t> pixels(pixelPtr, pixelPtr + pixelCount);
-
-    drawPixels(pixels, Vector2u{width, height});
+    drawPixelBytes(reinterpret_cast<const std::uint8_t*>(bodyData), Vector2u{width, height});
 }
 
 void SFMLWindowManager::handleSetFullscreen(const std::string& message) {
@@ -291,6 +374,7 @@ void SFMLWindowManager::recreateWindow(bool fullscreen) {
         auto desktopMode = sf::VideoMode::getDesktopMode();
         _window = std::make_unique<sf::RenderWindow>(
             desktopMode, _windowTitle, sf::State::Fullscreen);
+        _window->setKeyRepeatEnabled(false);
 
         sf::Vector2u size = _window->getSize();
 
@@ -313,6 +397,7 @@ void SFMLWindowManager::recreateWindow(bool fullscreen) {
         // Windowed mode
         _window = std::make_unique<sf::RenderWindow>(
             sf::VideoMode(sf::Vector2u(_windowedSize.x, _windowedSize.y)), _windowTitle, sf::Style::Default);
+        _window->setKeyRepeatEnabled(false);
 
         // Create texture and sprite with correct size
         _texture = sf::Texture(sf::Vector2u(_windowedSize.x, _windowedSize.y));

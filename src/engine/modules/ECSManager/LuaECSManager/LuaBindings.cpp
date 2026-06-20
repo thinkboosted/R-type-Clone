@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <limits>
 
 namespace rtypeEngine {
 
@@ -20,6 +21,8 @@ void LuaECSManager::setupLuaBindings() {
   _capabilities["isLocalMode"] = false;
   _capabilities["isClientMode"] = false;
   _capabilities["isServer"] = false;
+  ecs["timeScale"] = 1.0;
+  ecs["deathSlowdownActive"] = false;
 
   ecs.set_function("setGameMode", [this](const std::string &mode_name) {
       if (mode_name == "SOLO") {
@@ -38,6 +41,14 @@ void LuaECSManager::setupLuaBindings() {
           _capabilities["isLocalMode"] = false;
           _capabilities["isClientMode"] = true;
           _capabilities["isServer"] = false;
+          } else if (mode_name == "CLIENT") {
+            _capabilities["hasAuthority"] = false;
+            _capabilities["hasRendering"] = true;
+            _capabilities["hasLocalInput"] = true;
+            _capabilities["hasNetworkSync"] = true;
+            _capabilities["isLocalMode"] = false;
+            _capabilities["isClientMode"] = true;
+            _capabilities["isServer"] = false;
       } else if (mode_name == "MULTI_SERVER") {
           _capabilities["hasAuthority"] = true;
           _capabilities["hasRendering"] = false;
@@ -46,6 +57,14 @@ void LuaECSManager::setupLuaBindings() {
           _capabilities["isLocalMode"] = false;
           _capabilities["isClientMode"] = false;
           _capabilities["isServer"] = true;
+          } else if (mode_name == "HOST") {
+            _capabilities["hasAuthority"] = true;
+            _capabilities["hasRendering"] = true;
+            _capabilities["hasLocalInput"] = true;
+            _capabilities["hasNetworkSync"] = true;
+            _capabilities["isLocalMode"] = false;
+            _capabilities["isClientMode"] = false;
+            _capabilities["isServer"] = true;
       } else {
           _capabilities["hasAuthority"] = false;
           _capabilities["hasRendering"] = false;
@@ -92,6 +111,7 @@ void LuaECSManager::setupLuaBindings() {
 
       sendMessage("RenderEntityCommand", "DestroyEntity:" + id + ";");
       sendMessage("PhysicCommand", "DestroyBody:" + id + ";");
+      _queryCacheDirty = true;
     }
   });
 
@@ -124,6 +144,7 @@ void LuaECSManager::setupLuaBindings() {
           pool.dense.push_back(componentData);
           pool.entities.push_back(entityId);
           pool.sparse[entityId] = pool.dense.size() - 1;
+          _queryCacheDirty = true;
         }
     } catch (const std::exception& e) {
         std::cerr << "[LuaECSManager] CRASH AVERTED in addComponent (" << componentName << "): " << e.what() << std::endl;
@@ -146,6 +167,7 @@ void LuaECSManager::setupLuaBindings() {
         pool.dense.pop_back();
         pool.entities.pop_back();
         pool.sparse.erase(id);
+        _queryCacheDirty = true;
       }
     }
   });
@@ -179,9 +201,23 @@ void LuaECSManager::setupLuaBindings() {
                        }
                      }
                      if (required.empty()) return {};
+                     std::sort(required.begin(), required.end());
+                     std::string cacheKey;
+                     for (const auto& component : required) {
+                       cacheKey += component;
+                       cacheKey.push_back('\x1f');
+                     }
+                     if (_queryCacheDirty) {
+                       _queryCache.clear();
+                       _queryCacheDirty = false;
+                     }
+                     auto cached = _queryCache.find(cacheKey);
+                     if (cached != _queryCache.end()) {
+                       return cached->second;
+                     }
 
                      ComponentPool *smallestPool = nullptr;
-                     size_t minSize = SIZE_MAX;
+                     size_t minSize = std::numeric_limits<size_t>::max();
 
                      for (const auto &req : required) {
                        if (_pools.find(req) == _pools.end()) return {};
@@ -205,6 +241,7 @@ void LuaECSManager::setupLuaBindings() {
                          result.push_back(entityId);
                        }
                      }
+                     _queryCache[cacheKey] = result;
                      return result;
                    });
 
@@ -245,9 +282,10 @@ void LuaECSManager::setupLuaBindings() {
   });
 
   // Binary Protocol Bindings
-  auto buildBinaryPayload = [](const std::string &topic, const msgpack::sbuffer &sbuf) {
+  auto buildBinaryPayload = [](const std::string &topic, const msgpack::sbuffer &sbuf) -> std::string {
       if (topic.size() > 1024) {
-          throw std::runtime_error("Topic size too large (>1024)");
+          std::cerr << "[LuaECSManager] Refusing binary payload: topic size > 1024" << std::endl;
+          return "";
       }
       uint32_t topicLen = static_cast<uint32_t>(topic.size());
       const std::size_t totalSize = sizeof(topicLen) + topicLen + sbuf.size();
@@ -265,14 +303,20 @@ void LuaECSManager::setupLuaBindings() {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-      sendMessage("RequestNetworkSendBinary", buildBinaryPayload(topic, sbuf));
+      std::string payload = buildBinaryPayload(topic, sbuf);
+      if (!payload.empty()) {
+        sendMessage("RequestNetworkSendBinary", payload);
+      }
   });
 
   ecs.set_function("broadcastBinary", [this, buildBinaryPayload](const std::string &topic, sol::object data) {
       msgpack::sbuffer sbuf;
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
-      sendMessage("RequestNetworkBroadcastBinary", buildBinaryPayload(topic, sbuf));
+      std::string payload = buildBinaryPayload(topic, sbuf);
+      if (!payload.empty()) {
+        sendMessage("RequestNetworkBroadcastBinary", payload);
+      }
   });
 
   ecs.set_function("sendToClientBinary", [this](int clientId, const std::string &topic, sol::object data) {
@@ -280,7 +324,10 @@ void LuaECSManager::setupLuaBindings() {
       msgpack::packer<msgpack::sbuffer> pk(&sbuf);
       serializeToMsgPack(data, pk);
 
-      if (topic.size() > 1024) throw std::runtime_error("Topic size too large");
+      if (topic.size() > 1024) {
+          std::cerr << "[LuaECSManager] Refusing directed binary payload: topic size > 1024" << std::endl;
+          return;
+      }
       uint32_t cid = static_cast<uint32_t>(clientId);
       uint32_t topicLen = static_cast<uint32_t>(topic.size());
       size_t totalSize = 4 + 4 + topicLen + sbuf.size();
@@ -364,6 +411,8 @@ void LuaECSManager::setupLuaBindings() {
       }
       _entities.clear();
       _pools.clear();
+      _queryCache.clear();
+      _queryCacheDirty = true;
   });
 
   // ============================================================================
