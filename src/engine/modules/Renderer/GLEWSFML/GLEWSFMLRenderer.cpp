@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cerrno>
 #include <algorithm>
+#include <cstring>
 
 constexpr float PI = 3.14159265f;
 
@@ -41,6 +42,11 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
     if (end == str.c_str() || errno == ERANGE) return fallback;
     return static_cast<int>(value);
 }
+
+bool profileEnabled() {
+    static bool enabled = (std::getenv("RTYPE_PROFILE") != nullptr);
+    return enabled;
+}
 } // namespace
 
     GLEWSFMLRenderer::GLEWSFMLRenderer(const char *pubEndpoint, const char *subEndpoint)
@@ -60,9 +66,12 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
           _lightColor{1.0f, 1.0f, 1.0f},
           _lightIntensity(1.0f),
           _lastFrameTime(std::chrono::steady_clock::now()),
+          _lastRenderTime(std::chrono::steady_clock::now()),
+          _lastProfileLogTime(std::chrono::steady_clock::now()),
           _resourceManager(_hdc, _hwnd, _hglrc)
     {
         _pixelBuffer.resize(_resolution.x * _resolution.y);
+        _flippedPixelBuffer.resize(_pixelBuffer.size());
     }
 
     void GLEWSFMLRenderer::init()
@@ -142,6 +151,7 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
     void GLEWSFMLRenderer::onRenderEntityCommand(const std::string &message)
     {
+        _hudSortDirty = true;
         std::stringstream ss(message);
         std::string segment;
         while (std::getline(ss, segment, ';'))
@@ -230,6 +240,17 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
                         obj.rotation = {0, 0, 0};
                         obj.scale = {1, 1, 1};
                         obj.color = {1.0f, 0.5f, 0.2f};
+                        auto existing = _renderObjects.find(id);
+                        if (existing != _renderObjects.end())
+                        {
+                            obj.position = existing->second.position;
+                            obj.rotation = existing->second.rotation;
+                            obj.scale = existing->second.scale;
+                            obj.color = existing->second.color;
+                            obj.alpha = existing->second.alpha;
+                            obj.texturePath = existing->second.texturePath;
+                            obj.zOrder = existing->second.zOrder;
+                        }
                         _renderObjects[id] = obj;
 
                         _resourceManager.loadMesh(obj.meshPath);
@@ -920,16 +941,42 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
+    void GLEWSFMLRenderer::rebuildHudOrder()
+    {
+        _hudRenderOrder.clear();
+        _hudRenderOrder.reserve(_renderObjects.size());
+        for (const auto &pair : _renderObjects)
+        {
+            if (pair.second.isScreenSpace)
+            {
+                _hudRenderOrder.push_back(pair.first);
+            }
+        }
+        std::sort(_hudRenderOrder.begin(), _hudRenderOrder.end(),
+            [this](const std::string& a, const std::string& b) {
+                return _renderObjects.at(a).zOrder < _renderObjects.at(b).zOrder;
+            });
+        _hudSortDirty = false;
+    }
+
     void GLEWSFMLRenderer::render()
     {
         if (!_glewInitialized)
             return;
+        const auto renderStart = std::chrono::steady_clock::now();
+        constexpr auto targetFrameTime = std::chrono::milliseconds(16);
+        if (!_pendingResize && renderStart - _lastRenderTime < targetFrameTime)
+        {
+            return;
+        }
+        _lastRenderTime = renderStart;
 
         if (_pendingResize)
         {
             _resolution = _newResolution;
             _hudResolution = _newResolution;  // Also update HUD resolution
             _pixelBuffer.resize(_resolution.x * _resolution.y);
+            _flippedPixelBuffer.resize(_pixelBuffer.size());
             destroyFramebuffer();
             createFramebuffer();
             _pendingResize = false;
@@ -1182,21 +1229,19 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Sort HUD objects by zOrder
-        std::vector<std::pair<int, const RenderObject*>> sortedHUD;
-        for (const auto &pair : _renderObjects)
+        if (_hudSortDirty)
         {
-            if (pair.second.isScreenSpace)
-            {
-                sortedHUD.push_back({pair.second.zOrder, &pair.second});
-            }
+            rebuildHudOrder();
         }
-        std::sort(sortedHUD.begin(), sortedHUD.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
 
-        for (const auto &sortedPair : sortedHUD)
+        for (const auto &id : _hudRenderOrder)
         {
-            const auto &obj = *sortedPair.second;
+            auto objectIt = _renderObjects.find(id);
+            if (objectIt == _renderObjects.end())
+            {
+                continue;
+            }
+            const auto &obj = objectIt->second;
 
             // Render rectangles (button backgrounds, panels, etc.)
             if (obj.isRect)
@@ -1444,15 +1489,13 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
 
         glReadPixels(0, 0, _resolution.x, _resolution.y, GL_RGBA, GL_UNSIGNED_BYTE, _pixelBuffer.data());
 
-        std::vector<uint32_t> flippedBuffer(_pixelBuffer.size());
         for (unsigned int y = 0; y < _resolution.y; ++y)
         {
-            for (unsigned int x = 0; x < _resolution.x; ++x)
-            {
-                flippedBuffer[y * _resolution.x + x] = _pixelBuffer[(_resolution.y - 1 - y) * _resolution.x + x];
-            }
+            std::memcpy(&_flippedPixelBuffer[y * _resolution.x],
+                        &_pixelBuffer[(_resolution.y - 1 - y) * _resolution.x],
+                        _resolution.x * sizeof(uint32_t));
         }
-        _pixelBuffer = flippedBuffer;
+        _pixelBuffer.swap(_flippedPixelBuffer);
 
     // Prepend a small text header with the resolution so the consumer knows sizes
     std::string header;
@@ -1462,12 +1505,32 @@ int safeParseInt(const std::string& str, int fallback = 0) noexcept {
     header += std::to_string(_resolution.y);
     header += ";";
 
-    std::string pixelData(reinterpret_cast<const char *>(_pixelBuffer.data()),
-                  _pixelBuffer.size() * sizeof(uint32_t));
-    std::string message = header + pixelData;
-    sendMessage("ImageRendered", message);
+    const auto pixelBytes = _pixelBuffer.size() * sizeof(uint32_t);
+    _frameMessageBuffer.clear();
+    _frameMessageBuffer.reserve(header.size() + pixelBytes);
+    _frameMessageBuffer.append(header);
+    _frameMessageBuffer.append(reinterpret_cast<const char *>(_pixelBuffer.data()), pixelBytes);
+    sendMessage("ImageRendered", _frameMessageBuffer);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        if (profileEnabled())
+        {
+            const auto renderEnd = std::chrono::steady_clock::now();
+            _profileAccumulatedMs += std::chrono::duration<double, std::milli>(renderEnd - renderStart).count();
+            ++_profileFrameCount;
+            if (renderEnd - _lastProfileLogTime >= std::chrono::seconds(1))
+            {
+                const double avg = _profileFrameCount > 0 ? _profileAccumulatedMs / _profileFrameCount : 0.0;
+                std::cout << "[PROFILE][Renderer] frames=" << _profileFrameCount
+                          << " avg_ms=" << avg
+                          << " objects=" << _renderObjects.size()
+                          << " hud=" << _hudRenderOrder.size() << std::endl;
+                _profileAccumulatedMs = 0.0;
+                _profileFrameCount = 0;
+                _lastProfileLogTime = renderEnd;
+            }
+        }
     }
 
     std::vector<uint32_t> GLEWSFMLRenderer::getPixels() const

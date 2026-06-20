@@ -97,6 +97,11 @@ function CollisionSystem.hasTag(id, tag)
 end
 
 function CollisionSystem.onCollision(id1, id2)
+    if (CollisionSystem.hasTag(id1, "Bullet") and (CollisionSystem.hasTag(id2, "Bonus") or CollisionSystem.hasTag(id2, "PowerUp"))) or
+       (CollisionSystem.hasTag(id2, "Bullet") and (CollisionSystem.hasTag(id1, "Bonus") or CollisionSystem.hasTag(id1, "PowerUp"))) then
+        return
+    end
+
     -- Check Player vs Enemy
     if CollisionSystem.hasTag(id1, "Player") and CollisionSystem.hasTag(id2, "Enemy") then
         CollisionSystem.handlePlayerEnemy(id1, id2)
@@ -157,7 +162,7 @@ function CollisionSystem.handlePlayerEnemy(playerId, enemyId)
         
         -- Play hit sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "player_hit:effects/hit.wav:100")
+            ECS.sendMessage("SoundPlay", "player_hit:effects/hit.wav:" .. ECS.getSfxVolume(100))
         else
             -- Broadcast hit sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "player_hit:effects/hit.wav:100")
@@ -188,7 +193,7 @@ function CollisionSystem.handleEnemyBullet(enemyId, bulletId)
         
         -- Play explosion sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
+            ECS.sendMessage("SoundPlay", "explosion_" .. enemyId .. ":effects/explosion.wav:" .. ECS.getSfxVolume(90))
         else
             -- Broadcast explosion sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "explosion_" .. enemyId .. ":effects/explosion.wav:90")
@@ -255,7 +260,7 @@ function CollisionSystem.handlePlayerBonus(playerId, bonusId)
         
         -- Play powerup sound
         if not ECS.capabilities.hasNetworkSync then
-            ECS.sendMessage("SoundPlay", "powerup:effects/powerup.wav:100")
+            ECS.sendMessage("SoundPlay", "powerup:effects/powerup.wav:" .. ECS.getSfxVolume(100))
         else
             -- Broadcast powerup sound to all clients
             ECS.broadcastNetworkMessage("PLAY_SOUND", "powerup:effects/powerup.wav:100")

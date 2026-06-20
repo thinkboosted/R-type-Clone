@@ -263,11 +263,11 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
             end
 
         elseif nType == 2 then
-            ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
+            ECS.addComponent(localId, "Mesh", Mesh("assets/models/player_bullet.obj", "assets/textures/shoot.jpg"))
             ECS.addComponent(localId, "Color", Color(0.0, 1.0, 1.0))
             t.sx, t.sy, t.sz = 0.2, 0.2, 0.2
         elseif nType == 3 then
-            ECS.addComponent(localId, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
+            ECS.addComponent(localId, "Mesh", Mesh("assets/models/enemy_bullet.obj", "assets/textures/attack.jpg"))
             ECS.addComponent(localId, "Color", Color(1.0, 0.5, 0.0))
             t.sx, t.sy, t.sz = 0.2, 0.2, 0.2
         elseif nType == 99 then
@@ -276,7 +276,7 @@ function NetworkSystem.updateLocalEntity(serverId, x, y, z, rx, ry, rz, vx, vy, 
             ECS.addComponent(localId, "Animation", Animation(8, 0.15, true, "assets/models/Monster_3/motion_"))
             t.sx, t.sy, t.sz = getScaleForType(99)
         elseif nType == 61 or nType == 62 or nType == 63 then
-            ECS.addComponent(localId, "Mesh", Mesh("assets/models/cube.obj", nil))
+            ECS.addComponent(localId, "Mesh", Mesh("assets/models/powerup_crystal.obj", nil))
             ECS.addComponent(localId, "Tag", Tag({"PowerUp", "Bonus"}))
             if nType == 61 then
                 ECS.addComponent(localId, "Color", Color(0.2, 0.8, 1.0))

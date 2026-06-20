@@ -8,6 +8,7 @@
 #endif
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -250,6 +251,8 @@ void LuaECSManager::unloadScript(const std::string& path) {
         _systems.clear();
         _entities.clear();
         _pools.clear();
+        _queryCache.clear();
+        _queryCacheDirty = true;
 
         _lua = sol::state();
         _lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::math, sol::lib::io, sol::lib::os);
@@ -263,6 +266,7 @@ void LuaECSManager::unloadScript(const std::string& path) {
 }
 
 void LuaECSManager::loop() {
+  const auto loopStart = std::chrono::high_resolution_clock::now();
   auto currentTime = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> frameTime = currentTime - _lastFrameTime;
   _lastFrameTime = currentTime;
@@ -272,13 +276,31 @@ void LuaECSManager::loop() {
     deltaTime = MAX_FRAME_TIME;
   }
 
+  sol::table ecs = _lua["ECS"];
+  double timeScale = 1.0;
+  if (ecs.valid()) {
+    sol::optional<double> luaScale = ecs["timeScale"];
+    if (luaScale) {
+      timeScale = std::clamp(luaScale.value(), 0.0, 1.0);
+    }
+    sol::optional<bool> slowdownActive = ecs["deathSlowdownActive"];
+    if (slowdownActive.value_or(false)) {
+      timeScale = std::max(0.0, timeScale - deltaTime * 0.45);
+      ecs["timeScale"] = timeScale;
+      if (timeScale <= 0.001) {
+        ecs["timeScale"] = 0.0;
+      }
+    }
+  }
+
   _accumulator += deltaTime;
 
   while (_accumulator >= FIXED_DT) {
+    const double scaledDt = FIXED_DT * timeScale;
     for (auto &system : _systems) {
       if (system["update"].valid()) {
         try {
-          system["update"](FIXED_DT);
+          system["update"](scaledDt);
         } catch (const sol::error &e) {
           std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
         }
@@ -288,14 +310,37 @@ void LuaECSManager::loop() {
     _accumulator -= FIXED_DT;
   }
 
-  auto sleepTime = std::chrono::milliseconds(10);
+  auto sleepTime = std::chrono::milliseconds(1);
   std::this_thread::sleep_for(sleepTime);
+
+  static bool profileEnabled = (std::getenv("RTYPE_PROFILE") != nullptr);
+  static auto lastProfileLog = std::chrono::high_resolution_clock::now();
+  static double accumulatedMs = 0.0;
+  static int samples = 0;
+  if (profileEnabled) {
+    const auto loopEnd = std::chrono::high_resolution_clock::now();
+    accumulatedMs += std::chrono::duration<double, std::milli>(loopEnd - loopStart).count();
+    ++samples;
+    if (loopEnd - lastProfileLog >= std::chrono::seconds(1)) {
+      const double avg = samples > 0 ? accumulatedMs / samples : 0.0;
+      std::cout << "[PROFILE][LuaECS] avg_ms=" << avg
+                << " systems=" << _systems.size()
+                << " entities=" << _entities.size()
+                << " component_types=" << _pools.size()
+                << " query_cache=" << _queryCache.size() << std::endl;
+      accumulatedMs = 0.0;
+      samples = 0;
+      lastProfileLog = loopEnd;
+    }
+  }
 }
 
 void LuaECSManager::cleanup() {
   _systems.clear();
   _entities.clear();
   _pools.clear();
+  _queryCache.clear();
+  _queryCacheDirty = true;
   _luaListeners.clear();
 }
 

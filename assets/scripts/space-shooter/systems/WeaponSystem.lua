@@ -58,7 +58,7 @@ function WeaponSystem.update(dt)
             weapon.timeSinceLastShot = 0
 
             if not ECS.capabilities.hasNetworkSync then
-                ECS.sendMessage("SoundPlay", "laser_" .. id .. "_" .. os.time() .. ":effects/laser.wav:80")
+                ECS.sendMessage("SoundPlay", "laser_" .. id .. "_" .. os.time() .. ":effects/laser.wav:" .. ECS.getSfxVolume(80))
             else
                 ECS.broadcastNetworkMessage("PLAY_SOUND", "laser_" .. id .. "_" .. os.time() .. ":effects/laser.wav:80")
             end

@@ -29,14 +29,28 @@ ECS.isPaused = false
 -- Settings state (must be defined before executeAction uses it)
 local settingsState = {
     isFullscreen = false,
-    selectedResolution = 1,
-    resolutions = {
-        { width = 800, height = 600, label = "800x600" },
-        { width = 1024, height = 768, label = "1024x768" },
-        { width = 1280, height = 720, label = "1280x720" },
-        { width = 1920, height = 1080, label = "1920x1080" },
-    }
+    uiScaleIndex = 2,
+    uiScales = {
+        { value = 0.85, label = "85%" },
+        { value = 1.00, label = "100%" },
+        { value = 1.15, label = "115%" },
+        { value = 1.30, label = "130%" },
+    },
+    highContrast = false,
+    largeText = false,
+    reducedMotion = false,
+    musicVolume = 40,
+    sfxVolume = 70
 }
+local deathScreen = {
+    active = false,
+    score = 0
+}
+ECS.settings = settingsState
+ECS.getSfxVolume = function(defaultVolume)
+    local base = tonumber(defaultVolume) or 100
+    return math.floor(base * (settingsState.sfxVolume / 100) + 0.5)
+end
 
 -- Screen dimensions (will be updated from renderer if possible)
 local SCREEN_WIDTH = 800
@@ -59,6 +73,65 @@ local COLORS = {
     resume = { r = 0.1, g = 0.5, b = 0.2, a = 0.9 }
 }
 
+local DEFAULT_COLORS = COLORS
+local HIGH_CONTRAST_COLORS = {
+    background = { r = 0.0, g = 0.0, b = 0.0, a = 0.96 },
+    title = { r = 1.0, g = 0.95, b = 0.15 },
+    buttonNormal = { r = 0.05, g = 0.05, b = 0.08, a = 0.98 },
+    buttonSelected = { r = 0.0, g = 0.45, b = 1.0, a = 1.0 },
+    textNormal = { r = 1.0, g = 1.0, b = 1.0 },
+    textSelected = { r = 1.0, g = 1.0, b = 0.2 },
+    solo = { r = 0.0, g = 0.25, b = 0.8, a = 0.95 },
+    multi = { r = 0.0, g = 0.45, b = 0.75, a = 0.95 },
+    settings = { r = 0.18, g = 0.18, b = 0.18, a = 0.95 },
+    quit = { r = 0.65, g = 0.0, b = 0.0, a = 0.95 },
+    resume = { r = 0.0, g = 0.55, b = 0.16, a = 0.95 }
+}
+
+local uiScaleOverride = nil
+
+local function getUiScale()
+    if uiScaleOverride then
+        return uiScaleOverride
+    end
+    local scale = settingsState.uiScales[settingsState.uiScaleIndex]
+    local base = scale and scale.value or 1.0
+    if settingsState.largeText then
+        base = base + 0.15
+    end
+    return base
+end
+
+local function ui(value)
+    return math.floor(value * getUiScale() + 0.5)
+end
+
+local function uiWithScale(value, scale)
+    return math.floor(value * scale + 0.5)
+end
+
+local function applyAccessibilityPalette()
+    COLORS = settingsState.highContrast and HIGH_CONTRAST_COLORS or DEFAULT_COLORS
+end
+
+local function applyAudioSettings()
+    ECS.sendMessage("MusicSetVolume", "bgm:" .. tostring(settingsState.musicVolume))
+end
+
+local function formatToggle(enabled)
+    return enabled and "ON" or "OFF"
+end
+
+local function cycleIndex(current, list, delta)
+    local nextIndex = current + delta
+    if nextIndex < 1 then
+        nextIndex = #list
+    elseif nextIndex > #list then
+        nextIndex = 1
+    end
+    return nextIndex
+end
+
 -- ============================================================================
 -- HELPER: Estimate text width for centering calculations
 -- ============================================================================
@@ -72,7 +145,8 @@ end
 
 -- Helper to create a centered label at a given Y position
 local function createCenteredLabel(text, y, size, color, zOrder)
-    local textWidth = estimateTextWidth(text, size)
+    local displaySize = ui(size)
+    local textWidth = estimateTextWidth(text, displaySize)
     local x = (SCREEN_WIDTH - textWidth) / 2 + 40
     return MenuSystem.createLabel(text, x, y, size, color, zOrder)
 end
@@ -81,15 +155,15 @@ end
 -- HELPER: Create a button with background and text
 -- ============================================================================
 function MenuSystem.createButton(action, text, x, y, width, height, color, textSize, zBase)
-    textSize = textSize or 24
+    textSize = ui(textSize or 24)
     zBase = zBase or 10
+    local radius = math.max(8, ui(10))
 
     -- Create rounded rectangle background for nicer looking buttons
-    local bgId = ECS.createRoundedRect(x, y, width, height, 8, color.r, color.g, color.b, color.a or 0.9, zBase)
+    local bgId = ECS.createRoundedRect(x, y, width, height, radius, color.r, color.g, color.b, color.a or 0.9, zBase)
     table.insert(menuElements, bgId)
 
-    -- Add subtle outline
-    ECS.setOutline(bgId, true, 2, 0.3, 0.3, 0.4)
+    ECS.setOutline(bgId, true, settingsState.highContrast and 4 or 2, 0.45, 0.65, 0.9)
 
     -- Create text label (centered on button)
     local textWidth = estimateTextWidth(text, textSize)
@@ -118,7 +192,7 @@ end
 -- ============================================================================
 function MenuSystem.createLabel(text, x, y, size, color, zOrder)
     zOrder = zOrder or 15
-    local id = ECS.createUIText(text, x, y, size, color.r, color.g, color.b, zOrder)
+    local id = ECS.createUIText(text, x, y, ui(size), color.r, color.g, color.b, zOrder)
     table.insert(menuElements, id)
     return id
 end
@@ -127,6 +201,8 @@ end
 -- ============================================================================
 function MenuSystem.init()
     print("[MenuSystem] Initialized (2D UI Mode)")
+    _G.MenuSystem = MenuSystem
+    applyAccessibilityPalette()
     ECS.subscribe("MousePressed", MenuSystem.onMousePressed)
     ECS.subscribe("KeyPressed", MenuSystem.onKeyPressed)
     ECS.subscribe("MouseMoved", MenuSystem.onMouseMoved)
@@ -137,6 +213,7 @@ function MenuSystem.init()
     ECS.subscribe("GAME_START", MenuSystem.onGameStart)
     ECS.subscribe("GAME_STARTING", MenuSystem.onGameStarting)
     ECS.subscribe("GAME_END", MenuSystem.onGameEnd)
+    ECS.subscribe("GAME_OVER", MenuSystem.onGameOver)
     ECS.subscribe("FORCE_WAITING_ROOM", MenuSystem.onForceWaitingRoom)
     ECS.subscribe("ShowLevelIntro", MenuSystem.onShowLevelIntro)
     _G.SCREEN_WIDTH = SCREEN_WIDTH
@@ -226,56 +303,59 @@ function MenuSystem.renderMenu()
     selectedIndex = 1
     menuState = "MAIN"
 
-    -- Background overlay with rounded corners
+    applyAccessibilityPalette()
+
     local bgId = ECS.createRoundedRect(20, 20, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 40,
-        15, COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
+        ui(15), COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
     table.insert(menuElements, bgId)
-    ECS.setOutline(bgId, true, 3, 0.2, 0.4, 0.6)
+    ECS.setOutline(bgId, true, settingsState.highContrast and 4 or 3, 0.25, 0.55, 0.9)
 
-    -- Decorative circles in corners
-    local circleRadius = 30
-    local circle1 = ECS.createCircle(60, SCREEN_HEIGHT - 60, circleRadius, 0.1, 0.3, 0.5, 0.5, 1)
-    local circle2 = ECS.createCircle(SCREEN_WIDTH - 60, SCREEN_HEIGHT - 60, circleRadius, 0.1, 0.3, 0.5, 0.5, 1)
-    local circle3 = ECS.createCircle(60, 60, circleRadius, 0.1, 0.3, 0.5, 0.5, 1)
-    local circle4 = ECS.createCircle(SCREEN_WIDTH - 60, 60, circleRadius, 0.1, 0.3, 0.5, 0.5, 1)
-    table.insert(menuElements, circle1)
-    table.insert(menuElements, circle2)
-    table.insert(menuElements, circle3)
-    table.insert(menuElements, circle4)
-    ECS.setOutline(circle1, true, 2, 0.2, 0.5, 0.8)
-    ECS.setOutline(circle2, true, 2, 0.2, 0.5, 0.8)
-    ECS.setOutline(circle3, true, 2, 0.2, 0.5, 0.8)
-    ECS.setOutline(circle4, true, 2, 0.2, 0.5, 0.8)
+    if not settingsState.reducedMotion then
+        local circleRadius = ui(28)
+        local circle1 = ECS.createCircle(70, SCREEN_HEIGHT - 70, circleRadius, 0.1, 0.3, 0.5, 0.45, 1)
+        local circle2 = ECS.createCircle(SCREEN_WIDTH - 70, 70, circleRadius, 0.1, 0.3, 0.5, 0.45, 1)
+        table.insert(menuElements, circle1)
+        table.insert(menuElements, circle2)
+        ECS.setOutline(circle1, true, 2, 0.2, 0.5, 0.8)
+        ECS.setOutline(circle2, true, 2, 0.2, 0.5, 0.8)
+    end
 
-    -- Decorative lines
-    local line1 = ECS.createLine(100, SCREEN_HEIGHT - 150, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 150, 2, 0.3, 0.5, 0.7, 0.6, 2)
-    local line2 = ECS.createLine(100, 100, SCREEN_WIDTH - 100, 100, 2, 0.3, 0.5, 0.7, 0.6, 2)
+    local line1 = ECS.createLine(90, SCREEN_HEIGHT - 155, SCREEN_WIDTH - 90, SCREEN_HEIGHT - 155, 2, 0.3, 0.5, 0.7, 0.7, 2)
+    local line2 = ECS.createLine(90, 105, SCREEN_WIDTH - 90, 105, 2, 0.3, 0.5, 0.7, 0.7, 2)
     table.insert(menuElements, line1)
     table.insert(menuElements, line2)
 
     -- Title (centered)
-    local textWidthR = estimateTextWidth("R-TYPE", 64)
+    local textWidthR = estimateTextWidth("R-TYPE", ui(64))
     local xR = (SCREEN_WIDTH - textWidthR) / 2
     MenuSystem.createLabel("R-TYPE", xR, SCREEN_HEIGHT - 135, 64, COLORS.title, 20)
-    local textWidthC = estimateTextWidth("CLONE", 32)
+    local textWidthC = estimateTextWidth("CLONE", ui(32))
     local xC = (SCREEN_WIDTH - textWidthC) / 2
     MenuSystem.createLabel("CLONE", xC, SCREEN_HEIGHT - 185, 32, COLORS.title, 20)
     
     -- Button dimensions
-    local btnWidth = 300
-    local btnHeight = 50
-    local btnSpacing = 30
+    local btnWidth = math.min(ui(300), SCREEN_WIDTH - 120)
+    local btnHeight = ui(50)
+    local btnSpacing = ui(24)
     local startY = SCREEN_HEIGHT - 280
 
-    -- SOLO Button (left)
-    MenuSystem.createButton("SOLO", "SOLO PLAY", 
-        SCREEN_WIDTH/2 - btnWidth - 30, startY,
-        btnWidth, btnHeight, COLORS.solo, 28, 10)
-
-    -- MULTIPLAYER Button (right)
-    MenuSystem.createButton("MULTI", "MULTIPLAYER", 
-        SCREEN_WIDTH/2 + 30, startY,
-        btnWidth, btnHeight, COLORS.multi, 28, 10)
+    local twoColumn = SCREEN_WIDTH >= 760 and getUiScale() <= 1.15
+    if twoColumn then
+        MenuSystem.createButton("SOLO", "SOLO PLAY",
+            SCREEN_WIDTH/2 - btnWidth - ui(24), startY,
+            btnWidth, btnHeight, COLORS.solo, 28, 10)
+        MenuSystem.createButton("MULTI", "MULTIPLAYER",
+            SCREEN_WIDTH/2 + ui(24), startY,
+            btnWidth, btnHeight, COLORS.multi, 28, 10)
+    else
+        MenuSystem.createButton("SOLO", "SOLO PLAY",
+            SCREEN_WIDTH/2 - btnWidth/2, startY,
+            btnWidth, btnHeight, COLORS.solo, 28, 10)
+        MenuSystem.createButton("MULTI", "MULTIPLAYER",
+            SCREEN_WIDTH/2 - btnWidth/2, startY - btnHeight - btnSpacing,
+            btnWidth, btnHeight, COLORS.multi, 28, 10)
+        startY = startY - btnHeight - btnSpacing
+    end
 
     -- SETTINGS Button (center below)
     MenuSystem.createButton("SETTINGS", "SETTINGS",
@@ -288,8 +368,8 @@ function MenuSystem.renderMenu()
         btnWidth, btnHeight, COLORS.quit, 24, 10)
 
     -- Instructions (centered)
-    createCenteredLabel("Use Arrow Keys or Mouse to navigate", 60, 16, COLORS.textNormal, 15)
-    createCenteredLabel("Press ENTER or Click to select", 40, 16, COLORS.textNormal, 15)
+    createCenteredLabel("Arrow keys, WASD/ZQSD, mouse, Enter or Space", 62, 16, COLORS.textNormal, 15)
+    createCenteredLabel("Esc pauses, goes back, or quits from the main menu", 40, 16, COLORS.textNormal, 15)
     
     MenuSystem.updateSelection()
     print("[MenuSystem] Main menu rendered with " .. #menuButtons .. " buttons")
@@ -304,10 +384,12 @@ function MenuSystem.updateSelection()
             -- Highlighted state
             ECS.setUIColor(btn.bgId, COLORS.buttonSelected.r, COLORS.buttonSelected.g, COLORS.buttonSelected.b)
             ECS.setUIColor(btn.textId, COLORS.textSelected.r, COLORS.textSelected.g, COLORS.textSelected.b)
+            ECS.setOutline(btn.bgId, true, settingsState.highContrast and 5 or 3, COLORS.textSelected.r, COLORS.textSelected.g, COLORS.textSelected.b)
         else
             -- Normal state
             ECS.setUIColor(btn.bgId, btn.baseColor.r, btn.baseColor.g, btn.baseColor.b)
             ECS.setUIColor(btn.textId, COLORS.textNormal.r, COLORS.textNormal.g, COLORS.textNormal.b)
+            ECS.setOutline(btn.bgId, true, settingsState.highContrast and 3 or 2, 0.35, 0.4, 0.55)
         end
     end
 end
@@ -336,6 +418,9 @@ function MenuSystem.executeAction(action)
         ECS.isGameRunning = false
         isPaused = false
         ECS.isPaused = false
+        ECS.timeScale = 1.0
+        ECS.deathSlowdownActive = false
+        deathScreen.active = false
         _G.LevelBossActive = false
         _G.LevelBossDefeated = {}
         ECS.sendMessage("RESET_BOSS_STATE", "")
@@ -361,7 +446,7 @@ function MenuSystem.executeAction(action)
 
         MenuSystem.hideMenu()
         ECS.setGameMode("SOLO")
-        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:" .. tostring(settingsState.musicVolume))
         
         if #gsEntities > 0 then
             ECS.addComponent(gsEntities[1], "ServerAuthority", ServerAuthority())
@@ -403,36 +488,54 @@ function MenuSystem.executeAction(action)
         MenuSystem.showSettings()
         menuState = "PAUSE_SETTINGS"
 
-    elseif action == "RES_800x600" then
-        settingsState.selectedResolution = 1
-        ECS.setWindowSize(800, 600)
-        SCREEN_WIDTH = 800
-        SCREEN_HEIGHT = 600
-        print("[MenuSystem] Resolution set to 800x600")
+    elseif action == "UI_SCALE_PREV" then
+        settingsState.uiScaleIndex = cycleIndex(settingsState.uiScaleIndex, settingsState.uiScales, -1)
+        print("[MenuSystem] UI scale set to " .. settingsState.uiScales[settingsState.uiScaleIndex].label)
         MenuSystem.showSettings()
 
-    elseif action == "RES_1024x768" then
-        settingsState.selectedResolution = 2
-        ECS.setWindowSize(1024, 768)
-        SCREEN_WIDTH = 1024
-        SCREEN_HEIGHT = 768
-        print("[MenuSystem] Resolution set to 1024x768")
+    elseif action == "UI_SCALE_NEXT" then
+        settingsState.uiScaleIndex = cycleIndex(settingsState.uiScaleIndex, settingsState.uiScales, 1)
+        print("[MenuSystem] UI scale set to " .. settingsState.uiScales[settingsState.uiScaleIndex].label)
         MenuSystem.showSettings()
 
-    elseif action == "RES_1280x720" then
-        settingsState.selectedResolution = 3
-        ECS.setWindowSize(1280, 720)
-        SCREEN_WIDTH = 1280
-        SCREEN_HEIGHT = 720
-        print("[MenuSystem] Resolution set to 1280x720 HD")
+    elseif action == "MUSIC_DOWN" then
+        settingsState.musicVolume = math.max(0, settingsState.musicVolume - 10)
+        applyAudioSettings()
+        print("[MenuSystem] Music volume set to " .. settingsState.musicVolume)
         MenuSystem.showSettings()
 
-    elseif action == "RES_1920x1080" then
-        settingsState.selectedResolution = 4
-        ECS.setWindowSize(1920, 1080)
-        SCREEN_WIDTH = 1920
-        SCREEN_HEIGHT = 1080
-        print("[MenuSystem] Resolution set to 1920x1080 FHD")
+    elseif action == "MUSIC_UP" then
+        settingsState.musicVolume = math.min(100, settingsState.musicVolume + 10)
+        applyAudioSettings()
+        print("[MenuSystem] Music volume set to " .. settingsState.musicVolume)
+        MenuSystem.showSettings()
+
+    elseif action == "SFX_DOWN" then
+        settingsState.sfxVolume = math.max(0, settingsState.sfxVolume - 10)
+        ECS.sendMessage("SoundSetVolume", "ui_select:" .. tostring(settingsState.sfxVolume))
+        print("[MenuSystem] SFX volume set to " .. settingsState.sfxVolume)
+        MenuSystem.showSettings()
+
+    elseif action == "SFX_UP" then
+        settingsState.sfxVolume = math.min(100, settingsState.sfxVolume + 10)
+        ECS.sendMessage("SoundPlay", "ui_select:effects/powerup.wav:" .. tostring(settingsState.sfxVolume))
+        print("[MenuSystem] SFX volume set to " .. settingsState.sfxVolume)
+        MenuSystem.showSettings()
+
+    elseif action == "TOGGLE_CONTRAST" then
+        settingsState.highContrast = not settingsState.highContrast
+        applyAccessibilityPalette()
+        print("[MenuSystem] High contrast " .. formatToggle(settingsState.highContrast))
+        MenuSystem.showSettings()
+
+    elseif action == "TOGGLE_LARGE_TEXT" then
+        settingsState.largeText = not settingsState.largeText
+        print("[MenuSystem] Large text " .. formatToggle(settingsState.largeText))
+        MenuSystem.showSettings()
+
+    elseif action == "TOGGLE_REDUCED_MOTION" then
+        settingsState.reducedMotion = not settingsState.reducedMotion
+        print("[MenuSystem] Reduced motion " .. formatToggle(settingsState.reducedMotion))
         MenuSystem.showSettings()
 
     elseif action == "QUIT" then
@@ -456,6 +559,9 @@ function MenuSystem.executeAction(action)
         ECS.isGameRunning = false
         isPaused = false
         ECS.isPaused = false
+        ECS.timeScale = 1.0
+        ECS.deathSlowdownActive = false
+        deathScreen.active = false
         _G.LevelBossActive = false
         _G.LevelBossDefeated = {}
         ECS.sendMessage("RESET_BOSS_STATE", "")
@@ -486,7 +592,66 @@ function MenuSystem.executeAction(action)
         else
             MenuSystem.renderMenu()
         end
+    elseif action == "RESTART_GAME" then
+        deathScreen.active = false
+        ECS.timeScale = 1.0
+        ECS.deathSlowdownActive = false
+        MenuSystem.hideMenu()
+        MenuSystem.executeAction("SOLO")
     end
+end
+
+function MenuSystem.showDeathScreen(finalScore)
+    if not ECS.capabilities.hasRendering then return end
+
+    MenuSystem.hideMenu()
+    clearLevelIntro()
+    isMenuRendered = true
+    menuElements = {}
+    menuButtons = {}
+    selectedIndex = 1
+    menuState = "DEATH"
+    deathScreen.active = true
+    deathScreen.score = tonumber(finalScore) or 0
+
+    local bgId = ECS.createRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.65, 0.0, 0.0, 0.5, 70)
+    table.insert(menuElements, bgId)
+
+    local panelW = math.min(ui(520), SCREEN_WIDTH - ui(80))
+    local panelH = ui(270)
+    local panelX = SCREEN_WIDTH / 2 - panelW / 2
+    local panelY = SCREEN_HEIGHT / 2 - panelH / 2
+    local panel = ECS.createRoundedRect(panelX, panelY, panelW, panelH, ui(16), 0.05, 0.01, 0.01, 0.72, 71)
+    table.insert(menuElements, panel)
+    ECS.setOutline(panel, true, 4, 1.0, 0.15, 0.1)
+
+    local title = "GAME OVER"
+    local titleSize = 56
+    local titleW = estimateTextWidth(title, ui(titleSize))
+    MenuSystem.createLabel(title, SCREEN_WIDTH / 2 - titleW / 2, panelY + panelH - ui(80), titleSize, { r = 1.0, g = 0.12, b = 0.08 }, 72)
+
+    local scoreText = "Final Score: " .. tostring(deathScreen.score)
+    local scoreW = estimateTextWidth(scoreText, ui(22))
+    MenuSystem.createLabel(scoreText, SCREEN_WIDTH / 2 - scoreW / 2, panelY + panelH - ui(120), 22, COLORS.textNormal, 72)
+
+    local btnW = math.min(ui(210), panelW - ui(60))
+    local btnH = ui(46)
+    local gap = ui(18)
+    local btnY = panelY + ui(56)
+
+    if panelW >= ui(480) then
+        MenuSystem.createButton("RESTART_GAME", "RESTART", SCREEN_WIDTH / 2 - btnW - gap / 2, btnY, btnW, btnH, COLORS.resume, 22, 72)
+        MenuSystem.createButton("QUIT_TO_MENU", "MENU", SCREEN_WIDTH / 2 + gap / 2, btnY, btnW, btnH, COLORS.quit, 22, 72)
+    else
+        MenuSystem.createButton("RESTART_GAME", "RESTART", SCREEN_WIDTH / 2 - btnW / 2, btnY + btnH + gap, btnW, btnH, COLORS.resume, 22, 72)
+        MenuSystem.createButton("QUIT_TO_MENU", "MENU", SCREEN_WIDTH / 2 - btnW / 2, btnY, btnW, btnH, COLORS.quit, 22, 72)
+    end
+
+    MenuSystem.updateSelection()
+end
+
+function MenuSystem.onGameOver(score)
+    MenuSystem.showDeathScreen(score)
 end
 
 function MenuSystem.showMultiplayerMenu()
@@ -528,7 +693,7 @@ function MenuSystem.onGameStart(_)
     end
 
     if ECS.capabilities.hasRendering then
-        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:40")
+        ECS.sendMessage("MusicPlay", "bgm:music/background.ogg:" .. tostring(settingsState.musicVolume))
     end
     ECS.isGameRunning = true
 
@@ -604,70 +769,145 @@ end
 
 function MenuSystem.showSettings()
     MenuSystem.hideMenu()
+    applyAccessibilityPalette()
     isMenuRendered = true
     menuElements = {}
     menuButtons = {}
     selectedIndex = 1
-    menuState = "SETTINGS"
+    if menuState ~= "PAUSE_SETTINGS" then
+        menuState = "SETTINGS"
+    end
 
-    -- Background with rounded corners
     local bgId = ECS.createRoundedRect(20, 20, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 40,
-        15, COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
+        ui(15), COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
     table.insert(menuElements, bgId)
-    ECS.setOutline(bgId, true, 3, 0.2, 0.4, 0.6)
+    ECS.setOutline(bgId, true, settingsState.highContrast and 4 or 3, 0.25, 0.55, 0.9)
 
-    -- Title (centered)
-    createCenteredLabel("SETTINGS", SCREEN_HEIGHT - 100, 48, COLORS.title, 20)
+    local compactWidth = SCREEN_WIDTH < ui(760)
+    local compactHeight = SCREEN_HEIGHT < ui(640)
+    local topY = SCREEN_HEIGHT - (compactHeight and ui(70) or ui(92))
 
-    -- Decorative line under title
-    local line = ECS.createLine(100, SCREEN_HEIGHT - 130, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 130, 2, 0.3, 0.5, 0.7, 0.6, 2)
+    createCenteredLabel("SETTINGS", topY, compactHeight and 40 or 48, COLORS.title, 20)
+
+    local lineY = topY - ui(28)
+    local line = ECS.createLine(ui(60), lineY, SCREEN_WIDTH - ui(60), lineY, 2, 0.3, 0.5, 0.7, 0.6, 2)
     table.insert(menuElements, line)
 
-    -- ==================== DISPLAY SECTION ====================
-    createCenteredLabel("DISPLAY", SCREEN_HEIGHT - 165, 24, COLORS.title, 20)
+    local settingsScale = getUiScale()
+    if compactHeight then
+        settingsScale = math.min(settingsScale, compactWidth and 0.82 or 0.92)
+    elseif compactWidth then
+        settingsScale = math.min(settingsScale, 0.95)
+    end
+    uiScaleOverride = settingsScale
+    local function su(value)
+        return uiWithScale(value, settingsScale)
+    end
 
-    -- Resolution Section Label (centered)
-    createCenteredLabel("Window Size:", SCREEN_HEIGHT - 260, 20, COLORS.textNormal, 15)
+    local btnH = su(compactHeight and 32 or 38)
+    local btnW = su(compactWidth and 72 or 48)
+    local rowGap = compactWidth and su(compactHeight and 68 or 78) or su(60)
+    local rowY = lineY - su(compactHeight and 62 or 76)
+    local contentW = math.min(SCREEN_WIDTH - ui(80), ui(620))
+    local contentX = (SCREEN_WIDTH - contentW) / 2
+    local labelX = contentX
+    local valueW = su(compactWidth and 138 or 96)
+    local valueX = compactWidth and (contentX + contentW - valueW) or (SCREEN_WIDTH / 2 + ui(12))
+    local leftBtnX = valueX - btnW - su(8)
+    local rightBtnX = valueX + valueW + su(8)
+    local compactControlX = contentX + math.max(0, (contentW - (btnW * 2 + valueW + su(16))) / 2)
 
-    -- Resolution preset buttons - 2x2 grid
-    local btnW = 130
-    local btnH = 38
-    local startX = SCREEN_WIDTH/2 - btnW - 10
-    local startY = SCREEN_HEIGHT - 310
-    local spacing = 10
+    local function settingRow(label, value, y, leftAction, rightAction)
+        local valueText = tostring(value)
+        if compactWidth then
+            MenuSystem.createLabel(label, labelX, y + btnH + su(13), 15, COLORS.textNormal, 15)
+            MenuSystem.createLabel(valueText, valueX, y + btnH + su(13), 15, COLORS.title, 15)
+            local cx = compactControlX
+            if leftAction then
+                MenuSystem.createButton(leftAction, "<", cx, y, btnW, btnH, COLORS.settings, 22, 10)
+            end
+            if rightAction then
+                MenuSystem.createButton(rightAction, ">", cx + btnW + valueW + su(16), y, btnW, btnH, COLORS.settings, 22, 10)
+            end
+        else
+            MenuSystem.createLabel(label, labelX, y + su(9), 16, COLORS.textNormal, 15)
+            MenuSystem.createLabel(valueText, valueX, y + su(9), 16, COLORS.title, 15)
+            if leftAction then
+                MenuSystem.createButton(leftAction, "<", leftBtnX, y, btnW, btnH, COLORS.settings, 22, 10)
+            end
+            if rightAction then
+                MenuSystem.createButton(rightAction, ">", rightBtnX, y, btnW, btnH, COLORS.settings, 22, 10)
+            end
+        end
+    end
 
-    -- Row 1: 800x600 and 1024x768
-    local res1Color = (settingsState.selectedResolution == 1) and COLORS.solo or COLORS.settings
-    MenuSystem.createButton("RES_800x600", "800x600",
-        startX, startY, btnW, btnH, res1Color, 16, 10)
+    local function toggleRow(label, enabled, y, action)
+        local color = enabled and COLORS.solo or COLORS.settings
+        if compactWidth then
+            MenuSystem.createLabel(label, labelX, y + btnH + su(13), 15, COLORS.textNormal, 15)
+            MenuSystem.createButton(action, formatToggle(enabled), compactControlX + btnW + ui(8), y, valueW, btnH, color, 16, 10)
+        else
+            MenuSystem.createLabel(label, labelX, y + su(9), 16, COLORS.textNormal, 15)
+            MenuSystem.createButton(action, formatToggle(enabled), valueX, y, valueW, btnH, color, 18, 10)
+        end
+    end
 
-    local res2Color = (settingsState.selectedResolution == 2) and COLORS.solo or COLORS.settings
-    MenuSystem.createButton("RES_1024x768", "1024x768",
-        startX + btnW + spacing, startY, btnW, btnH, res2Color, 16, 10)
+    if compactWidth then
+        settingRow("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label,
+            rowY, "UI_SCALE_PREV", "UI_SCALE_NEXT")
+        settingRow("Music Volume", tostring(settingsState.musicVolume) .. "%",
+            rowY - rowGap, "MUSIC_DOWN", "MUSIC_UP")
+        settingRow("SFX Volume", tostring(settingsState.sfxVolume) .. "%",
+            rowY - rowGap * 2, "SFX_DOWN", "SFX_UP")
+        toggleRow("High Contrast", settingsState.highContrast, rowY - rowGap * 3, "TOGGLE_CONTRAST")
+        toggleRow("Large Text", settingsState.largeText, rowY - rowGap * 4, "TOGGLE_LARGE_TEXT")
+        toggleRow("Reduced Motion", settingsState.reducedMotion, rowY - rowGap * 5, "TOGGLE_REDUCED_MOTION")
+    else
+        local colGap = su(44)
+        local colW = (contentW - colGap) / 2
+        local leftColX = contentX
+        local rightColX = contentX + colW + colGap
+        local colValueW = su(86)
+        local colBtnW = su(42)
 
-    -- Row 2: 1280x720 and 1920x1080
-    local res3Color = (settingsState.selectedResolution == 3) and COLORS.solo or COLORS.settings
-    MenuSystem.createButton("RES_1280x720", "1280x720 HD",
-        startX, startY - btnH - spacing, btnW, btnH, res3Color, 14, 10)
+        local function settingRowAt(label, value, y, colX, leftAction, rightAction)
+            local vX = colX + su(150)
+            MenuSystem.createLabel(label, colX, y + su(9), 16, COLORS.textNormal, 15)
+            MenuSystem.createLabel(tostring(value), vX, y + su(9), 16, COLORS.title, 15)
+            if leftAction then
+                MenuSystem.createButton(leftAction, "<", vX - colBtnW - su(8), y, colBtnW, btnH, COLORS.settings, 20, 10)
+            end
+            if rightAction then
+                MenuSystem.createButton(rightAction, ">", vX + colValueW + su(8), y, colBtnW, btnH, COLORS.settings, 20, 10)
+            end
+        end
 
-    local res4Color = (settingsState.selectedResolution == 4) and COLORS.solo or COLORS.settings
-    MenuSystem.createButton("RES_1920x1080", "1920x1080 FHD",
-        startX + btnW + spacing, startY - btnH - spacing, btnW, btnH, res4Color, 14, 10)
+        local function toggleRowAt(label, enabled, y, colX, action)
+            local color = enabled and COLORS.solo or COLORS.settings
+            MenuSystem.createLabel(label, colX, y + su(9), 16, COLORS.textNormal, 15)
+            MenuSystem.createButton(action, formatToggle(enabled), colX + su(150), y, colValueW, btnH, color, 16, 10)
+        end
 
-    -- Separator line
-    local line2 = ECS.createLine(100, SCREEN_HEIGHT - 400, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 400, 1, 0.3, 0.3, 0.4, 0.5, 2)
-    table.insert(menuElements, line2)
+        MenuSystem.createLabel("DISPLAY / AUDIO", leftColX, rowY + su(48), 20, COLORS.title, 20)
+        MenuSystem.createLabel("ACCESSIBILITY", rightColX, rowY + su(48), 20, COLORS.title, 20)
+        settingRowAt("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label,
+            rowY, leftColX, "UI_SCALE_PREV", "UI_SCALE_NEXT")
+        settingRowAt("Music", tostring(settingsState.musicVolume) .. "%",
+            rowY - rowGap, leftColX, "MUSIC_DOWN", "MUSIC_UP")
+        settingRowAt("SFX", tostring(settingsState.sfxVolume) .. "%",
+            rowY - rowGap * 2, leftColX, "SFX_DOWN", "SFX_UP")
+        toggleRowAt("High Contrast", settingsState.highContrast, rowY, rightColX, "TOGGLE_CONTRAST")
+        toggleRowAt("Large Text", settingsState.largeText, rowY - rowGap, rightColX, "TOGGLE_LARGE_TEXT")
+        toggleRowAt("Reduced Motion", settingsState.reducedMotion, rowY - rowGap * 2, rightColX, "TOGGLE_REDUCED_MOTION")
+    end
 
-    -- ==================== AUDIO SECTION ====================
-    createCenteredLabel("AUDIO", SCREEN_HEIGHT - 430, 24, COLORS.title, 20)
+    local hint = compactWidth and "Resize manually. F11 fullscreen." or "Window size follows manual resizing. Fullscreen: F11."
+    createCenteredLabel(hint, compactHeight and 76 or 82, 15, COLORS.textNormal, 15)
 
-    createCenteredLabel("Music: 40%  |  SFX: 60%", SCREEN_HEIGHT - 465, 16, COLORS.textNormal, 15)
-    createCenteredLabel("(Volume controls coming soon)", SCREEN_HEIGHT - 490, 14, { r = 0.5, g = 0.5, b = 0.5 }, 15)
-
-    -- ==================== BACK BUTTON ====================
     MenuSystem.createButton("BACK", "BACK",
-        SCREEN_WIDTH/2 - 100, 50, 200, 45, COLORS.quit, 22, 10)
+        SCREEN_WIDTH/2 - ui(100), 35, ui(200), ui(45), COLORS.quit, 22, 10)
 
+    uiScaleOverride = nil
     MenuSystem.updateSelection()
 end
 
@@ -675,8 +915,6 @@ end
 -- SHOW PAUSE MENU
 -- ============================================================================
 function MenuSystem.showPauseMenu()
-    if isPaused then return end
-
     print("[MenuSystem] Showing pause menu")
     isPaused = true
     ECS.isPaused = true -- Global pause flag for other systems
@@ -686,31 +924,28 @@ function MenuSystem.showPauseMenu()
     selectedIndex = 1
     menuState = "PAUSE"
 
-    -- Semi-transparent overlay
-    local bgId = ECS.createRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, 0.7, 50)
+    local bgId = ECS.createRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0, settingsState.highContrast and 0.86 or 0.7, 50)
     table.insert(menuElements, bgId)
 
-    -- Pause panel background
-    local panelW, panelH = 300, 350
+    local panelW, panelH = ui(320), ui(350)
     local panelX = SCREEN_WIDTH/2 - panelW/2
     local panelY = SCREEN_HEIGHT/2 - panelH/2
-    local panelBg = ECS.createRect(panelX, panelY, panelW, panelH, 0.1, 0.1, 0.15, 0.95, 51)
+    local panelBg = ECS.createRoundedRect(panelX, panelY, panelW, panelH, ui(14), COLORS.background.r, COLORS.background.g, COLORS.background.b, 0.96, 51)
     table.insert(menuElements, panelBg)
+    ECS.setOutline(panelBg, true, settingsState.highContrast and 4 or 3, 0.35, 0.65, 0.95)
 
-    -- Title
-    local textWidth = estimateTextWidth("PAUSED", 40)
+    local textWidth = estimateTextWidth("PAUSED", ui(40))
     local titleX = SCREEN_WIDTH/2 - textWidth/2
-    MenuSystem.createLabel("PAUSED", titleX, panelY + panelH - 60, 40, COLORS.title, 55)
+    MenuSystem.createLabel("PAUSED", titleX, panelY + panelH - ui(60), 40, COLORS.title, 55)
     
-    -- Buttons
-    local btnWidth = 250
-    local btnHeight = 45
+    local btnWidth = math.min(ui(250), panelW - ui(36))
+    local btnHeight = ui(45)
     local btnX = SCREEN_WIDTH/2 - btnWidth/2
-    local startY = panelY + panelH - 130
+    local startY = panelY + panelH - ui(130)
     
     MenuSystem.createButton("RESUME", "RESUME", btnX, startY, btnWidth, btnHeight, COLORS.resume, 24, 52)
-    MenuSystem.createButton("PAUSE_SETTINGS", "SETTINGS", btnX, startY - 70, btnWidth, btnHeight, COLORS.settings, 24, 52)
-    MenuSystem.createButton("QUIT_TO_MENU", "MAIN MENU", btnX, startY - 140, btnWidth, btnHeight, COLORS.quit, 24, 52)
+    MenuSystem.createButton("PAUSE_SETTINGS", "SETTINGS", btnX, startY - ui(70), btnWidth, btnHeight, COLORS.settings, 24, 52)
+    MenuSystem.createButton("QUIT_TO_MENU", "MAIN MENU", btnX, startY - ui(140), btnWidth, btnHeight, COLORS.quit, 24, 52)
     
     MenuSystem.updateSelection()
     ECS.sendMessage("GAME_PAUSED", "")
@@ -846,22 +1081,18 @@ function MenuSystem.onWindowResized(msg)
             _G.SCREEN_WIDTH = newWidth
             _G.SCREEN_HEIGHT = newHeight
 
-            -- Update settings state to reflect actual resolution
-            for i, res in ipairs(settingsState.resolutions) do
-                if res.width == newWidth and res.height == newHeight then
-                    settingsState.selectedResolution = i
-                    break
-                end
-            end
-
             -- If menu is currently shown, redraw it with new dimensions
             if isMenuRendered then
                 if menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
                     MenuSystem.showSettings()
                 elseif menuState == "PAUSE" then
+                    MenuSystem.hideMenu()
                     MenuSystem.showPauseMenu()
                 elseif menuState == "MAIN" then
+                    MenuSystem.hideMenu()
                     MenuSystem.renderMenu()
+                elseif menuState == "DEATH" then
+                    MenuSystem.showDeathScreen(deathScreen.score)
                 end
             end
         end
@@ -880,6 +1111,33 @@ end
 -- UPDATE (for animations if needed)
 -- ============================================================================
 function MenuSystem.update(dt)
+    if ECS.isGameRunning
+        and not deathScreen.active
+        and ECS.capabilities.hasAuthority
+        and ECS.capabilities.hasRendering
+        and not ECS.capabilities.hasNetworkSync then
+        local players = ECS.getEntitiesWith({"Player", "Life"})
+        local shouldShowDeath = (#players == 0)
+        if not shouldShowDeath then
+            local life = ECS.getComponent(players[1], "Life")
+            shouldShowDeath = life and (life.amount or 0) <= 0
+        end
+        if shouldShowDeath then
+            local score = 0
+            local scoreEntities = ECS.getEntitiesWith({"Score"})
+            if #scoreEntities > 0 then
+                local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
+                if scoreComp and scoreComp.value then
+                    score = scoreComp.value
+                end
+            end
+            ECS.isGameRunning = false
+            ECS.deathSlowdownActive = true
+            ECS.timeScale = 1.0
+            MenuSystem.showDeathScreen(score)
+        end
+    end
+
     if levelIntro.active then
         levelIntro.timer = levelIntro.timer + dt
         if levelIntro.timer >= levelIntro.duration then

@@ -67,6 +67,7 @@ class GLEWSFMLRenderer : public I3DRenderer {
     void destroyFramebuffer();
     void ensureGLEWInitialized();
     void initContext();
+    void rebuildHudOrder();
 
     // Moved to ResourceManager
     // void loadMesh(const std::string& path);
@@ -81,9 +82,17 @@ class GLEWSFMLRenderer : public I3DRenderer {
     GLuint _renderTexture;
     GLuint _depthBuffer;
     std::vector<uint32_t> _pixelBuffer;
+    std::vector<uint32_t> _flippedPixelBuffer;
+    std::string _frameMessageBuffer;
 
     std::map<std::string, RenderObject> _renderObjects;
+    std::vector<std::string> _hudRenderOrder;
+    bool _hudSortDirty = true;
     std::chrono::steady_clock::time_point _lastFrameTime;
+    std::chrono::steady_clock::time_point _lastRenderTime;
+    std::chrono::steady_clock::time_point _lastProfileLogTime;
+    double _profileAccumulatedMs = 0.0;
+    int _profileFrameCount = 0;
 
     std::string _activeCameraId;
     Vector3f _cameraPos;

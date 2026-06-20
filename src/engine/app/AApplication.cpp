@@ -13,6 +13,11 @@ bool debugEnabled() {
   return enabled;
 }
 
+bool profileEnabled() {
+  static bool enabled = (std::getenv("RTYPE_PROFILE") != nullptr);
+  return enabled;
+}
+
 std::string truncatePayload(const std::string& msg, std::size_t limit = 200) {
   if (msg.size() <= limit) {
     return msg;
@@ -73,12 +78,15 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
       try {
         port = std::stoi(baseEndpoint.substr(colonPos + 1));
       } catch (const std::exception &e) {
-        // If it's not a number (and not * which we caught above), log error
-        std::cerr << "Invalid port in baseEndpoint: " << e.what() << std::endl;
-        throw;
+        std::cerr << "Invalid port in baseEndpoint, using same endpoint for pub/sub: " << e.what() << std::endl;
+        _pubBrokerEndpoint = baseEndpoint;
+        _subBrokerEndpoint = baseEndpoint;
+        port = -1;
       }
-      _pubBrokerEndpoint = base + ":" + std::to_string(port);
-      _subBrokerEndpoint = base + ":" + std::to_string(port + 1);
+      if (port >= 0) {
+        _pubBrokerEndpoint = base + ":" + std::to_string(port);
+        _subBrokerEndpoint = base + ":" + std::to_string(port + 1);
+      }
     } else {
       _pubBrokerEndpoint = baseEndpoint;
       _subBrokerEndpoint = baseEndpoint;
@@ -139,7 +147,7 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
         } catch (const zmq::error_t& e) {
             std::cerr << "Failed to setup server message broker: " << e.what()
                       << " (Bind endpoints: " << _pubBrokerEndpoint << ", " << _subBrokerEndpoint << ")" << std::endl;
-            throw;
+            cleanupMessageBroker();
         }
     } else {
         try {
@@ -158,7 +166,7 @@ void AApplication::setupBroker(const std::string& baseEndpoint, bool isServer) {
             }
         } catch (const zmq::error_t& e) {
             std::cerr << "Failed to setup client message connections: " << e.what() << std::endl;
-            throw;
+            cleanupMessageBroker();
         }
     }
 }
@@ -193,7 +201,13 @@ void AApplication::addModule(const std::string &modulePath, const std::string &p
   if (debugEnabled()) {
     std::cout << "[App] Loading module: " << modulePath << " pub=" << pubEndpoint << " sub=" << subEndpoint << std::endl;
   }
-  _modules.push_back(_modulesManager->loadModule(modulePath, pubEndpoint, subEndpoint));
+  try {
+    _modules.push_back(_modulesManager->loadModule(modulePath, pubEndpoint, subEndpoint));
+  } catch (const std::exception& e) {
+    std::cerr << "[App] Failed to load module '" << modulePath << "': " << e.what() << std::endl;
+  } catch (...) {
+    std::cerr << "[App] Failed to load module '" << modulePath << "': unknown error" << std::endl;
+  }
 }
 
 void AApplication::run() {
@@ -212,10 +226,36 @@ void AApplication::run() {
     module->start();
   }
 
+  auto lastProfileLog = std::chrono::steady_clock::now();
+  double processMsTotal = 0.0;
+  double loopMsTotal = 0.0;
+  int profileSamples = 0;
+
   while (_running) {
+    const auto processStart = std::chrono::steady_clock::now();
     processMessages();
+    const auto processEnd = std::chrono::steady_clock::now();
     loop();
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    const auto loopEnd = std::chrono::steady_clock::now();
+
+    if (profileEnabled()) {
+      processMsTotal += std::chrono::duration<double, std::milli>(processEnd - processStart).count();
+      loopMsTotal += std::chrono::duration<double, std::milli>(loopEnd - processEnd).count();
+      ++profileSamples;
+      if (loopEnd - lastProfileLog >= std::chrono::seconds(1)) {
+        const double sampleCount = profileSamples > 0 ? static_cast<double>(profileSamples) : 1.0;
+        std::cout << "[PROFILE][App] process_avg_ms=" << (processMsTotal / sampleCount)
+                  << " loop_avg_ms=" << (loopMsTotal / sampleCount)
+                  << " modules=" << _modules.size()
+                  << " samples=" << profileSamples << std::endl;
+        processMsTotal = 0.0;
+        loopMsTotal = 0.0;
+        profileSamples = 0;
+        lastProfileLog = loopEnd;
+      }
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
 
   for (const auto &module : _modules) {
@@ -301,7 +341,7 @@ void AApplication::processMessages() {
   }
 
   int messagesProcessed = 0;
-  const int maxMessagesPerLoop = 100;
+  const int maxMessagesPerLoop = 256;
 
   while (messagesProcessed < maxMessagesPerLoop) {
     zmq::message_t zmqMessage;
@@ -336,7 +376,13 @@ void AApplication::processMessages() {
         if (spacePos != std::string::npos && spacePos + 1 < fullMessage.size()) {
           messageContent = fullMessage.substr(spacePos + 1);
         }
-        handler(messageContent);
+        try {
+          handler(messageContent);
+        } catch (const std::exception& e) {
+          std::cerr << "[App] Handler error for topic '" << topic << "': " << e.what() << std::endl;
+        } catch (...) {
+          std::cerr << "[App] Handler error for topic '" << topic << "': unknown error" << std::endl;
+        }
         break;
       }
     }

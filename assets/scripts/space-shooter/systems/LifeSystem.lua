@@ -13,6 +13,73 @@
 local Spawns = dofile("assets/scripts/space-shooter/spawns.lua")
 local LifeSystem = {}
 
+local function getFinalScore()
+    local scoreEntities = ECS.getEntitiesWith({"Score"})
+    if #scoreEntities > 0 then
+        local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
+        if scoreComp and scoreComp.value then
+            return scoreComp.value
+        end
+    end
+    return 0
+end
+
+local function showLocalGameOver(finalScore)
+    if _G.MenuSystem and _G.MenuSystem.showDeathScreen then
+        _G.MenuSystem.showDeathScreen(finalScore)
+    end
+    ECS.sendMessage("GAME_OVER", tostring(finalScore))
+end
+
+local function handlePlayerDeath(id, life, transform)
+    if life.deathEventSent then
+        return true
+    end
+
+    life.deathEventSent = true
+    ECS.deathSlowdownActive = true
+    ECS.timeScale = 1.0
+    ECS.isGameRunning = false
+
+    local finalScore = getFinalScore()
+    print("GAME OVER: Player died! Final Score: " .. finalScore)
+
+    if ECS.capabilities.hasRendering and transform then
+        Spawns.createExplosion(transform.x, transform.y, transform.z)
+    end
+
+    if not ECS.capabilities.hasNetworkSync then
+        ECS.sendMessage("MusicStop", "bgm")
+        ECS.sendMessage("SoundPlay", "gameover:effects/gameover.wav:" .. ECS.getSfxVolume(100))
+        showLocalGameOver(finalScore)
+    else
+        ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
+        ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
+
+        local ownerClientId = nil
+        local netIdentity = ECS.getComponent(id, "NetworkIdentity")
+        if netIdentity and netIdentity.ownerId and tonumber(netIdentity.ownerId) then
+            ownerClientId = tonumber(netIdentity.ownerId)
+        else
+            local legacyNetId = ECS.getComponent(id, "NetworkId")
+            if legacyNetId and legacyNetId.id and tonumber(legacyNetId.id) then
+                ownerClientId = tonumber(legacyNetId.id)
+            end
+        end
+
+        if ownerClientId and ownerClientId > 0 then
+            ECS.sendToClient(ownerClientId, "GAME_OVER", tostring(finalScore))
+            ECS.sendMessage("SERVER_PLAYER_DEAD", tostring(ownerClientId))
+        end
+
+        if ECS.capabilities.hasRendering then
+            showLocalGameOver(finalScore)
+        end
+    end
+
+    return true
+end
+
 function LifeSystem.init()
     print("[LifeSystem] Initialized (hasAuthority: " .. tostring(ECS.capabilities.hasAuthority) .. ")")
 end
@@ -28,10 +95,19 @@ function LifeSystem.update(dt)
         local life = ECS.getComponent(id, "Life")
         local t = ECS.getComponent(id, "Transform")
         local hasAuthority = ECS.hasComponent(id, "ServerAuthority")
+        local player = ECS.getComponent(id, "Player")
+        local enemy = ECS.getComponent(id, "Enemy")
 
         -- Boundary Check (Optimization): Destroy entities that go too far off-screen (only on authority)
         if hasAuthority and (t.x < -50 or t.x > 50 or t.y < -30 or t.y > 30) then
             life.amount = 0
+        end
+
+        if player and life.amount <= 0 and (hasAuthority or ECS.capabilities.hasAuthority) then
+            handlePlayerDeath(id, life, t)
+            -- Keep the destroyed ship body out of gameplay, but the death UI is already drawn.
+            ECS.destroyEntity(id)
+            return
         end
 
         if life.invulnerableTime and life.invulnerableTime > 0 then
@@ -53,9 +129,6 @@ function LifeSystem.update(dt)
             if life.amount <= 0 then
                 -- Authority-required logic (damage, broadcasts, etc.) only for authoritative entities
                 if hasAuthority then
-                    local player = ECS.getComponent(id, "Player")
-                    local enemy = ECS.getComponent(id, "Enemy")
-
                     -- In multiplayer server mode, broadcast enemy death to clients
                     if enemy and ECS.capabilities.hasNetworkSync and not life.deathEventSent then
                         -- Don't broadcast for boundary deaths
@@ -81,49 +154,11 @@ function LifeSystem.update(dt)
                         
                         -- Play enemy death sound
                         if not ECS.capabilities.hasNetworkSync then
-                            ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/explosion.wav:90")
+                            ECS.sendMessage("SoundPlay", "enemy_death_" .. id .. ":effects/explosion.wav:" .. ECS.getSfxVolume(90))
                         end
                     end
                 end
 
-                local finalScore = nil
-
-                if player then
-                    print("DEBUG: Player Dead. Life Amount: " .. life.amount)
-                    local scoreEntities = ECS.getEntitiesWith({"Score"})
-                    finalScore = 0
-                    if #scoreEntities > 0 then
-                        local scoreComp = ECS.getComponent(scoreEntities[1], "Score")
-                        finalScore = scoreComp.value
-                    end
-                    print("GAME OVER: Player died! Final Score: " .. finalScore)
-                    
-                    -- Play stop music and gameover sound
-                    if not ECS.capabilities.hasNetworkSync then
-                        ECS.sendMessage("MusicStop", "bgm")
-                        ECS.sendMessage("SoundPlay", "gameover:effects/gameover.wav:100")
-                    else
-                        -- Broadcast stop music and gameover sound to clients
-                        ECS.broadcastNetworkMessage("STOP_MUSIC", "bgm")
-                        ECS.broadcastNetworkMessage("PLAY_SOUND", "gameover:effects/gameover.wav:100")
-                    end
-
-                    local ownerClientId = nil
-                    local netIdentity = ECS.getComponent(id, "NetworkIdentity")
-                    if netIdentity and netIdentity.ownerId and tonumber(netIdentity.ownerId) then
-                        ownerClientId = tonumber(netIdentity.ownerId)
-                    else
-                        local legacyNetId = ECS.getComponent(id, "NetworkId")
-                        if legacyNetId and legacyNetId.id and tonumber(legacyNetId.id) then
-                            ownerClientId = tonumber(legacyNetId.id)
-                        end
-                    end
-
-                    if ownerClientId and ownerClientId > 0 then
-                        ECS.sendToClient(ownerClientId, "GAME_OVER", tostring(finalScore))
-                        ECS.sendMessage("SERVER_PLAYER_DEAD", tostring(ownerClientId))
-                    end
-                end
                 end  -- Close the if hasAuthority
 
                 -- Destroy entity for all (authoritative and non-authoritative)
@@ -134,9 +169,6 @@ function LifeSystem.update(dt)
                     if ECS.capabilities.hasNetworkSync then
                         -- Multiplayer server: Broadcast entity destruction
                         ECS.broadcastNetworkMessage("ENTITY_DESTROY", id)
-                    elseif ECS.capabilities.hasLocalMode and player and finalScore then -- Changed from isServer() to capabilities.isLocalMode
-                        -- Solo mode: Trigger local game over
-                        ECS.sendMessage("GAME_OVER", tostring(finalScore))
                     end
                 end
             end

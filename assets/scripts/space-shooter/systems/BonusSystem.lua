@@ -54,7 +54,7 @@ function BonusSystem.spawnBonus()
     
     -- Rendering only on instances with rendering capability
     if ECS.capabilities.hasRendering then
-        ECS.addComponent(bonus, "Mesh", Mesh("assets/models/cube.obj"))
+        ECS.addComponent(bonus, "Mesh", Mesh("assets/models/powerup_crystal.obj"))
         ECS.addComponent(bonus, "Color", Color(0.0, 0.5, 1.0)) -- Blue bonus
     end
 

@@ -186,12 +186,13 @@ end
 function Spawns.spawnBullet(x, y, z, isEnemy, ownerId, customVx, customVy)
     local e = ECS.createEntity()
     
-    local speed = isEnemy and -config.bullet.speed or config.bullet.speed
+    local enemyBulletSpeed = config.bullet.enemySpeed or (config.bullet.speed * 0.45)
+    local speed = isEnemy and -enemyBulletSpeed or config.bullet.speed
     local tag = isEnemy and "EnemyBullet" or "Bullet"
     local color = isEnemy and Color(1, 0, 0) or Color(1, 1, 0)
 
     -- Core
-    ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, 0.2, 0.2, 0.2))
+    ECS.addComponent(e, "Transform", Transform(x, y, z, 0, 0, 0, 0.42, 0.42, 0.42))
     ECS.addComponent(e, "Tag", Tag({tag}))
     ECS.addComponent(e, "Bullet", Bullet(config.bullet.damage))
     ECS.addComponent(e, "Life", Life(config.bullet.life))
@@ -209,11 +210,10 @@ function Spawns.spawnBullet(x, y, z, isEnemy, ownerId, customVx, customVy)
     -- Visuals
     if hasRendering() then
         if isEnemy then
-             ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/attack.jpg"))
+             ECS.addComponent(e, "Mesh", Mesh("assets/models/enemy_bullet.obj", "assets/textures/attack.jpg"))
              ECS.addComponent(e, "Color", Color(1.0, 0.5, 0.0)) -- Orange
         else
-            ECS.addComponent(e, "Mesh", Mesh("assets/models/sphere.obj", "assets/textures/shoot.jpg"))
-             -- ECS.addComponent(e, "Mesh", Mesh("assets/models/laser.obj", nil)) -- Laser
+            ECS.addComponent(e, "Mesh", Mesh("assets/models/player_bullet.obj", "assets/textures/shoot.jpg"))
              ECS.addComponent(e, "Color", Color(0.0, 1.0, 1.0)) -- Cyan
         end
     end
@@ -249,7 +249,7 @@ function Spawns.spawnPowerUp(x, y, z, powerType)
     phys.vy = 0
 
     if hasRendering() then
-        ECS.addComponent(e, "Mesh", Mesh("assets/models/cube.obj", nil))
+        ECS.addComponent(e, "Mesh", Mesh("assets/models/powerup_crystal.obj", nil))
         if pickedType == "SPREAD" then
             ECS.addComponent(e, "Color", Color(1.0, 0.8, 0.0))
         else
@@ -298,7 +298,7 @@ end
 function Spawns.createBackground(texturePath, scaleX, scaleY)
     if not hasRendering() then return end
 
-    local tex = texturePath or "assets/textures/Background/StartSky.jpg"
+    local tex = texturePath or "assets/textures/Background/Starfield.png"
     local sx = scaleX or 60
     local sy = scaleY or 40
 
@@ -348,7 +348,7 @@ function Spawns.createCoreEntities(level, backgroundTexture)
     end
 
     -- Create Background
-    local bgTex = backgroundTexture or ("assets/textures/Background/SinglePlay" .. tostring(level) .. ".png")
+    local bgTex = backgroundTexture or "assets/textures/Background/Starfield.png"
     local isMultiplayer = ECS.capabilities and ECS.capabilities.hasNetworkSync
 
     if isMultiplayer then

@@ -15,11 +15,13 @@ function PhysicSystem.update(dt)
     if not ECS.capabilities.hasAuthority then return end
 
     local entities = ECS.getEntitiesWith({"Physic"})
+    local timeScale = ECS.timeScale
+    if timeScale == nil then timeScale = 1.0 end
 
     for _, id in ipairs(entities) do
         local physic = ECS.getComponent(id, "Physic")
         -- Always send velocity to ensure we can stop the ship (send 0,0,0)
-        local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, physic.vx, physic.vy)
+        local msg = string.format("SetLinearVelocity:%s:%f,%f,0;", id, (physic.vx or 0) * timeScale, (physic.vy or 0) * timeScale)
         ECS.sendMessage("PhysicCommand", msg)
     end
 end
