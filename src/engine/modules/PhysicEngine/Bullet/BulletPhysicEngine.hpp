@@ -78,6 +78,7 @@ class BulletPhysicEngine : public IPhysicEngine {
     std::chrono::high_resolution_clock::time_point _lastFrameTime;
     float _timeAccumulator = 0.0f;
     const float _maxDeltaTime = 1.0f / 30.0f;
+    bool _isPaused = false;
 
 };
 

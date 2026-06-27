@@ -27,7 +27,8 @@ namespace rtypeEngine {
 BulletPhysicEngine::BulletPhysicEngine(const char* pubEndpoint, const char* subEndpoint)
     : IPhysicEngine(pubEndpoint, subEndpoint),
       _bulletWorld(nullptr),
-      _bodyManager(nullptr) {}
+      _bodyManager(nullptr),
+      _isPaused(false) {}
 
 void BulletPhysicEngine::init() {
     _bulletWorld = new BulletWorld();
@@ -35,9 +36,19 @@ void BulletPhysicEngine::init() {
     _bodyManager = new BulletBodyManager(_bulletWorld->getWorld());
 
     _lastFrameTime = std::chrono::high_resolution_clock::now();
+    _isPaused = false;
 
     subscribe("PhysicCommand", [this](const std::string& msg) {
         this->onPhysicCommand(msg);
+    });
+
+    subscribe("GAME_PAUSED", [this](const std::string&) {
+        _isPaused = true;
+    });
+
+    subscribe("GAME_RESUMED", [this](const std::string&) {
+        _isPaused = false;
+        _lastFrameTime = std::chrono::high_resolution_clock::now();
     });
 
     std::cout << "[BulletPhysicEngine] Initialized" << std::endl;
@@ -54,9 +65,13 @@ void BulletPhysicEngine::loop() {
         std::cout << "[Bullet] Heartbeat - Loop Running. Bodies tracked: " << _bodyManager->getBodies().size() << std::endl;
     }
 
-    stepSimulation();
-    checkCollisions();
-    sendUpdates();
+    if (!_isPaused) {
+        stepSimulation();
+        checkCollisions();
+        sendUpdates();
+    } else {
+        _lastFrameTime = std::chrono::high_resolution_clock::now();
+    }
 }
 
 void BulletPhysicEngine::stepSimulation() {
