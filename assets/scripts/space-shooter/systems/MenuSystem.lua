@@ -29,6 +29,14 @@ ECS.isPaused = false
 -- Settings state (must be defined before executeAction uses it)
 local settingsState = {
     isFullscreen = false,
+    resolutionIndex = 1,
+    resolutions = {
+        { width = 800, height = 600, label = "800x600 (4:3)" },
+        { width = 1024, height = 768, label = "1024x768 (4:3)" },
+        { width = 1280, height = 720, label = "1280x720 (16:9 HD)" },
+        { width = 1600, height = 900, label = "1600x900 (16:9)" },
+        { width = 1920, height = 1080, label = "1920x1080 (16:9 FHD)" }
+    },
     uiScaleIndex = 2,
     uiScales = {
         { value = 0.85, label = "85%" },
@@ -488,6 +496,30 @@ function MenuSystem.executeAction(action)
         MenuSystem.showSettings()
         menuState = "PAUSE_SETTINGS"
 
+    elseif action == "RESOLUTION_PREV" then
+        local currentIdx = settingsState.resolutionIndex
+        if currentIdx == 0 then
+            currentIdx = 1
+        else
+            currentIdx = cycleIndex(currentIdx, settingsState.resolutions, -1)
+        end
+        settingsState.resolutionIndex = currentIdx
+        local res = settingsState.resolutions[currentIdx]
+        print("[MenuSystem] Setting resolution to: " .. res.width .. "x" .. res.height)
+        ECS.sendMessage("SetWindowSize", res.width .. "," .. res.height)
+
+    elseif action == "RESOLUTION_NEXT" then
+        local currentIdx = settingsState.resolutionIndex
+        if currentIdx == 0 then
+            currentIdx = 1
+        else
+            currentIdx = cycleIndex(currentIdx, settingsState.resolutions, 1)
+        end
+        settingsState.resolutionIndex = currentIdx
+        local res = settingsState.resolutions[currentIdx]
+        print("[MenuSystem] Setting resolution to: " .. res.width .. "x" .. res.height)
+        ECS.sendMessage("SetWindowSize", res.width .. "," .. res.height)
+
     elseif action == "UI_SCALE_PREV" then
         settingsState.uiScaleIndex = cycleIndex(settingsState.uiScaleIndex, settingsState.uiScales, -1)
         print("[MenuSystem] UI scale set to " .. settingsState.uiScales[settingsState.uiScaleIndex].label)
@@ -782,6 +814,26 @@ function MenuSystem.showSettings()
         menuState = "SETTINGS"
     end
 
+    -- Synchronize resolution index with current SCREEN_WIDTH and SCREEN_HEIGHT
+    local foundRes = false
+    for idx, res in ipairs(settingsState.resolutions) do
+        if res.width == SCREEN_WIDTH and res.height == SCREEN_HEIGHT then
+            settingsState.resolutionIndex = idx
+            foundRes = true
+            break
+        end
+    end
+    if not foundRes then
+        settingsState.resolutionIndex = 0 -- Custom resolution
+    end
+
+    local resLabel = ""
+    if settingsState.resolutionIndex == 0 then
+        resLabel = SCREEN_WIDTH .. "x" .. SCREEN_HEIGHT .. " (Custom)"
+    else
+        resLabel = settingsState.resolutions[settingsState.resolutionIndex].label
+    end
+
     local marginX = math.max(20, ui(24))
     local marginY = math.max(20, ui(24))
     local panelW = SCREEN_WIDTH - marginX * 2
@@ -820,7 +872,7 @@ function MenuSystem.showSettings()
     local contentX = panelX + (panelW - contentW) / 2
 
     local usableHeight = lineY - panelY - ui(110)
-    local rowGap = math.floor(usableHeight / 6)
+    local rowGap = math.floor(usableHeight / 7)
     local btnH = math.min(ui(36), math.floor(rowGap * 0.75))
 
     local controlW = ui(220)
@@ -899,6 +951,10 @@ function MenuSystem.showSettings()
     end
 
     local y = lineY - ui(50)
+
+    -- Resolution Row
+    drawSettingRow("Resolution", resLabel, nil, y, "RESOLUTION_PREV", "RESOLUTION_NEXT")
+    y = y - rowGap
 
     -- UI Scale
     drawSettingRow("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label, nil, y, "UI_SCALE_PREV", "UI_SCALE_NEXT")
@@ -1020,7 +1076,7 @@ function MenuSystem.onKeyPressed(key)
     if key == "UP" or key == "Z" or key == "W" then
         if menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
             if selectedIndex == 1 or selectedIndex == 2 then
-                selectedIndex = 10
+                selectedIndex = 12
             elseif selectedIndex == 3 then
                 selectedIndex = 1
             elseif selectedIndex == 4 then
@@ -1032,11 +1088,15 @@ function MenuSystem.onKeyPressed(key)
             elseif selectedIndex == 7 then
                 selectedIndex = 5
             elseif selectedIndex == 8 then
-                selectedIndex = 7
+                selectedIndex = 6
             elseif selectedIndex == 9 then
-                selectedIndex = 8
+                selectedIndex = 7
             elseif selectedIndex == 10 then
                 selectedIndex = 9
+            elseif selectedIndex == 11 then
+                selectedIndex = 10
+            elseif selectedIndex == 12 then
+                selectedIndex = 11
             end
         else
             selectedIndex = selectedIndex - 1
@@ -1054,15 +1114,19 @@ function MenuSystem.onKeyPressed(key)
                 selectedIndex = 5
             elseif selectedIndex == 4 then
                 selectedIndex = 6
-            elseif selectedIndex == 5 or selectedIndex == 6 then
+            elseif selectedIndex == 5 then
                 selectedIndex = 7
-            elseif selectedIndex == 7 then
+            elseif selectedIndex == 6 then
                 selectedIndex = 8
-            elseif selectedIndex == 8 then
+            elseif selectedIndex == 7 or selectedIndex == 8 then
                 selectedIndex = 9
             elseif selectedIndex == 9 then
                 selectedIndex = 10
             elseif selectedIndex == 10 then
+                selectedIndex = 11
+            elseif selectedIndex == 11 then
+                selectedIndex = 12
+            elseif selectedIndex == 12 then
                 selectedIndex = 1
             end
         else
@@ -1082,6 +1146,8 @@ function MenuSystem.onKeyPressed(key)
                 selectedIndex = 3
             elseif selectedIndex == 6 then
                 selectedIndex = 5
+            elseif selectedIndex == 8 then
+                selectedIndex = 7
             end
             MenuSystem.updateSelection()
         end
@@ -1097,6 +1163,8 @@ function MenuSystem.onKeyPressed(key)
                 selectedIndex = 4
             elseif selectedIndex == 5 then
                 selectedIndex = 6
+            elseif selectedIndex == 7 then
+                selectedIndex = 8
             end
             MenuSystem.updateSelection()
         end
