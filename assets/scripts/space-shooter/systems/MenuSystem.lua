@@ -389,12 +389,12 @@ end
 function MenuSystem.updateSelection()
     for i, btn in ipairs(menuButtons) do
         if i == selectedIndex then
-            -- Highlighted state
-            ECS.setUIColor(btn.bgId, COLORS.buttonSelected.r, COLORS.buttonSelected.g, COLORS.buttonSelected.b)
-            ECS.setUIColor(btn.textId, COLORS.textSelected.r, COLORS.textSelected.g, COLORS.textSelected.b)
-            ECS.setOutline(btn.bgId, true, settingsState.highContrast and 5 or 3, COLORS.textSelected.r, COLORS.textSelected.g, COLORS.textSelected.b)
+            -- Highlighted state: keep the button's specific base color and draw a thick white outline
+            ECS.setUIColor(btn.bgId, btn.baseColor.r, btn.baseColor.g, btn.baseColor.b)
+            ECS.setUIColor(btn.textId, 1.0, 1.0, 1.0)
+            ECS.setOutline(btn.bgId, true, settingsState.highContrast and 5 or 3, 1.0, 1.0, 1.0)
         else
-            -- Normal state
+            -- Normal state: keep base color and draw a subtle outline
             ECS.setUIColor(btn.bgId, btn.baseColor.r, btn.baseColor.g, btn.baseColor.b)
             ECS.setUIColor(btn.textId, COLORS.textNormal.r, COLORS.textNormal.g, COLORS.textNormal.b)
             ECS.setOutline(btn.bgId, true, settingsState.highContrast and 3 or 2, 0.35, 0.4, 0.55)

@@ -1,6 +1,8 @@
 local HitFlashSystem = {}
 
 function HitFlashSystem.update(dt)
+    if ECS.isPaused then return end
+
     local entities = ECS.getEntitiesWith({"HitFlash", "Color"})
     for _, id in ipairs(entities) do
         local hitFlash = ECS.getComponent(id, "HitFlash")

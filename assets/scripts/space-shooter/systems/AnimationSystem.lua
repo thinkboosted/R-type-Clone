@@ -8,6 +8,8 @@ function AnimationSystem.init()
 end
 
 function AnimationSystem.update(dt)
+    if ECS.isPaused then return end
+
     -- Iterate over entities with Animation and Mesh components
     local entities = ECS.getEntitiesWith({"Animation", "Mesh"})
     

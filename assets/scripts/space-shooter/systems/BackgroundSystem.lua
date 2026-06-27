@@ -11,6 +11,7 @@ end
 function BackgroundSystem.update(dt)
     -- Only run on rendering instances (Client/Solo)
     if not ECS.capabilities.hasRendering then return end
+    if ECS.isPaused then return end
 
     local images = ECS.getEntitiesWith({"Background", "Transform"})
 
