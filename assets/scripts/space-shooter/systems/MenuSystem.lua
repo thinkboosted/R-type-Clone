@@ -31,11 +31,11 @@ local settingsState = {
     isFullscreen = false,
     resolutionIndex = 1,
     resolutions = {
-        { width = 800, height = 600, label = "800x600 (4:3)" },
-        { width = 1024, height = 768, label = "1024x768 (4:3)" },
-        { width = 1280, height = 720, label = "1280x720 (16:9 HD)" },
-        { width = 1600, height = 900, label = "1600x900 (16:9)" },
-        { width = 1920, height = 1080, label = "1920x1080 (16:9 FHD)" }
+        { width = 800, height = 600, label = "800x600" },
+        { width = 1024, height = 768, label = "1024x768" },
+        { width = 1280, height = 720, label = "1280x720" },
+        { width = 1600, height = 900, label = "1600x900" },
+        { width = 1920, height = 1080, label = "1920x1080" }
     },
     uiScaleIndex = 2,
     uiScales = {
@@ -829,7 +829,7 @@ function MenuSystem.showSettings()
 
     local resLabel = ""
     if settingsState.resolutionIndex == 0 then
-        resLabel = SCREEN_WIDTH .. "x" .. SCREEN_HEIGHT .. " (Custom)"
+        resLabel = SCREEN_WIDTH .. "x" .. SCREEN_HEIGHT
     else
         resLabel = settingsState.resolutions[settingsState.resolutionIndex].label
     end
@@ -875,7 +875,7 @@ function MenuSystem.showSettings()
     local rowGap = math.floor(usableHeight / 7)
     local btnH = math.min(ui(36), math.floor(rowGap * 0.75))
 
-    local controlW = ui(220)
+    local controlW = ui(250)
     local valueW = controlW - ui(92)
     local decBtnX = contentX + contentW - controlW
     local valBoxX = decBtnX + ui(46)
