@@ -773,141 +773,163 @@ function MenuSystem.showSettings()
     isMenuRendered = true
     menuElements = {}
     menuButtons = {}
-    selectedIndex = 1
+
+    -- Preserve selectedIndex if we are redrawing settings
+    if menuState ~= "SETTINGS" and menuState ~= "PAUSE_SETTINGS" then
+        selectedIndex = 1
+    end
     if menuState ~= "PAUSE_SETTINGS" then
         menuState = "SETTINGS"
     end
 
-    local bgId = ECS.createRoundedRect(20, 20, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 40,
-        ui(15), COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
+    local marginX = math.max(20, ui(24))
+    local marginY = math.max(20, ui(24))
+    local panelW = SCREEN_WIDTH - marginX * 2
+    local panelH = SCREEN_HEIGHT - marginY * 2
+    local panelX = marginX
+    local panelY = marginY
+
+    -- Main Settings panel background
+    local bgId = ECS.createRoundedRect(panelX, panelY, panelW, panelH,
+        ui(16), COLORS.background.r, COLORS.background.g, COLORS.background.b, COLORS.background.a, 0)
     table.insert(menuElements, bgId)
-    ECS.setOutline(bgId, true, settingsState.highContrast and 4 or 3, 0.25, 0.55, 0.9)
+    ECS.setOutline(bgId, true, settingsState.highContrast and 5 or 3, 0.2, 0.5, 0.85)
 
-    local compactWidth = SCREEN_WIDTH < ui(760)
-    local compactHeight = SCREEN_HEIGHT < ui(640)
-    local topY = SCREEN_HEIGHT - (compactHeight and ui(70) or ui(92))
+    -- Dynamic background accents
+    if not settingsState.reducedMotion then
+        local circleRadius = ui(28)
+        local circle1 = ECS.createCircle(panelX + ui(50), panelY + panelH - ui(50), circleRadius, 0.1, 0.3, 0.5, 0.45, 1)
+        local circle2 = ECS.createCircle(panelX + panelW - ui(50), panelY + ui(50), circleRadius, 0.1, 0.3, 0.5, 0.45, 1)
+        table.insert(menuElements, circle1)
+        table.insert(menuElements, circle2)
+        ECS.setOutline(circle1, true, 2, 0.2, 0.5, 0.8)
+        ECS.setOutline(circle2, true, 2, 0.2, 0.5, 0.8)
+    end
 
-    createCenteredLabel("SETTINGS", topY, compactHeight and 40 or 48, COLORS.title, 20)
+    -- Header Title
+    local titleSize = 36
+    local titleY = panelY + panelH - ui(55)
+    createCenteredLabel("SETTINGS", titleY, titleSize, COLORS.title, 20)
 
-    local lineY = topY - ui(28)
-    local line = ECS.createLine(ui(60), lineY, SCREEN_WIDTH - ui(60), lineY, 2, 0.3, 0.5, 0.7, 0.6, 2)
+    local lineY = titleY - ui(15)
+    local line = ECS.createLine(panelX + ui(40), lineY, panelX + panelW - ui(40), lineY, 2, 0.25, 0.45, 0.7, 0.6, 2)
     table.insert(menuElements, line)
 
-    local settingsScale = getUiScale()
-    if compactHeight then
-        settingsScale = math.min(settingsScale, compactWidth and 0.82 or 0.92)
-    elseif compactWidth then
-        settingsScale = math.min(settingsScale, 0.95)
-    end
-    uiScaleOverride = settingsScale
-    local function su(value)
-        return uiWithScale(value, settingsScale)
-    end
+    -- Compute Row sizes & dynamic spacing
+    local contentW = math.min(panelW - ui(80), ui(680))
+    local contentX = panelX + (panelW - contentW) / 2
 
-    local btnH = su(compactHeight and 32 or 38)
-    local btnW = su(compactWidth and 72 or 48)
-    local rowGap = compactWidth and su(compactHeight and 68 or 78) or su(60)
-    local rowY = lineY - su(compactHeight and 62 or 76)
-    local contentW = math.min(SCREEN_WIDTH - ui(80), ui(620))
-    local contentX = (SCREEN_WIDTH - contentW) / 2
-    local labelX = contentX
-    local valueW = su(compactWidth and 138 or 96)
-    local valueX = compactWidth and (contentX + contentW - valueW) or (SCREEN_WIDTH / 2 + ui(12))
-    local leftBtnX = valueX - btnW - su(8)
-    local rightBtnX = valueX + valueW + su(8)
-    local compactControlX = contentX + math.max(0, (contentW - (btnW * 2 + valueW + su(16))) / 2)
+    local usableHeight = lineY - panelY - ui(110)
+    local rowGap = math.floor(usableHeight / 6)
+    local btnH = math.min(ui(36), math.floor(rowGap * 0.75))
 
-    local function settingRow(label, value, y, leftAction, rightAction)
-        local valueText = tostring(value)
-        if compactWidth then
-            MenuSystem.createLabel(label, labelX, y + btnH + su(13), 15, COLORS.textNormal, 15)
-            MenuSystem.createLabel(valueText, valueX, y + btnH + su(13), 15, COLORS.title, 15)
-            local cx = compactControlX
-            if leftAction then
-                MenuSystem.createButton(leftAction, "<", cx, y, btnW, btnH, COLORS.settings, 22, 10)
-            end
-            if rightAction then
-                MenuSystem.createButton(rightAction, ">", cx + btnW + valueW + su(16), y, btnW, btnH, COLORS.settings, 22, 10)
-            end
+    local controlW = ui(220)
+    local valueW = controlW - ui(92)
+    local decBtnX = contentX + contentW - controlW
+    local valBoxX = decBtnX + ui(46)
+    local incBtnX = contentX + contentW - ui(40)
+
+    -- Accent colors for active / inactive toggles
+    local TOGGLE_ACTIVE_COLOR = { r = 0.15, g = 0.55, b = 0.3, a = 0.95 }
+    local TOGGLE_INACTIVE_COLOR = { r = 0.22, g = 0.22, b = 0.26, a = 0.9 }
+
+    -- Subtle card background for setting rows to look modern and neat
+    local function drawRowCard(y)
+        local cardBg = ECS.createRoundedRect(contentX - ui(10), y - ui(6), contentW + ui(20), btnH + ui(12), ui(8), 1.0, 1.0, 1.0, 0.03, 1)
+        table.insert(menuElements, cardBg)
+        if settingsState.highContrast then
+            ECS.setOutline(cardBg, true, 1, 0.2, 0.2, 0.25)
         else
-            MenuSystem.createLabel(label, labelX, y + su(9), 16, COLORS.textNormal, 15)
-            MenuSystem.createLabel(valueText, valueX, y + su(9), 16, COLORS.title, 15)
-            if leftAction then
-                MenuSystem.createButton(leftAction, "<", leftBtnX, y, btnW, btnH, COLORS.settings, 22, 10)
-            end
-            if rightAction then
-                MenuSystem.createButton(rightAction, ">", rightBtnX, y, btnW, btnH, COLORS.settings, 22, 10)
-            end
+            ECS.setOutline(cardBg, true, 1, 0.15, 0.18, 0.22)
         end
     end
 
-    local function toggleRow(label, enabled, y, action)
-        local color = enabled and COLORS.solo or COLORS.settings
-        if compactWidth then
-            MenuSystem.createLabel(label, labelX, y + btnH + su(13), 15, COLORS.textNormal, 15)
-            MenuSystem.createButton(action, formatToggle(enabled), compactControlX + btnW + ui(8), y, valueW, btnH, color, 16, 10)
-        else
-            MenuSystem.createLabel(label, labelX, y + su(9), 16, COLORS.textNormal, 15)
-            MenuSystem.createButton(action, formatToggle(enabled), valueX, y, valueW, btnH, color, 18, 10)
+    local function drawSettingRow(label, valueText, volumePercent, y, decAction, incAction)
+        drawRowCard(y)
+
+        -- Label
+        local labelFontSize = 18
+        local labelY = y + btnH / 2 - ui(labelFontSize) / 2
+        MenuSystem.createLabel(label, contentX, labelY, labelFontSize, COLORS.textNormal, 15)
+
+        -- Decrement arrow
+        if decAction then
+            MenuSystem.createButton(decAction, "<", decBtnX, y, ui(40), btnH, COLORS.settings, 20, 10)
         end
-    end
 
-    if compactWidth then
-        settingRow("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label,
-            rowY, "UI_SCALE_PREV", "UI_SCALE_NEXT")
-        settingRow("Music Volume", tostring(settingsState.musicVolume) .. "%",
-            rowY - rowGap, "MUSIC_DOWN", "MUSIC_UP")
-        settingRow("SFX Volume", tostring(settingsState.sfxVolume) .. "%",
-            rowY - rowGap * 2, "SFX_DOWN", "SFX_UP")
-        toggleRow("High Contrast", settingsState.highContrast, rowY - rowGap * 3, "TOGGLE_CONTRAST")
-        toggleRow("Large Text", settingsState.largeText, rowY - rowGap * 4, "TOGGLE_LARGE_TEXT")
-        toggleRow("Reduced Motion", settingsState.reducedMotion, rowY - rowGap * 5, "TOGGLE_REDUCED_MOTION")
-    else
-        local colGap = su(44)
-        local colW = (contentW - colGap) / 2
-        local leftColX = contentX
-        local rightColX = contentX + colW + colGap
-        local colValueW = su(86)
-        local colBtnW = su(42)
+        -- Value panel (with optional visual volume progress indicator)
+        local barBg = ECS.createRoundedRect(valBoxX, y, valueW, btnH, ui(6), 0.12, 0.12, 0.18, 0.9, 10)
+        table.insert(menuElements, barBg)
+        ECS.setOutline(barBg, true, 1, 0.25, 0.3, 0.4)
 
-        local function settingRowAt(label, value, y, colX, leftAction, rightAction)
-            local vX = colX + su(150)
-            MenuSystem.createLabel(label, colX, y + su(9), 16, COLORS.textNormal, 15)
-            MenuSystem.createLabel(tostring(value), vX, y + su(9), 16, COLORS.title, 15)
-            if leftAction then
-                MenuSystem.createButton(leftAction, "<", vX - colBtnW - su(8), y, colBtnW, btnH, COLORS.settings, 20, 10)
-            end
-            if rightAction then
-                MenuSystem.createButton(rightAction, ">", vX + colValueW + su(8), y, colBtnW, btnH, COLORS.settings, 20, 10)
+        if volumePercent then
+            local fillW = math.floor((volumePercent / 100) * (valueW - ui(8)) + 0.5)
+            if fillW > 0 then
+                local barFill = ECS.createRoundedRect(valBoxX + ui(4), y + ui(4), fillW, btnH - ui(8), ui(4), 0.15, 0.55, 0.85, 0.9, 11)
+                table.insert(menuElements, barFill)
             end
         end
 
-        local function toggleRowAt(label, enabled, y, colX, action)
-            local color = enabled and COLORS.solo or COLORS.settings
-            MenuSystem.createLabel(label, colX, y + su(9), 16, COLORS.textNormal, 15)
-            MenuSystem.createButton(action, formatToggle(enabled), colX + su(150), y, colValueW, btnH, color, 16, 10)
-        end
+        -- Value text
+        local textFontSize = 16
+        local valWidth = estimateTextWidth(valueText, ui(textFontSize))
+        local valX = valBoxX + (valueW - valWidth) / 2
+        local valY = y + btnH / 2 - ui(textFontSize) / 2
+        local textId = ECS.createUIText(valueText, valX, valY, ui(textFontSize), COLORS.title.r, COLORS.title.g, COLORS.title.b, 12)
+        table.insert(menuElements, textId)
 
-        MenuSystem.createLabel("DISPLAY / AUDIO", leftColX, rowY + su(48), 20, COLORS.title, 20)
-        MenuSystem.createLabel("ACCESSIBILITY", rightColX, rowY + su(48), 20, COLORS.title, 20)
-        settingRowAt("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label,
-            rowY, leftColX, "UI_SCALE_PREV", "UI_SCALE_NEXT")
-        settingRowAt("Music", tostring(settingsState.musicVolume) .. "%",
-            rowY - rowGap, leftColX, "MUSIC_DOWN", "MUSIC_UP")
-        settingRowAt("SFX", tostring(settingsState.sfxVolume) .. "%",
-            rowY - rowGap * 2, leftColX, "SFX_DOWN", "SFX_UP")
-        toggleRowAt("High Contrast", settingsState.highContrast, rowY, rightColX, "TOGGLE_CONTRAST")
-        toggleRowAt("Large Text", settingsState.largeText, rowY - rowGap, rightColX, "TOGGLE_LARGE_TEXT")
-        toggleRowAt("Reduced Motion", settingsState.reducedMotion, rowY - rowGap * 2, rightColX, "TOGGLE_REDUCED_MOTION")
+        -- Increment arrow
+        if incAction then
+            MenuSystem.createButton(incAction, ">", incBtnX, y, ui(40), btnH, COLORS.settings, 20, 10)
+        end
     end
 
-    local hint = compactWidth and "Resize manually. F11 fullscreen." or "Window size follows manual resizing. Fullscreen: F11."
-    createCenteredLabel(hint, compactHeight and 76 or 82, 15, COLORS.textNormal, 15)
+    local function drawToggleRow(label, enabled, y, action)
+        drawRowCard(y)
+
+        -- Label
+        local labelFontSize = 18
+        local labelY = y + btnH / 2 - ui(labelFontSize) / 2
+        MenuSystem.createLabel(label, contentX, labelY, labelFontSize, COLORS.textNormal, 15)
+
+        -- Toggle switch button (fills the full control group width)
+        local btnColor = enabled and TOGGLE_ACTIVE_COLOR or TOGGLE_INACTIVE_COLOR
+        local btnText = formatToggle(enabled)
+        MenuSystem.createButton(action, btnText, decBtnX, y, controlW, btnH, btnColor, 18, 10)
+    end
+
+    local y = lineY - ui(50)
+
+    -- UI Scale
+    drawSettingRow("UI Scale", settingsState.uiScales[settingsState.uiScaleIndex].label, nil, y, "UI_SCALE_PREV", "UI_SCALE_NEXT")
+    y = y - rowGap
+
+    -- Music Volume
+    drawSettingRow("Music Volume", tostring(settingsState.musicVolume) .. "%", settingsState.musicVolume, y, "MUSIC_DOWN", "MUSIC_UP")
+    y = y - rowGap
+
+    -- SFX Volume
+    drawSettingRow("SFX Volume", tostring(settingsState.sfxVolume) .. "%", settingsState.sfxVolume, y, "SFX_DOWN", "SFX_UP")
+    y = y - rowGap
+
+    -- High Contrast
+    drawToggleRow("High Contrast Mode", settingsState.highContrast, y, "TOGGLE_CONTRAST")
+    y = y - rowGap
+
+    -- Large Text
+    drawToggleRow("Large Text Mode", settingsState.largeText, y, "TOGGLE_LARGE_TEXT")
+    y = y - rowGap
+
+    -- Reduced Motion
+    drawToggleRow("Reduced Motion Mode", settingsState.reducedMotion, y, "TOGGLE_REDUCED_MOTION")
+
+    -- Hints & Back button
+    local hint = "Use Keyboard arrows/Enter to change. Toggle Fullscreen with F11."
+    createCenteredLabel(hint, panelY + ui(95), 15, COLORS.textNormal, 15)
 
     MenuSystem.createButton("BACK", "BACK",
-        SCREEN_WIDTH/2 - ui(100), 35, ui(200), ui(45), COLORS.quit, 22, 10)
+        SCREEN_WIDTH/2 - ui(100), panelY + ui(30), ui(200), ui(45), COLORS.quit, 22, 10)
 
-    uiScaleOverride = nil
     MenuSystem.updateSelection()
 end
 
@@ -996,24 +1018,86 @@ function MenuSystem.onKeyPressed(key)
     if not isMenuRendered then return end
 
     if key == "UP" or key == "Z" or key == "W" then
-        selectedIndex = selectedIndex - 1
-        if selectedIndex < 1 then selectedIndex = #menuButtons end
+        if menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
+            if selectedIndex == 1 or selectedIndex == 2 then
+                selectedIndex = 10
+            elseif selectedIndex == 3 then
+                selectedIndex = 1
+            elseif selectedIndex == 4 then
+                selectedIndex = 2
+            elseif selectedIndex == 5 then
+                selectedIndex = 3
+            elseif selectedIndex == 6 then
+                selectedIndex = 4
+            elseif selectedIndex == 7 then
+                selectedIndex = 5
+            elseif selectedIndex == 8 then
+                selectedIndex = 7
+            elseif selectedIndex == 9 then
+                selectedIndex = 8
+            elseif selectedIndex == 10 then
+                selectedIndex = 9
+            end
+        else
+            selectedIndex = selectedIndex - 1
+            if selectedIndex < 1 then selectedIndex = #menuButtons end
+        end
         MenuSystem.updateSelection()
 
     elseif key == "DOWN" or key == "S" then
-        selectedIndex = selectedIndex + 1
-        if selectedIndex > #menuButtons then selectedIndex = 1 end
+        if menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
+            if selectedIndex == 1 then
+                selectedIndex = 3
+            elseif selectedIndex == 2 then
+                selectedIndex = 4
+            elseif selectedIndex == 3 then
+                selectedIndex = 5
+            elseif selectedIndex == 4 then
+                selectedIndex = 6
+            elseif selectedIndex == 5 or selectedIndex == 6 then
+                selectedIndex = 7
+            elseif selectedIndex == 7 then
+                selectedIndex = 8
+            elseif selectedIndex == 8 then
+                selectedIndex = 9
+            elseif selectedIndex == 9 then
+                selectedIndex = 10
+            elseif selectedIndex == 10 then
+                selectedIndex = 1
+            end
+        else
+            selectedIndex = selectedIndex + 1
+            if selectedIndex > #menuButtons then selectedIndex = 1 end
+        end
         MenuSystem.updateSelection()
 
     elseif key == "LEFT" or key == "Q" or key == "A" then
         if menuState == "MAIN" and selectedIndex == 2 then
             selectedIndex = 1
             MenuSystem.updateSelection()
+        elseif menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
+            if selectedIndex == 2 then
+                selectedIndex = 1
+            elseif selectedIndex == 4 then
+                selectedIndex = 3
+            elseif selectedIndex == 6 then
+                selectedIndex = 5
+            end
+            MenuSystem.updateSelection()
         end
 
     elseif key == "RIGHT" or key == "D" then
         if menuState == "MAIN" and selectedIndex == 1 then
             selectedIndex = 2
+            MenuSystem.updateSelection()
+        elseif menuState == "SETTINGS" or menuState == "PAUSE_SETTINGS" then
+            if selectedIndex == 1 then
+                selectedIndex = 2
+            elseif selectedIndex == 3 then
+                selectedIndex = 4
+            elseif selectedIndex == 5 then
+                selectedIndex = 6
+            end
             MenuSystem.updateSelection()
         end
 
