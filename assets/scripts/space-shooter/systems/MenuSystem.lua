@@ -909,25 +909,36 @@ function MenuSystem.showSettings()
             MenuSystem.createButton(decAction, "<", decBtnX, y, ui(40), btnH, COLORS.settings, 20, 10)
         end
 
-        -- Value panel (with optional visual volume progress indicator)
+        -- Value panel background container
         local barBg = ECS.createRoundedRect(valBoxX, y, valueW, btnH, ui(6), 0.12, 0.12, 0.18, 0.9, 10)
         table.insert(menuElements, barBg)
         ECS.setOutline(barBg, true, 1, 0.25, 0.3, 0.4)
 
         if volumePercent then
-            local fillW = math.floor((volumePercent / 100) * (valueW - ui(8)) + 0.5)
+            -- Thin progress track background
+            local trackH = ui(4)
+            local trackY = y + ui(5)
+            local trackBg = ECS.createRoundedRect(valBoxX + ui(6), trackY, valueW - ui(12), trackH, ui(2), 0.2, 0.2, 0.25, 0.9, 11)
+            table.insert(menuElements, trackBg)
+
+            -- Active progress fill
+            local maxFillW = valueW - ui(12)
+            local fillW = math.floor((volumePercent / 100) * maxFillW + 0.5)
             if fillW > 0 then
-                local barFill = ECS.createRoundedRect(valBoxX + ui(4), y + ui(4), fillW, btnH - ui(8), ui(4), 0.15, 0.55, 0.85, 0.9, 11)
+                local barFill = ECS.createRoundedRect(valBoxX + ui(6), trackY, fillW, trackH, ui(2), 0.15, 0.6, 0.9, 0.95, 12)
                 table.insert(menuElements, barFill)
             end
         end
 
-        -- Value text
+        -- Value text (vertically centered above the thin track)
         local textFontSize = 16
         local valWidth = estimateTextWidth(valueText, ui(textFontSize))
         local valX = valBoxX + (valueW - valWidth) / 2
-        local valY = y + btnH / 2 - ui(textFontSize) / 2
-        local textId = ECS.createUIText(valueText, valX, valY, ui(textFontSize), COLORS.title.r, COLORS.title.g, COLORS.title.b, 12)
+        local textY = y + btnH / 2 - ui(textFontSize) / 2
+        if volumePercent then
+            textY = textY + ui(2)
+        end
+        local textId = ECS.createUIText(valueText, valX, textY, ui(textFontSize), COLORS.title.r, COLORS.title.g, COLORS.title.b, 15)
         table.insert(menuElements, textId)
 
         -- Increment arrow
