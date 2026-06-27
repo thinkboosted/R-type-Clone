@@ -1057,6 +1057,7 @@ end
 -- KEYBOARD INPUT
 -- ============================================================================
 function MenuSystem.onKeyPressed(key)
+    print("[MenuSystem] KeyPressed callback: key=" .. tostring(key) .. ", isGameRunning=" .. tostring(ECS.isGameRunning) .. ", isMenuRendered=" .. tostring(isMenuRendered) .. ", isPaused=" .. tostring(isPaused) .. ", menuState=" .. tostring(menuState))
     -- F11 for fullscreen toggle (works anywhere)
     if key == "F11" then
         settingsState.isFullscreen = not settingsState.isFullscreen

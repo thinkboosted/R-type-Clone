@@ -106,7 +106,25 @@ end
 
 function HPBarSystem.update(dt)
     if not ECS.capabilities.hasRendering then return end
-    if not ECS.isGameRunning then return end
+
+    if not ECS.isGameRunning then
+        if HPBarSystem.bgId then
+            ECS.destroyUI(HPBarSystem.bgId)
+            HPBarSystem.bgId = nil
+        end
+        if HPBarSystem.fillId then
+            ECS.destroyUI(HPBarSystem.fillId)
+            HPBarSystem.fillId = nil
+        end
+        if HPBarSystem.textId then
+            ECS.destroyUI(HPBarSystem.textId)
+            HPBarSystem.textId = nil
+        end
+        hideBossUI()
+        HPBarSystem.lastHP = -1
+        HPBarSystem.lastMax = -1
+        return
+    end
 
     ensureUI()
 
