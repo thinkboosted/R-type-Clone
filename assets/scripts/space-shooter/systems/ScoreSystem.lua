@@ -41,8 +41,18 @@ function ScoreSystem.init()
 end
 
 function ScoreSystem.update(dt)
-    if ECS.isPaused then return end
     if not ECS.capabilities.hasRendering then return end
+
+    if not ECS.isGameRunning then
+        if ScoreSystem.uiTextId then
+            ECS.destroyUI(ScoreSystem.uiTextId)
+            ScoreSystem.uiTextId = nil
+            ScoreSystem.lastScore = -1
+        end
+        return
+    end
+
+    if ECS.isPaused then return end
 
     ensureScoreUI()
 
