@@ -17,3 +17,6 @@ CMakeFiles/
 Notes
 
 build/*
+graphify-out/
+legacy/
+old/

@@ -1,8 +1,9 @@
 # 🤖 Agent Guide — R-Type Clone
 
-Antigravity: AI assistant for Mael (Solo Builder). Full read/write access: R-Type Clone repository (C++17, Lua/Sol2, ECS, UDP Networking, OpenGL, ZeroMQ).
+AI assistant. Full read/write access: R-Type Clone repository (C++17, Lua/Sol2, ECS, UDP Networking, OpenGL, ZeroMQ).
 
 <posture_and_communication>
+
 - **Terse & Direct**: No politeness ("sure", "understand", "excellent"). Go straight to point.
 - **Short fragments**: Max 1-2 sentences per response unless code/deep analysis. No transition sentences.
 - **Ultra-Caveman**: Compress output. Strip articles/determiners ("the", "a", "an", "le", "la", "les") to save tokens.
@@ -11,44 +12,47 @@ Antigravity: AI assistant for Mael (Solo Builder). Full read/write access: R-Typ
 - **Zero Complacency**: Do not validate blindly. Point out flaws in Mael's reasoning/solutions before execution. Never pivot opinion because Mael insists. Explain past contradictions. Short/honest > long/complaisant.
 - **Mandatory Verification**: Do not assume/hallucinate. Search files/tokensave first. Prefix unverified claims with "Unverified:".
 - **Reactive Documentation**: Update documentation, code guidelines, sitemaps, and rules files immediately after design decisions/code changes.
-</posture_and_communication>
+  </posture_and_communication>
 
 <tool_and_context_rules>
+
 - **Prefer tokensave**: Before reading source files or scanning the codebase, use the tokensave MCP tools. They provide instant semantic results.
 - **SQLite Database**: Query the SQLite database directly at `.tokensave/tokensave.db` (tables: `nodes`, `edges`, `files`) using SQL to answer complex structural queries.
 - **No recursive grep**: Avoid heavy recursive scans or grep when tokensave can be used.
-- **Routing**:
-  - **Flash (default)**: Chat, simple edits, searches, cron tasks, compile/build tests.
-  - **Pro (DeepSeek Pro/Gemini Pro)**: Architecture design, complex debug (>2 files), security audits, code reviews.
-</tool_and_context_rules>
+  - </tool_and_context_rules>
 
 <development_workflow>
+
 - **Phase 0 (COMPRENDRE)**: Use tokensave, explore key files, identify existing patterns before coding.
 - **Phase 1 (PLANIFIER)**: Write 3-5 step plan with precise file paths.
 - **Phase 2 (EXÉCUTER)**: Step-by-step implementation. Use targeted patches (`replace_file_content` / `multi_replace_file_content`). Check build/compiler feedback instantly.
 - **Phase 3 (VÉRIFIER)**: Run static analysis, build the code (`python3 build.py`), and test both client and server modes to guarantee no regressions.
-</development_workflow>
+  </development_workflow>
 
 <error_handling>
+
 - **Tool Failure**: If tool fails twice, switch to fallback (e.g., if tokensave fails, use `grep_search`; if `grep_search` fails, search files/folders).
-</error_handling>
+  </error_handling>
 
 <budget_limits>
+
 - **Tool loop breaker**: Max 5 consecutive tool calls without user. If stalled, stop, explain, ask Mael.
 - **Token budget**: Avoid full reads for files >300 lines unless target lines specified. Use tokensave or read targeted ranges.
-</budget_limits>
+  </budget_limits>
 
 <yagni_ladder>
+
 1. Existing CLI/script.
 2. Lightweight stdlib/package.
 3. Project pattern.
 4. Custom code (last resort).
-</yagni_ladder>
+   </yagni_ladder>
 
 <loop_engineering>
+
 - **Maker-Checker**: Code -> Test -> Verify -> Correct (max 10 inner loops).
 - **Adversarial Check**: Auto-critique before presenting.
-</loop_engineering>
+  </loop_engineering>
 
 ---
 
@@ -71,15 +75,15 @@ Antigravity: AI assistant for Mael (Solo Builder). Full read/write access: R-Typ
 
 ## 1. Project Overview
 
-| Attribute | Value |
-| :--- | :--- |
-| **Language** | C++17 |
-| **Project Type** | Recreation of the classic arcade game *R-Type* |
-| **Context** | School project (EPITECH-style) |
-| **Architecture** | Entity Component System (ECS) |
-| **Networking** | Client/Server multiplayer (UDP) |
-| **Scripting** | Lua (via Sol2) |
-| **Platforms** | Linux, Windows |
+| Attribute              | Value                                           |
+| :--------------------- | :---------------------------------------------- |
+| **Language**     | C++17                                           |
+| **Project Type** | Recreation of the classic arcade game*R-Type* |
+| **Context**      | School project (EPITECH-style)                  |
+| **Architecture** | Entity Component System (ECS)                   |
+| **Networking**   | Client/Server multiplayer (UDP)                 |
+| **Scripting**    | Lua (via Sol2)                                  |
+| **Platforms**    | Linux, Windows                                  |
 
 ### 1.1 Project Goals
 
@@ -148,13 +152,13 @@ Antigravity: AI assistant for Mael (Solo Builder). Full read/write access: R-Typ
 
 ### 2.1 Key Architectural Decisions
 
-| Decision | Rationale |
-| :--- | :--- |
-| **Dynamic modules** | Allows independent development, replacement, and testing of subsystems |
-| **ZeroMQ pub/sub** | Lightweight, transport-agnostic messaging; scales from in-process to networked |
-| **Per-module threads** | Prevents slow subsystems from blocking others |
-| **C-style factory** | Avoids C++ ABI mismatches between compiler versions |
-| **Lua scripting** | Enables rapid iteration on game logic without recompilation |
+| Decision                     | Rationale                                                                      |
+| :--------------------------- | :----------------------------------------------------------------------------- |
+| **Dynamic modules**    | Allows independent development, replacement, and testing of subsystems         |
+| **ZeroMQ pub/sub**     | Lightweight, transport-agnostic messaging; scales from in-process to networked |
+| **Per-module threads** | Prevents slow subsystems from blocking others                                  |
+| **C-style factory**    | Avoids C++ ABI mismatches between compiler versions                            |
+| **Lua scripting**      | Enables rapid iteration on game logic without recompilation                    |
 
 ---
 
@@ -235,8 +239,11 @@ public:
     virtual void subscribe(const std::string& topic, MessageHandler handler) = 0;
 };
 ```
+
 ### 4.2 Module Loading
+
 Modules are loaded dynamically via `AModulesManager`:
+
 ```cpp
 // Each module exports this C-style factory function
 extern "C" IModule* createModule(const char* pubEndpoint, const char* subEndpoint);
@@ -244,15 +251,15 @@ extern "C" IModule* createModule(const char* pubEndpoint, const char* subEndpoin
 
 ### 4.3 Available Modules
 
-| Module | Library | Purpose |
-| :--- | :--- | :--- |
-| `SFMLWindowManager` | `SFMLWindowManager.so` | Window creation, input events |
-| `GLEWSFMLRenderer` | `GLEWSFMLRenderer.so` | OpenGL 3D/2D rendering |
-| `LuaECSManager` | `LuaECSManager.so` | ECS logic, Lua scripting |
-| `BulletPhysicEngine` | `BulletPhysicEngine.so` | Physics simulation |
-| `NetworkManager` | `NetworkManager.so` | UDP client/server networking |
-| `SFMLSoundManager` | `SFMLSoundManager.so` | Audio playback |
-| `BasicECSSavesManager` | `BasicECSSavesManager.so` | Save/load game state |
+| Module                   | Library                     | Purpose                       |
+| :----------------------- | :-------------------------- | :---------------------------- |
+| `SFMLWindowManager`    | `SFMLWindowManager.so`    | Window creation, input events |
+| `GLEWSFMLRenderer`     | `GLEWSFMLRenderer.so`     | OpenGL 3D/2D rendering        |
+| `LuaECSManager`        | `LuaECSManager.so`        | ECS logic, Lua scripting      |
+| `BulletPhysicEngine`   | `BulletPhysicEngine.so`   | Physics simulation            |
+| `NetworkManager`       | `NetworkManager.so`       | UDP client/server networking  |
+| `SFMLSoundManager`     | `SFMLSoundManager.so`     | Audio playback                |
+| `BasicECSSavesManager` | `BasicECSSavesManager.so` | Save/load game state          |
 
 ### 4.4 Inter-Module Communication
 
@@ -267,6 +274,7 @@ subscribe("KeyPressed", [](const std::string& key) {
     // Handle key press
 });
 ```
+
 **Common Topics:**
 | Topic | Direction | Purpose |
 | :--- | :--- | :--- |
@@ -277,15 +285,22 @@ subscribe("KeyPressed", [](const std::string& key) {
 | `NetworkMessage` | Network → ECS | Incoming network data |
 | `RequestNetworkSend` | ECS → Network | Outgoing network data |
 | `LoadScript` | App → ECS | Load Lua script file |
----
+----------------------------------------
+
 ## 5. ECS Architecture
+
 ### 5.1 Overview
+
 The ECS (Entity Component System) is implemented in Lua, managed by `LuaECSManager`:
+
 - **Entities:** UUID strings (e.g., `"a1b2c3d4-..."`)
 - **Components:** Lua tables with data
 - **Systems:** Lua tables with `init()` and `update(dt)` functions
+
 ### 5.2 Component Pools
+
 Components are stored in **sparse sets** for cache-efficient iteration:
+
 ```cpp
 struct ComponentPool {
     std::vector<sol::table> dense;           // Component data
@@ -298,20 +313,20 @@ struct ComponentPool {
 
 Defined in `assets/scripts/space-shooter/components/Components.lua`:
 
-| Component | Purpose |
-| :--- | :--- |
-| `Transform` | Position, rotation, scale |
-| `Mesh` | 3D model path, texture path |
-| `Sprite` | 2D texture reference |
-| `Collider` | Physics collision shape |
-| `Physic` | Mass, friction, velocity |
-| `Player` | Player speed, properties |
-| `Enemy` | Enemy AI properties |
-| `Bullet` | Projectile damage |
-| `Life` | Health/HP |
-| `InputState` | Current input state |
-| `NetworkIdentity` | Network ownership |
-| `GameState` | Game state machine |
+| Component           | Purpose                     |
+| :------------------ | :-------------------------- |
+| `Transform`       | Position, rotation, scale   |
+| `Mesh`            | 3D model path, texture path |
+| `Sprite`          | 2D texture reference        |
+| `Collider`        | Physics collision shape     |
+| `Physic`          | Mass, friction, velocity    |
+| `Player`          | Player speed, properties    |
+| `Enemy`           | Enemy AI properties         |
+| `Bullet`          | Projectile damage           |
+| `Life`            | Health/HP                   |
+| `InputState`      | Current input state         |
+| `NetworkIdentity` | Network ownership           |
+| `GameState`       | Game state machine          |
 
 ### 5.4 ECS API (Lua)
 
@@ -347,18 +362,19 @@ ECS.broadcastNetworkMessage("TOPIC", "payload")
 Systems are loaded in dependency order in `GameLoop.lua`:
 
 1. **Core Gameplay** (Authority: Server + Solo)
+
    - `CollisionSystem`, `PhysicSystem`, `LifeSystem`, `EnemySystem`, `PlayerSystem`, `GameStateManager`
-
 2. **Input & Control** (All instances)
+
    - `InputSystem`
-
 3. **Network Sync** (Server + Client in Multiplayer)
+
    - `NetworkSystem`
-
 4. **Menu & State** (All instances)
-   - `MenuSystem`
 
+   - `MenuSystem`
 5. **Visual & UI** (Client + Solo only)
+
    - `RenderSystem`, `ParticleSystem`, `ScoreSystem`, `BackgroundSystem`
 
 ---
@@ -367,12 +383,12 @@ Systems are loaded in dependency order in `GameLoop.lua`:
 
 ### 6.1 Protocol Overview
 
-| Feature | Specification |
-| :--- | :--- |
-| **Transport** | UDP (via ASIO) |
-| **Serialization** | MsgPack (binary) |
-| **Architecture** | Server-Authoritative |
-| **Update Rate** | 20Hz (50ms) |
+| Feature                 | Specification        |
+| :---------------------- | :------------------- |
+| **Transport**     | UDP (via ASIO)       |
+| **Serialization** | MsgPack (binary)     |
+| **Architecture**  | Server-Authoritative |
+| **Update Rate**   | 20Hz (50ms)          |
 
 ### 6.2 Capability Flags
 
@@ -392,21 +408,21 @@ ECS.capabilities = {
 
 **Mode Matrix:**
 
-| Mode | Authority | Rendering | NetworkSync | LocalInput |
-| :--- | :---: | :---: | :---: | :---: |
-| **Solo** | ✅ | ✅ | ❌ | ✅ |
-| **Server** | ✅ | ❌ | ✅ | ❌ |
-| **Client** | ❌ | ✅ | ✅ | ✅ |
+| Mode             | Authority | Rendering | NetworkSync | LocalInput |
+| :--------------- | :-------: | :-------: | :---------: | :--------: |
+| **Solo**   |    ✅    |    ✅    |     ❌     |     ✅     |
+| **Server** |    ✅    |    ❌    |     ✅     |     ❌     |
+| **Client** |    ❌    |    ✅    |     ✅     |     ✅     |
 
 ### 6.3 Core Network Messages
 
-| Topic | Direction | Payload |
-| :--- | :--- | :--- |
-| `INPUT` | Client → Server | `{k: "UP", s: 1}` (MsgPack) |
-| `ENTITY_POS` | Server → Clients | Position, rotation, velocity, type |
-| `PLAYER_ASSIGN` | Server → Client | Entity UUID |
-| `CLIENT_READY` | Client → Server | Confirmation |
-| `ENTITY_DESTROY` | Server → Clients | Entity UUID |
+| Topic              | Direction         | Payload                            |
+| :----------------- | :---------------- | :--------------------------------- |
+| `INPUT`          | Client → Server  | `{k: "UP", s: 1}` (MsgPack)      |
+| `ENTITY_POS`     | Server → Clients | Position, rotation, velocity, type |
+| `PLAYER_ASSIGN`  | Server → Client  | Entity UUID                        |
+| `CLIENT_READY`   | Client → Server  | Confirmation                       |
+| `ENTITY_DESTROY` | Server → Clients | Entity UUID                        |
 
 ### 6.4 Wire Format
 
@@ -484,6 +500,7 @@ python3 build.py
 ```
 
 This script:
+
 1. Detects/bootstraps vcpkg
 2. Installs dependencies
 3. Configures CMake
@@ -538,7 +555,7 @@ export LD_LIBRARY_PATH=$PWD:$PWD/lib:$LD_LIBRARY_PATH
 ### 9.1 C++ Style
 
 - **Standard:** C++17
-- **Naming:** 
+- **Naming:**
   - Classes: `PascalCase`
   - Functions/methods: `camelCase`
   - Private members: `_prefixedCamelCase`
@@ -596,12 +613,14 @@ docs: update agent.md with networking section
 ### 10.4 Forbidden Actions
 
 > ⚠️ **DO NOT:**
+>
 > - Invent new features without explicit request
 > - Remove capability guards without understanding consequences
 > - Change wire protocol without updating all consumers
 > - Modify build system without testing both platforms
 > - Add blocking calls in module loops
 > - Use global state in Lua without documenting it
+
 ### 10.5 Testing Changes
 
 1. **Solo Mode:** Run `./r-type_client` alone
@@ -680,16 +699,16 @@ end
 
 ### 12.1 File Locations
 
-| What | Where |
-| :--- | :--- |
-| Game entry (client) | `src/game/client/main.cpp` |
-| Game entry (server) | `src/game/server/main.cpp` |
-| Module base class | `src/engine/modules/AModule.hpp` |
-| ECS manager | `src/engine/modules/ECSManager/LuaECSManager/` |
-| Game scripts | `assets/scripts/space-shooter/` |
-| Component defs | `assets/scripts/space-shooter/components/Components.lua` |
-| System scripts | `assets/scripts/space-shooter/systems/` |
-| Build config | `CMakeLists.txt`, `vcpkg.json` |
+| What                | Where                                                      |
+| :------------------ | :--------------------------------------------------------- |
+| Game entry (client) | `src/game/client/main.cpp`                               |
+| Game entry (server) | `src/game/server/main.cpp`                               |
+| Module base class   | `src/engine/modules/AModule.hpp`                         |
+| ECS manager         | `src/engine/modules/ECSManager/LuaECSManager/`           |
+| Game scripts        | `assets/scripts/space-shooter/`                          |
+| Component defs      | `assets/scripts/space-shooter/components/Components.lua` |
+| System scripts      | `assets/scripts/space-shooter/systems/`                  |
+| Build config        | `CMakeLists.txt`, `vcpkg.json`                         |
 
 ### 12.2 Key Commands
 
@@ -712,12 +731,14 @@ rm -rf build && python3 build.py
 ### 12.3 Useful Debug Messages
 
 In Lua scripts:
+
 ```lua
 print("[SystemName] Debug message")
 print("[SystemName] Capabilities: Authority=" .. tostring(ECS.capabilities.hasAuthority))
 ```
 
 In C++ modules:
+
 ```cpp
 std::cout << "[ModuleName] Debug message" << std::endl;
 ```
