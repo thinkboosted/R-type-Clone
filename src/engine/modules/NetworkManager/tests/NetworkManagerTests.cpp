@@ -294,8 +294,45 @@ TEST_F(NetworkManagerTest, DisconnectCleansUpClients) {
     client.cleanup();
 }
 
-/*
-TEST_F(NetworkManagerTest, Aggressive_MalformedUdpPacket) {
-    // ... kept commented out as requested to keep build green but show intent ...
+TEST_F(NetworkManagerTest, MalformedUdpPacketDoesNotCrashServer) {
+    rtypeEngine::NetworkManager server("tcp://127.0.0.1:5590", "tcp://127.0.0.1:5591");
+    server.init();
+    server.bind(4249);
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Send malformed raw UDP packet (not MsgPack)
+    asio::io_context ioContext;
+    asio::ip::udp::socket rawSocket(ioContext, asio::ip::udp::v4());
+    asio::ip::udp::endpoint targetEndpoint(asio::ip::address::from_string("127.0.0.1"), 4249);
+    
+    std::string malformedData = "\x12\x34\x56\x78\x9A\xBC\xDE\xF0";
+    rawSocket.send_to(asio::buffer(malformedData), targetEndpoint);
+    
+    // Wait a bit to let the server receive and process the packet
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    
+    // Establish a valid client and send a valid message to prove the server is still healthy
+    rtypeEngine::NetworkManager client("tcp://127.0.0.1:5592", "tcp://127.0.0.1:5593");
+    client.init();
+    client.connect("127.0.0.1", 4249);
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    client.sendNetworkMessage("TestTopic", "ValidMessage");
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
+    auto messages = server.getAllMessages();
+    bool receivedValid = false;
+    for (const auto& msg : messages) {
+        if (msg.topic == "TestTopic" && msg.payload == "ValidMessage") {
+            receivedValid = true;
+            break;
+        }
+    }
+    
+    EXPECT_TRUE(receivedValid);
+    
+    client.cleanup();
+    server.cleanup();
 }
-*/
