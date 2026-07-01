@@ -72,7 +72,9 @@ void LuaECSManager::init() {
         try {
           system["onSavesListReceived"](msg);
         } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in onSavesListReceived: " << e.what() << std::endl;
+          std::cerr << "[LuaECSManager] Lua Error in onSavesListReceived: " << e.what() << std::endl;
+        } catch (const std::exception &e) {
+          std::cerr << "[LuaECSManager] Std Error in onSavesListReceived: " << e.what() << std::endl;
         }
       }
     }
@@ -84,7 +86,9 @@ void LuaECSManager::init() {
         try {
           system[eventName](msg);
         } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in system " << eventName << ": " << e.what() << std::endl;
+          std::cerr << "[LuaECSManager] Lua Error in system " << eventName << ": " << e.what() << std::endl;
+        } catch (const std::exception &e) {
+          std::cerr << "[LuaECSManager] Std Error in system " << eventName << ": " << e.what() << std::endl;
         }
       }
     }
@@ -104,7 +108,9 @@ void LuaECSManager::init() {
                       try {
                           func(msg);
                       } catch (const sol::error &e) {
-                          std::cerr << "[LuaECSManager] Error in " << topic << " listener: " << e.what() << std::endl;
+                          std::cerr << "[LuaECSManager] Lua Error in " << topic << " listener: " << e.what() << std::endl;
+                      } catch (const std::exception &e) {
+                          std::cerr << "[LuaECSManager] Std Error in " << topic << " listener: " << e.what() << std::endl;
                       }
                   }
               }
@@ -132,7 +138,9 @@ void LuaECSManager::init() {
               try {
                 system["onCollision"](id1, id2);
               } catch (const sol::error &e) {
-                std::cerr << "[LuaECSManager] Error in onCollision: " << e.what() << std::endl;
+                std::cerr << "[LuaECSManager] Lua Error in onCollision: " << e.what() << std::endl;
+              } catch (const std::exception &e) {
+                std::cerr << "[LuaECSManager] Std Error in onCollision: " << e.what() << std::endl;
               }
             }
           }
@@ -150,7 +158,9 @@ void LuaECSManager::init() {
               try {
                 system["onRaycastHit"](id, distance);
               } catch (const sol::error &e) {
-                std::cerr << "[LuaECSManager] Error in onRaycastHit: " << e.what() << std::endl;
+                std::cerr << "[LuaECSManager] Lua Error in onRaycastHit: " << e.what() << std::endl;
+              } catch (const std::exception &e) {
+                std::cerr << "[LuaECSManager] Std Error in onRaycastHit: " << e.what() << std::endl;
               }
             }
           }
@@ -189,7 +199,9 @@ void LuaECSManager::init() {
           try {
             system["onEntityUpdated"](id, x, y, z, rx, ry, rz);
           } catch (const sol::error &e) {
-            std::cerr << "[LuaECSManager] Error in onEntityUpdated: " << e.what() << std::endl;
+            std::cerr << "[LuaECSManager] Lua Error in onEntityUpdated: " << e.what() << std::endl;
+          } catch (const std::exception &e) {
+            std::cerr << "[LuaECSManager] Std Error in onEntityUpdated: " << e.what() << std::endl;
           }
         }
       }
@@ -237,7 +249,9 @@ void LuaECSManager::loadScript(const std::string &path) {
     _lua.script_file(path);
     std::cout << "[LuaECSManager] Loaded script: " << path << std::endl;
   } catch (const sol::error &e) {
-    std::cerr << "[LuaECSManager] Error loading script: " << e.what() << std::endl;
+    std::cerr << "[LuaECSManager] Lua Error loading script: " << e.what() << std::endl;
+  } catch (const std::exception &e) {
+    std::cerr << "[LuaECSManager] Std Error loading script: " << e.what() << std::endl;
   }
 }
 
@@ -302,7 +316,9 @@ void LuaECSManager::loop() {
         try {
           system["update"](scaledDt);
         } catch (const sol::error &e) {
-          std::cerr << "[LuaECSManager] Error in system update: " << e.what() << std::endl;
+          std::cerr << "[LuaECSManager] Lua Error in system update: " << e.what() << std::endl;
+        } catch (const std::exception &e) {
+          std::cerr << "[LuaECSManager] Std Error in system update: " << e.what() << std::endl;
         }
       }
     }

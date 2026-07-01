@@ -259,7 +259,9 @@ void LuaECSManager::setupLuaBindings() {
                   try {
                     func(msg);
                   } catch (const sol::error &e) {
-                    std::cerr << "[LuaECSManager] Error in subscriber for " << topic << ": " << e.what() << std::endl;
+                    std::cerr << "[LuaECSManager] Lua Error in subscriber for " << topic << ": " << e.what() << std::endl;
+                  } catch (const std::exception &e) {
+                    std::cerr << "[LuaECSManager] Std Error in subscriber for " << topic << ": " << e.what() << std::endl;
                   }
                 }
               }
@@ -378,7 +380,9 @@ void LuaECSManager::setupLuaBindings() {
       try {
         system["init"]();
       } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error in system init: " << e.what() << std::endl;
+        std::cerr << "[LuaECSManager] Lua Error in system init: " << e.what() << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "[LuaECSManager] Std Error in system init: " << e.what() << std::endl;
       }
     }
   });

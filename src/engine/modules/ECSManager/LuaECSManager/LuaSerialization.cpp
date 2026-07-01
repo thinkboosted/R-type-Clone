@@ -120,7 +120,9 @@ void LuaECSManager::deserializeState(const std::string &state) {
         pool.sparse[entityId] = pool.dense.size() - 1;
 
       } catch (const sol::error &e) {
-        std::cerr << "[LuaECSManager] Error deserializing component: " << e.what() << std::endl;
+        std::cerr << "[LuaECSManager] Lua Error deserializing component: " << e.what() << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "[LuaECSManager] Std Error deserializing component: " << e.what() << std::endl;
       }
     }
   }
